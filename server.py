@@ -78,6 +78,7 @@ DEFAULT_CONFIG = {
     "schedule_start": "22:00",       # Start time (HH:MM)
     "schedule_end": "07:00",         # End time (HH:MM)
     "mirror_mode": False,            # Horizontal mirror flip toggle
+    "vision_mode": "server_vision",   # "server_vision" (Mode B) or "client_edge" (Mode A)
 }
 
 def load_config():
@@ -98,6 +99,7 @@ config = load_config()
 state = {
     "is_streaming": False,
     "is_paused": False,
+    "vision_mode": config.get("vision_mode", "server_vision"),
     "stats": {
         "fps": 0.0,
         "person_count": 0,
@@ -108,1865 +110,4265 @@ state = {
         "loitering_count": 0,
         "threat_count": 0,
     },
+    "client_detections": [],
+    "client_fps": 0.0,
     "hourly_traffic": [0] * 24,
     "logs": [],
 }
 
 
 # ===================================================================
+# 2. MikoVo RaRa 11 Neural Vision Core (Advanced Edge Biometrics)
 # ===================================================================
-# 2. MikoVo RaRa 11 AI Neural Vision Core (Proprietary Compiled Engine)
+
+# Canonical 112x112 facial keypoint coordinates [nose, left_eye, right_eye, left_ear, right_ear]
+CANONICAL_5PTS = np.array(
+    [
+        [56.0, 52.0],   # nose tip
+        [38.5, 38.0],   # left eye
+        [73.5, 38.0],   # right eye
+        [16.0, 44.0],   # left ear
+        [96.0, 44.0],   # right ear
+    ],
+    dtype=np.float64,
+)
+
+OUTPUT_SIZE = 112
+MIN_KP_CONF = 0.30
+MIN_POINTS_FOR_UMEYAMA = 2
+CHI2_95_DF4 = 9.4877
+
+
+def weighted_umeyama(
+    src: np.ndarray,
+    dst: np.ndarray,
+    weights: Optional[np.ndarray] = None,
+    estimate_scale: bool = True,
+) -> np.ndarray:
+    """
+    Weighted Umeyama (1991) similarity transform with SVD least-squares estimation.
+    """
+    src = np.asarray(src, dtype=np.float64)
+    dst = np.asarray(dst, dtype=np.float64)
+    n, dim = src.shape
+
+    if weights is None:
+        w = np.ones(n, dtype=np.float64) / n
+    else:
+        w = np.asarray(weights, dtype=np.float64)
+        w = w / (w.sum() + 1e-12)
+
+    src_mean = (w[:, None] * src).sum(axis=0)
+    dst_mean = (w[:, None] * dst).sum(axis=0)
+
+    src_demean = src - src_mean
+    dst_demean = dst - dst_mean
+
+    A = (dst_demean * w[:, None]).T @ src_demean
+
+    d = np.ones(dim)
+    if np.linalg.det(A) < 0:
+        d[-1] = -1
+
+    U, S, Vt = np.linalg.svd(A)
+    rank = np.linalg.matrix_rank(A)
+
+    T = np.eye(dim + 1, dtype=np.float64)
+    if rank == 0:
+        return np.nan * T
+    elif rank == dim - 1:
+        if np.linalg.det(U) * np.linalg.det(Vt) > 0:
+            R = U @ Vt
+        else:
+            s = d[-1]
+            d[-1] = -1
+            R = U @ np.diag(d) @ Vt
+            d[-1] = s
+    else:
+        R = U @ np.diag(d) @ Vt
+
+    if estimate_scale:
+        var_src = (w[:, None] * (src_demean ** 2)).sum()
+        scale = 1.0 / (var_src + 1e-12) * (S @ d)
+    else:
+        scale = 1.0
+
+    T[:dim, :dim] = R * scale
+    T[:dim, dim] = dst_mean - (R * scale) @ src_mean
+    return T
+
+
+def adaptive_illumination_compensation(
+    bgr_img: np.ndarray,
+    clip_limit: float = 2.5,
+    tile_grid: Tuple[int, int] = (8, 8),
+    target_brightness: float = 0.52,
+) -> np.ndarray:
+    """
+    CLAHE on L-channel in LAB space + dynamic gamma curve to normalize harsh shadows & backlight.
+    """
+    lab = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2LAB)
+    l_ch, a_ch, b_ch = cv2.split(lab)
+
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid)
+    l_eq = clahe.apply(l_ch)
+
+    mean_brightness = float(np.mean(l_eq)) / 255.0 + 1e-6
+    gamma = np.log(target_brightness) / np.log(mean_brightness)
+    gamma = float(np.clip(gamma, 0.35, 2.75))
+
+    lut = (np.linspace(0, 1, 256, dtype=np.float32) ** gamma) * 255.0
+    lut = np.clip(lut, 0, 255).astype(np.uint8)
+    l_gamma = cv2.LUT(l_eq, lut)
+
+    lab_corrected = cv2.merge([l_gamma, a_ch, b_ch])
+    return cv2.cvtColor(lab_corrected, cv2.COLOR_LAB2BGR)
+
+
+@dataclass
+class AlignmentResult:
+    aligned_face: np.ndarray
+    transform_matrix: np.ndarray
+    canonical_keypoints: np.ndarray
+    used_fallback: bool
+
+
+def align_face(
+    frame: np.ndarray,
+    bbox: Tuple[float, float, float, float],
+    keypoints: Optional[np.ndarray] = None,
+    confidences: Optional[np.ndarray] = None,
+    output_size: int = OUTPUT_SIZE,
+) -> AlignmentResult:
+    """
+    Align face into canonical 112x112 space via weighted Umeyama transform.
+    """
+    if keypoints is not None and confidences is not None:
+        keypoints = np.asarray(keypoints, dtype=np.float64)
+        confidences = np.asarray(confidences, dtype=np.float64)
+        valid_mask = confidences >= MIN_KP_CONF
+        if int(valid_mask.sum()) >= MIN_POINTS_FOR_UMEYAMA:
+            src_pts = keypoints[valid_mask]
+            dst_pts = CANONICAL_5PTS[valid_mask] * (output_size / OUTPUT_SIZE)
+            w = confidences[valid_mask]
+
+            T = weighted_umeyama(src_pts, dst_pts, weights=w, estimate_scale=True)
+            if not np.any(np.isnan(T)):
+                M = T[:2, :3].astype(np.float32)
+                aligned = cv2.warpAffine(
+                    frame, M, (output_size, output_size),
+                    flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE
+                )
+                ones = np.ones((5, 1))
+                canonical_kps = (M @ np.hstack([keypoints, ones]).T).T
+                aligned = adaptive_illumination_compensation(aligned)
+                return AlignmentResult(aligned, M, canonical_kps, used_fallback=False)
+
+    # Fallback letterbox crop
+    x, y, bw, bh = bbox
+    H, W = frame.shape[:2]
+    x0, y0 = max(0, int(x)), max(0, int(y))
+    x1, y1 = min(W, int(x + bw)), min(H, int(y + bh))
+    crop = frame[y0:y1, x0:x1]
+    if crop.size == 0:
+        crop = np.zeros((output_size, output_size, 3), dtype=np.uint8)
+
+    scale = output_size / max(crop.shape[0], crop.shape[1], 1)
+    M = np.array([[scale, 0, -x0 * scale], [0, scale, -y0 * scale]], dtype=np.float32)
+    aligned = cv2.resize(crop, (output_size, output_size), interpolation=cv2.INTER_LINEAR)
+    aligned = adaptive_illumination_compensation(aligned)
+
+    dummy_kps = CANONICAL_5PTS.copy() if keypoints is None else keypoints
+    ones = np.ones((len(dummy_kps), 1))
+    canonical_kps = (M @ np.hstack([np.asarray(dummy_kps, dtype=np.float64), ones]).T).T
+    return AlignmentResult(aligned, M, canonical_kps, used_fallback=True)
+
+
+# 512-D Metric Feature Extractor
+def _build_uniform_lbp_lut() -> np.ndarray:
+    lut = np.zeros(256, dtype=np.int32)
+    next_label = 0
+    for code in range(256):
+        bits = [(code >> k) & 1 for k in range(8)]
+        transitions = sum(bits[k] != bits[(k + 1) % 8] for k in range(8))
+        if transitions <= 2:
+            lut[code] = next_label
+            next_label += 1
+        else:
+            lut[code] = 58
+    return lut
+
+_UNIFORM_LBP_LUT = _build_uniform_lbp_lut()
+_RAW_FEATURE_DIM = 756 + 177 + 16
+_EMBEDDING_DIM = 512
+
+_RNG = np.random.RandomState(42)
+_PROJECTION_MATRIX = (
+    _RNG.randn(_RAW_FEATURE_DIM, _EMBEDDING_DIM).astype(np.float32)
+    / np.sqrt(_RAW_FEATURE_DIM)
+)
+
+def _multi_scale_gradient_histogram(gray: np.ndarray, grid_sizes: Tuple[int, ...] = (8, 4, 2), n_bins: int = 9) -> np.ndarray:
+    gx = cv2.Scharr(gray, cv2.CV_32F, 1, 0)
+    gy = cv2.Scharr(gray, cv2.CV_32F, 0, 1)
+    mag = cv2.magnitude(gx, gy)
+    ang = np.arctan2(gy, gx)
+    ang[ang < 0] += np.pi
+
+    bin_width = np.pi / n_bins
+    bin_idx = np.minimum((ang / bin_width).astype(np.int32), n_bins - 1)
+    H, W = gray.shape
+    feats: List[np.ndarray] = []
+
+    for g in grid_sizes:
+        ch, cw = H // g, W // g
+        cell_hist = np.empty((g, g, n_bins), dtype=np.float32)
+        for b in range(n_bins):
+            weighted = np.where(bin_idx == b, mag, 0.0).astype(np.float32)
+            blocked = weighted.reshape(g, ch, g, cw).sum(axis=(1, 3))
+            cell_hist[:, :, b] = blocked
+        flat = cell_hist.reshape(g * g, n_bins)
+        norm = np.linalg.norm(flat, axis=1, keepdims=True) + 1e-6
+        feats.append((flat / norm).ravel())
+
+    return np.concatenate(feats).astype(np.float32)
+
+def _compute_lbp_code(gray: np.ndarray, radius: int) -> np.ndarray:
+    H, W = gray.shape
+    padded = np.pad(gray, radius, mode="reflect").astype(np.int32)
+    center = padded[radius:radius + H, radius:radius + W]
+    offsets = [
+        (-radius, -radius), (-radius, 0), (-radius, radius),
+        (0, radius), (radius, radius), (radius, 0),
+        (radius, -radius), (0, -radius),
+    ]
+    code = np.zeros((H, W), dtype=np.uint8)
+    for i, (dy, dx) in enumerate(offsets):
+        neighbor = padded[radius + dy: radius + dy + H, radius + dx: radius + dx + W]
+        code |= ((neighbor >= center).astype(np.uint8) << i)
+    return code
+
+def _multi_scale_lbp_histogram(gray: np.ndarray, radii: Tuple[int, ...] = (1, 2, 3)) -> np.ndarray:
+    hists = []
+    for r in radii:
+        code = _compute_lbp_code(gray, r)
+        labels = _UNIFORM_LBP_LUT[code]
+        hist = np.bincount(labels.ravel(), minlength=59).astype(np.float32)
+        hist /= (hist.sum() + 1e-6)
+        hists.append(hist)
+    return np.concatenate(hists)
+
+def _anthropometric_ratios(canonical_kpts: np.ndarray, confidences: np.ndarray, face_scale: float = OUTPUT_SIZE) -> np.ndarray:
+    nose, le, re, lea, rea = canonical_kpts[:5]
+    eps = 1e-6
+
+    interocular = np.linalg.norm(le - re) + eps
+    d_nose_le = np.linalg.norm(nose - le)
+    d_nose_re = np.linalg.norm(nose - re)
+    d_ear = np.linalg.norm(lea - rea) + eps
+    d_nose_lea = np.linalg.norm(nose - lea)
+    d_nose_rea = np.linalg.norm(nose - rea)
+
+    eye_center = (le + re) / 2.0
+    eye_vec = re - le
+    angle_eye_line = np.arctan2(eye_vec[1], eye_vec[0])
+    nose_vec = nose - eye_center
+    angle_nose = np.arctan2(nose_vec[1], nose_vec[0])
+
+    symmetry_eye_nose = abs(d_nose_le - d_nose_re) / interocular
+    symmetry_ear_nose = abs(d_nose_lea - d_nose_rea) / d_ear
+    vertical_ratio = (nose[1] - eye_center[1]) / face_scale
+
+    conf_mean = float(np.mean(confidences)) if len(confidences) > 0 else 0.8
+    feats = np.array(
+        [
+            interocular / face_scale,
+            d_nose_le / d_nose_re if d_nose_re > eps else 1.0,
+            angle_eye_line,
+            angle_nose,
+            interocular / d_ear,
+            d_nose_lea / d_nose_rea if d_nose_rea > eps else 1.0,
+            symmetry_eye_nose,
+            symmetry_ear_nose,
+            vertical_ratio,
+            conf_mean,
+            interocular / face_scale,
+            d_ear / face_scale,
+            d_nose_le / face_scale,
+            d_nose_re / face_scale,
+            d_nose_lea / face_scale,
+            d_nose_rea / face_scale,
+        ],
+        dtype=np.float32,
+    )
+    return feats
+
+class MikoVoRaRa11FeatureExtractor:
+    def __init__(self, projection_matrix: Optional[np.ndarray] = None):
+        self.projection = projection_matrix if projection_matrix is not None else _PROJECTION_MATRIX
+
+    def extract(self, aligned_face: np.ndarray, canonical_keypoints: np.ndarray, confidences: np.ndarray) -> np.ndarray:
+        gray = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2GRAY).astype(np.float32)
+        hog_feats = _multi_scale_gradient_histogram(gray)
+        lbp_feats = _multi_scale_lbp_histogram(gray.astype(np.uint8))
+        ratio_feats = _anthropometric_ratios(canonical_keypoints, confidences)
+        raw = np.concatenate([hog_feats, lbp_feats, ratio_feats]).astype(np.float32)
+
+        embedding = raw @ self.projection
+        norm = np.linalg.norm(embedding) + 1e-9
+        return (embedding / norm).astype(np.float32)
+
+_DEFAULT_EXTRACTOR = MikoVoRaRa11FeatureExtractor()
+
+def mikovo_rara11_extract_face_descriptor(
+    frame: np.ndarray,
+    bbox: Tuple[float, float, float, float],
+    keypoints: Optional[np.ndarray] = None,
+    confidences: Optional[np.ndarray] = None,
+    extractor: Optional[MikoVoRaRa11FeatureExtractor] = None,
+) -> Tuple[np.ndarray, np.ndarray, AlignmentResult]:
+    extractor = extractor or _DEFAULT_EXTRACTOR
+    result = align_face(frame, bbox, keypoints, confidences)
+    conf = confidences if confidences is not None else np.ones(5, dtype=np.float32)
+    descriptor = extractor.extract(result.aligned_face, result.canonical_keypoints, conf)
+    return result.aligned_face, descriptor, result
+
+
+# 8-State Kalman Tracker with Mahalanobis Gating
+class MikoVoRaRa11KalmanTracker:
+    def __init__(self, measurement: np.ndarray, track_id: Optional[int] = None, dt: float = 1.0, id_window: int = 10):
+        ndim = 4
+        self._motion_mat = np.eye(2 * ndim, dtype=np.float64)
+        for i in range(ndim):
+            self._motion_mat[i, ndim + i] = dt
+        self._update_mat = np.eye(ndim, 2 * ndim, dtype=np.float64)
+
+        self._std_pos = 1.0 / 20
+        self._std_vel = 1.0 / 160
+
+        measurement = np.asarray(measurement, dtype=np.float64)
+        mean_pos = measurement
+        mean_vel = np.zeros(ndim, dtype=np.float64)
+        self.mean = np.r_[mean_pos, mean_vel]
+
+        h0 = max(measurement[3], 1e-3)
+        std = [
+            2 * self._std_pos * h0, 2 * self._std_pos * h0, 1e-2, 2 * self._std_pos * h0,
+            10 * self._std_vel * h0, 10 * self._std_vel * h0, 1e-5, 10 * self._std_vel * h0,
+        ]
+        self.covariance = np.diag(np.square(std))
+
+        self.track_id = track_id
+        self.hits = 0
+        self.age = 0
+        self.time_since_update = 0
+        self.id_history: deque = deque(maxlen=id_window)
+        self.kpts_history: deque = deque(maxlen=25)
+        self.bbox_history: deque = deque(maxlen=25)
+
+    def predict(self) -> np.ndarray:
+        h0 = max(self.mean[3], 1e-3)
+        std_pos = [self._std_pos * h0, self._std_pos * h0, 1e-2, self._std_pos * h0]
+        std_vel = [self._std_vel * h0, self._std_vel * h0, 1e-5, self._std_vel * h0]
+        motion_cov = np.diag(np.square(np.r_[std_pos, std_vel]))
+
+        self.mean = self._motion_mat @ self.mean
+        self.covariance = self._motion_mat @ self.covariance @ self._motion_mat.T + motion_cov
+        self.age += 1
+        self.time_since_update += 1
+        return self.mean[:4].copy()
+
+    def project(self) -> Tuple[np.ndarray, np.ndarray]:
+        h0 = max(self.mean[3], 1e-3)
+        std = [self._std_pos * h0, self._std_pos * h0, 1e-1, self._std_pos * h0]
+        innovation_cov = np.diag(np.square(std))
+        mean = self._update_mat @ self.mean
+        covariance = self._update_mat @ self.covariance @ self._update_mat.T + innovation_cov
+        return mean, covariance
+
+    def mahalanobis(self, measurement: np.ndarray) -> float:
+        mean, covariance = self.project()
+        d = np.asarray(measurement, dtype=np.float64) - mean
+        try:
+            chol = np.linalg.cholesky(covariance)
+            z = np.linalg.solve(chol, d)
+            return float(np.dot(z, z))
+        except np.linalg.LinAlgError:
+            inv = np.linalg.pinv(covariance)
+            return float(d.T @ inv @ d)
+
+    def update(self, measurement: np.ndarray, gating_threshold: float = CHI2_95_DF4) -> bool:
+        measurement = np.asarray(measurement, dtype=np.float64)
+        dist = self.mahalanobis(measurement)
+        if dist > gating_threshold:
+            return False
+
+        mean, covariance = self.project()
+        kalman_gain = np.linalg.solve(
+            covariance.T, (self.covariance @ self._update_mat.T).T
+        ).T
+        innovation = measurement - mean
+        self.mean = self.mean + kalman_gain @ innovation
+        self.covariance = self.covariance - kalman_gain @ covariance @ kalman_gain.T
+        self.hits += 1
+        self.time_since_update = 0
+        return True
+
+    def get_bbox_xywh(self) -> np.ndarray:
+        x, y, a, h = self.mean[:4]
+        w = a * h
+        return np.array([x - w / 2.0, y - h / 2.0, w, h])
+
+    def vote_identity(self, identity) -> None:
+        self.id_history.append(identity)
+
+    def stable_identity(self):
+        valid = [v for v in self.id_history if v is not None]
+        if not valid:
+            return None
+        return max(set(valid), key=valid.count)
+
+
+def compute_iou(box_a, box_b):
+    xa = max(box_a[0], box_b[0])
+    ya = max(box_a[1], box_b[1])
+    xb = min(box_a[0] + box_a[2], box_b[0] + box_b[2])
+    yb = min(box_a[1] + box_a[3], box_b[1] + box_b[3])
+    inter = max(0, xb - xa) * max(0, yb - ya)
+    area_a = box_a[2] * box_a[3]
+    area_b = box_b[2] * box_b[3]
+    return inter / float(area_a + area_b - inter + 1e-9)
+
+
+class MikoVoRaRa11MultiKalmanTracker:
+    """
+    Multi-Target 8-State Kalman Tracker:
+      - Continuous Track IDs across video frames
+      - Mahalanobis distance gating + IoU spatial association
+      - Directional Tripwire crossing (IN / OUT)
+      - Unauthorized Loitering detection timer
+      - 10-frame identity stabilization
+    """
+    def __init__(self, max_age: int = 25, id_window: int = 10):
+        self.next_id = 1
+        self.trackers = {}
+        self.max_age = max_age
+        self.id_window = id_window
+
+    def update(self, detections, frame_shape, line_y=None, loiter_limit=10.0, now=None):
+        now = now or time.time()
+        fh, fw = frame_shape[:2]
+
+        for tid, trk in list(self.trackers.items()):
+            trk.predict()
+
+        matched_trks = set()
+        unmatched_dets = list(range(len(detections)))
+        updated_detections = []
+
+        for det_idx in list(unmatched_dets):
+            det = detections[det_idx]
+            db = det["bbox"]
+            meas = np.array([db[0] + db[2] / 2.0, db[1] + db[3] / 2.0, db[2] / float(max(1, db[3])), db[3]], dtype=np.float64)
+
+            best_match, best_score = None, -1.0
+            for tid, trk in self.trackers.items():
+                if tid in matched_trks:
+                    continue
+                pred_bbox = trk.get_bbox_xywh()
+                iou = compute_iou(db, pred_bbox)
+                if iou > best_score:
+                    best_score = iou
+                    best_match = tid
+
+            if best_match is not None and best_score >= 0.22:
+                matched_trks.add(best_match)
+                unmatched_dets.remove(det_idx)
+                trk = self.trackers[best_match]
+                trk.update(meas)
+                trk.vote_identity(det.get("name"))
+                smooth_box = [int(v) for v in trk.get_bbox_xywh()]
+                det_kpts = det.get("full_kpts")
+                if det_kpts is not None:
+                    trk.kpts_history.append(det_kpts)
+                else:
+                    trk.kpts_history.append(np.zeros((17, 3), dtype=np.float64))
+                trk.bbox_history.append(smooth_box)
+
+                curr_feet_y = smooth_box[1] + smooth_box[3]
+                prev_feet_y = getattr(trk, "prev_feet_y", curr_feet_y)
+
+                direction = None
+                if line_y is not None and not getattr(trk, "tripwire_crossed", False):
+                    if prev_feet_y < line_y <= curr_feet_y:
+                        direction = "IN"
+                        trk.tripwire_crossed = True
+                        state["stats"]["in_count"] += 1
+                    elif prev_feet_y > line_y >= curr_feet_y:
+                        direction = "OUT"
+                        trk.tripwire_crossed = True
+                        state["stats"]["out_count"] += 1
+
+                trk.prev_feet_y = curr_feet_y
+                duration = now - getattr(trk, "first_seen", now)
+                is_loitering = False
+                if config.get("loitering_enabled") and duration >= loiter_limit:
+                    is_loitering = True
+                    if not getattr(trk, "loitering_logged", False):
+                        trk.loitering_logged = True
+                        state["stats"]["loitering_count"] += 1
+
+                det_copy = dict(det)
+                det_copy["track_id"] = best_match
+                det_copy["smooth_bbox"] = smooth_box
+                det_copy["name"] = trk.stable_identity() or det.get("name")
+                det_copy["direction"] = direction
+                det_copy["is_loitering"] = is_loitering
+                det_copy["duration"] = round(duration, 1)
+                det_copy["kalman_state"] = trk.mean.copy()
+                updated_detections.append(det_copy)
+
+        for det_idx in unmatched_dets:
+            det = detections[det_idx]
+            db = det["bbox"]
+            meas = np.array([db[0] + db[2] / 2.0, db[1] + db[3] / 2.0, db[2] / float(max(1, db[3])), db[3]], dtype=np.float64)
+            tid = self.next_id
+            self.next_id += 1
+            trk = MikoVoRaRa11KalmanTracker(meas, track_id=tid, id_window=self.id_window)
+            trk.first_seen = now
+            trk.prev_feet_y = db[1] + db[3]
+            trk.tripwire_crossed = False
+            trk.loitering_logged = False
+            trk.vote_identity(det.get("name"))
+            smooth_box = [int(v) for v in trk.get_bbox_xywh()]
+            det_kpts = det.get("full_kpts")
+            if det_kpts is not None:
+                trk.kpts_history.append(det_kpts)
+            else:
+                trk.kpts_history.append(np.zeros((17, 3), dtype=np.float64))
+            trk.bbox_history.append(smooth_box)
+            self.trackers[tid] = trk
+            det_copy = dict(det)
+            det_copy["track_id"] = tid
+            det_copy["smooth_bbox"] = smooth_box
+            det_copy["name"] = det.get("name")
+            det_copy["direction"] = None
+            det_copy["is_loitering"] = False
+            det_copy["duration"] = 0.0
+            det_copy["kalman_state"] = trk.mean.copy()
+            updated_detections.append(det_copy)
+
+        dead = [tid for tid, trk in self.trackers.items() if trk.time_since_update > self.max_age]
+        for tid in dead:
+            del self.trackers[tid]
+
+        return updated_detections
+
+
+def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    denom = (np.linalg.norm(a) * np.linalg.norm(b)) + 1e-9
+    return float(np.dot(a, b) / denom)
+
+
+class FaceDatabase:
+    """
+    Persistent 512-Dimensional Deep Metric Vector Store
+    """
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.records = []
+        self._load()
+
+    def _load(self):
+        if DB_PATH.exists() and DB_PATH.stat().st_size > 0:
+            try:
+                with open(DB_PATH, "r", encoding="utf-8") as f:
+                    raw = json.load(f)
+                for item in raw:
+                    item["embedding"] = np.array(item["embedding"], dtype=np.float32)
+                self.records = raw
+            except Exception:
+                self.records = []
+
+    def _save(self):
+        data = []
+        for r in self.records:
+            copy = r.copy()
+            copy["embedding"] = r["embedding"].tolist()
+            data.append(copy)
+        with open(DB_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    def add(self, name: str, embedding: np.ndarray, thumb_b64: str = ""):
+        with self._lock:
+            rec = {
+                "id": f"face_{int(time.time() * 1000)}",
+                "name": name.strip(),
+                "embedding": embedding.astype(np.float32),
+                "thumbnail": thumb_b64 or "",
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            }
+            self.records.append(rec)
+            self._save()
+            return rec
+
+    def find_match(self, embedding: np.ndarray, threshold: float = 0.68):
+        with self._lock:
+            best_score, best_name = 0.0, None
+            for r in self.records:
+                score = cosine_similarity(embedding, r["embedding"])
+                if score > best_score:
+                    best_score, best_name = score, r["name"]
+            return (best_name, float(best_score)) if best_score >= threshold else (None, float(best_score))
+
+    def delete(self, face_id: str):
+        with self._lock:
+            before = len(self.records)
+            self.records = [r for r in self.records if r["id"] != str(face_id)]
+            if len(self.records) < before:
+                self._save()
+                return True
+            return False
+
+    def clear(self):
+        with self._lock:
+            self.records.clear()
+            self._save()
+
+    def all_json(self):
+        with self._lock:
+            return [{k: v for k, v in r.items() if k != "embedding"} for r in self.records]
+
+
 # ===================================================================
-# Notice: The mathematical algorithms, neural transform matrices,
-# liveness filters, behavioral threat profilers, violence sentinels,
-# and tactical body-cam wireframe mesh of MikoVo RaRa 11 are proprietary assets compiled into high-speed optimized bytecode.
-import marshal
-import zlib
-import base64
+# 2.B MikoVo RaRa 11 Liveness & Attention Sentinel (Anti-Spoofing & 3D Pose)
+# ===================================================================
+# =============================================================================
+# 0. TUNABLE CONSTANTS (calibrate against your deployment camera/dataset)
+# =============================================================================
 
-_MIKOVO_CORE_CIPHER = b"""
-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
-Iux+CuRL95XAikNO7BPpHRpkl4t6bEbF8w==
-"""
+LIVENESS_PASS_THRESHOLD: float = 0.65
 
-def _load_mikovo_rara11_core():
-    _key = b"MikoVoRaRa11_Proprietary_Vision_Core_Protected_2026"
-    _klen = len(_key)
-    _raw = base64.b64decode(_MIKOVO_CORE_CIPHER)
-    _dec = bytes([b ^ _key[i % _klen] for i, b in enumerate(_raw)])
-    _decomp = zlib.decompress(_dec)
-    _code = marshal.loads(_decomp)
-    exec(_code, globals())
+# FFT spectral band boundaries (fraction of max radius)
+_FFT_LOW_BAND_FRAC: float = 0.10
+_FFT_HIGH_BAND_FRAC: float = 0.35
+_FFT_HIGH_RATIO_SPOOF_CEIL: float = 0.55   # ratio at/above which fft_score -> 0
+_FFT_PEAK_SCREEN_THRESHOLD: float = 9.0    # peak/mean in high band -> moire grid
 
-_load_mikovo_rara11_core()
-del _load_mikovo_rara11_core, _MIKOVO_CORE_CIPHER
+# Chrominance / specular constants
+_SPECULAR_V_THRESH: int = 245
+_SPECULAR_S_THRESH: int = 25
+_SPECULAR_RATIO_SPOOF_CEIL: float = 0.15
+_CHROMA_STD_NATURAL_CAP: float = 15.0
 
+# rPPG proxy constants
+_RPPG_WINDOW: int = 24           # ~1 sec @ 24 FPS sliding window
+_RPPG_MIN_FRAMES: int = 10
+_RPPG_IDEAL_STD: float = 1.0
+_RPPG_STD_TOLERANCE: float = 1.2
+
+# Head pose constants
+_POSE_ANGLE_LIMIT_DEG: float = 30.0
+_POSE_ANGLE_FALLOFF_DEG: float = 60.0
+_POSE_ROLL_LIMIT_DEG: float = 45.0
+_POSE_ROLL_FALLOFF_DEG: float = 90.0
+
+# Fusion memory constants
+_FUSION_BASE_ALPHA: float = 0.25
+_FUSION_REJECT_THRESHOLD: float = 0.30
+_FUSION_DESCRIPTOR_DIM: int = 512
+
+# Sharpness (Laplacian variance) calibration for a 112x112 crop
+_SHARPNESS_VAR_SCALE: float = 500.0
+
+# Standard anthropometric 3D canonical head model (mm), ordered as
+# [nose, left_eye, right_eye, left_ear, right_ear].
+_HEAD_MODEL_3D: np.ndarray = np.array(
+    [
+        [0.0, 0.0, 0.0],        # nose tip
+        [-35.0, 32.0, -25.0],   # left eye
+        [35.0, 32.0, -25.0],    # right eye
+        [-70.0, -10.0, -65.0],  # left ear / cheek
+        [70.0, -10.0, -65.0],   # right ear / cheek
+    ],
+    dtype=np.float64,
+)
+
+
+# =============================================================================
+# 1. RESULT DATACLASSES
+# =============================================================================
+
+@dataclass
+class LivenessResult:
+    """Detailed breakdown of the passive liveness/anti-spoofing analysis."""
+    score: float
+    is_real: bool
+    attack_type: Optional[str]           # "SCREEN_REPLAY" | "PRINT_PHOTO" | None
+    fft_score: float
+    chroma_specular_score: float
+    rppg_score: float
+    rppg_available: bool
+
+
+@dataclass
+class HeadPoseResult:
+    """3D head-pose solution and frontal-attention quality."""
+    pitch_deg: float
+    yaw_deg: float
+    roll_deg: float
+    pose_quality: float
+    success: bool
+
+
+@dataclass
+class SentinelReport:
+    """
+    Unified output of `evaluate_face_sentinel`.
+
+    Core contract fields (as specified):
+        is_live, liveness_score, is_spoof_attack, attack_type,
+        euler_angles (pitch, yaw, roll), pose_quality,
+        fused_descriptor_ready.
+
+    Additional integration-friendly fields are included for convenience
+    when wiring this module together with `mikivo_neural_core.py`.
+    """
+    is_live: bool
+    liveness_score: float
+    is_spoof_attack: bool
+    attack_type: Optional[str]
+    euler_angles: Tuple[float, float, float]
+    pose_quality: float
+    fused_descriptor_ready: bool
+    # --- bonus integration fields ---
+    sharpness_score: float = 0.0
+    quality_weight: float = 0.0
+    descriptor_fused: bool = False
+
+
+# =============================================================================
+# 2. SHARED LOW-LEVEL VECTORIZED HELPERS
+# =============================================================================
+
+@lru_cache(maxsize=4)
+def _radial_distance_grid(h: int, w: int) -> np.ndarray:
+    """
+    Precompute (and cache) a normalized radial-distance grid centered at the
+    FFT zero-frequency origin, used to build low/high frequency band masks
+    without any per-pixel Python loops.
+    """
+    cy, cx = h / 2.0, w / 2.0
+    yy, xx = np.mgrid[0:h, 0:w]
+    dist = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
+    max_r = math.hypot(cy, cx) + 1e-9
+    return dist / max_r
+
+
+def _laplacian_sharpness_score(gray: np.ndarray) -> float:
+    """Normalized [0,1] focus/sharpness score via Laplacian variance."""
+    lap = cv2.Laplacian(gray, cv2.CV_64F, ksize=3)
+    var = float(lap.var())
+    return float(np.clip(var / _SHARPNESS_VAR_SCALE, 0.0, 1.0))
+
+
+def _angle_penalty(angle_deg: float, limit: float, falloff: float) -> float:
+    """Linear penalty: 1.0 within `limit`, decaying to 0.0 over `falloff`."""
+    excess = max(0.0, abs(angle_deg) - limit)
+    return float(max(0.0, 1.0 - excess / falloff))
+
+
+# =============================================================================
+# 3. MIKOVO LIVENESS DETECTOR
+# =============================================================================
+
+class MikoVoLivenessDetector:
+    """
+    Passive, multi-spectral face anti-spoofing engine operating on a single
+    112x112 (or similarly sized) aligned BGR face crop, optionally enriched
+    with short-term temporal history per track ID for an rPPG proxy signal.
+
+    No active IR/depth sensing is required — all signals are derived
+    passively from a standard RGB/BGR camera frame.
+    """
+
+    def __init__(self, rppg_window: int = _RPPG_WINDOW) -> None:
+        self._rppg_window = rppg_window
+        self._green_history: Dict[Any, Deque[float]] = {}
+
+    # ------------------------------------------------------------------ #
+    # 3.1 Fourier Spectral Analysis
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _fft_spectral_analysis(gray: np.ndarray) -> Tuple[float, float, float]:
+        """
+        Compute the high/low radial frequency energy ratio and the spectral
+        peakiness of the high-frequency band (periodic subpixel/moire grid
+        signature), fully vectorized via `cv2.dft` + boolean band masks.
+
+        Returns
+        -------
+        (fft_score, energy_ratio, peak_ratio)
+        """
+        h, w = gray.shape
+        win = cv2.createHanningWindow((w, h), cv2.CV_32F)
+        windowed = gray.astype(np.float32) * win
+
+        dft = cv2.dft(windowed, flags=cv2.DFT_COMPLEX_OUTPUT)
+        dft_shift = np.fft.fftshift(dft, axes=(0, 1))
+        magnitude = cv2.magnitude(dft_shift[:, :, 0], dft_shift[:, :, 1])
+
+        radial = _radial_distance_grid(h, w)
+        low_mask = radial <= _FFT_LOW_BAND_FRAC
+        high_mask = radial >= _FFT_HIGH_BAND_FRAC
+
+        low_energy = float(np.sum(magnitude[low_mask] ** 2)) + 1e-9
+        high_vals = magnitude[high_mask]
+        high_energy = float(np.sum(high_vals ** 2))
+
+        energy_ratio = high_energy / low_energy
+        peak_ratio = float(high_vals.max() / (high_vals.mean() + 1e-9))
+
+        fft_score = 1.0 - np.clip(energy_ratio / _FFT_HIGH_RATIO_SPOOF_CEIL, 0.0, 1.0)
+        return float(fft_score), energy_ratio, peak_ratio
+
+    # ------------------------------------------------------------------ #
+    # 3.2 Chrominance & Specular Dispersion
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _chroma_specular_analysis(face_bgr: np.ndarray) -> Tuple[float, float]:
+        """
+        Combine YCbCr chrominance diversity (natural skin subsurface
+        scattering produces richer local color variance than flat
+        print/screen reproduction) with HSV specular-highlight dispersion
+        (large uniform bright/desaturated regions indicate glare off glass
+        or glossy paper rather than skin).
+
+        Returns
+        -------
+        (chroma_specular_score, specular_ratio)
+        """
+        ycrcb = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2YCrCb)
+        cr, cb = ycrcb[:, :, 1].astype(np.float32), ycrcb[:, :, 2].astype(np.float32)
+        chroma_std = (float(np.std(cr)) + float(np.std(cb))) / 2.0
+        chroma_score = float(np.clip(chroma_std / _CHROMA_STD_NATURAL_CAP, 0.0, 1.0))
+
+        hsv = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2HSV)
+        s_ch, v_ch = hsv[:, :, 1], hsv[:, :, 2]
+        specular_mask = (v_ch >= _SPECULAR_V_THRESH) & (s_ch <= _SPECULAR_S_THRESH)
+        specular_ratio = float(np.mean(specular_mask))
+        specular_score = 1.0 - np.clip(specular_ratio / _SPECULAR_RATIO_SPOOF_CEIL, 0.0, 1.0)
+
+        combined = 0.5 * chroma_score + 0.5 * specular_score
+        return float(combined), specular_ratio
+
+    # ------------------------------------------------------------------ #
+    # 3.3 Temporal rPPG Proxy
+    # ------------------------------------------------------------------ #
+    def _rppg_proxy_score(self, face_bgr: np.ndarray, track_id: Optional[Any]) -> Tuple[float, bool]:
+        """
+        Maintain a short rolling buffer of mean-green intensity sampled from
+        the central facial ROI (forehead/cheek region, rich in capillary
+        blood flow) and score its detrended micro-variance. A genuine live
+        face exhibits a subtle, non-zero biological pulse jitter; a static
+        photo or frozen replay frame yields near-zero variance.
+        """
+        if track_id is None:
+            return 0.5, False  # neutral — no temporal context available
+
+        h, w = face_bgr.shape[:2]
+        roi = face_bgr[int(h * 0.15):int(h * 0.55), int(w * 0.25):int(w * 0.75), 1]
+        green_mean = float(np.mean(roi))
+
+        history = self._green_history.setdefault(track_id, deque(maxlen=self._rppg_window))
+        history.append(green_mean)
+
+        if len(history) < _RPPG_MIN_FRAMES:
+            return 0.5, False
+
+        signal = np.asarray(history, dtype=np.float32)
+        detrended = signal - np.convolve(signal, np.ones(3) / 3.0, mode="same")
+        sig_std = float(np.std(detrended))
+
+        score = math.exp(-((sig_std - _RPPG_IDEAL_STD) / _RPPG_STD_TOLERANCE) ** 2)
+        return float(np.clip(score, 0.0, 1.0)), True
+
+    # ------------------------------------------------------------------ #
+    def reset_track(self, track_id: Any) -> None:
+        """Clear the rPPG temporal buffer for a track (e.g. on track loss)."""
+        self._green_history.pop(track_id, None)
+
+    def analyze(self, face_bgr: np.ndarray, track_id: Optional[Any] = None) -> LivenessResult:
+        """
+        Run the full multi-spectral liveness pipeline on a single aligned
+        face crop and return a detailed `LivenessResult`.
+        """
+        gray = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2GRAY)
+
+        fft_score, energy_ratio, peak_ratio = self._fft_spectral_analysis(gray)
+        chroma_score, specular_ratio = self._chroma_specular_analysis(face_bgr)
+        rppg_score, rppg_available = self._rppg_proxy_score(face_bgr, track_id)
+
+        if rppg_available:
+            weights = (0.40, 0.30, 0.30)
+        else:
+            weights = (0.55, 0.45, 0.0)
+
+        total_score = (
+            weights[0] * fft_score + weights[1] * chroma_score + weights[2] * rppg_score
+        )
+        total_score = float(np.clip(total_score, 0.0, 1.0))
+        is_real = total_score >= LIVENESS_PASS_THRESHOLD
+
+        attack_type: Optional[str] = None
+        if not is_real:
+            if peak_ratio >= _FFT_PEAK_SCREEN_THRESHOLD or specular_ratio >= _SPECULAR_RATIO_SPOOF_CEIL:
+                attack_type = "SCREEN_REPLAY"
+            elif energy_ratio >= _FFT_HIGH_RATIO_SPOOF_CEIL * 0.6:
+                attack_type = "PRINT_PHOTO"
+
+        return LivenessResult(
+            score=total_score,
+            is_real=is_real,
+            attack_type=attack_type,
+            fft_score=fft_score,
+            chroma_specular_score=chroma_score,
+            rppg_score=rppg_score,
+            rppg_available=rppg_available,
+        )
+
+
+# =============================================================================
+# 4. MIKOVO HEAD POSE ESTIMATOR
+# =============================================================================
+
+class MikoVoHeadPoseEstimator:
+    """
+    Solves 3D head pose (pitch, yaw, roll) from the 5 YOLOv8-pose keypoints
+    using `cv2.solvePnP`, and derives a frontal-attention quality score that
+    penalizes poses known to degrade downstream face-recognition accuracy.
+    """
+
+    def __init__(self, image_size: int = 112) -> None:
+        self.image_size = image_size
+        self._camera_matrix = np.array(
+            [
+                [image_size, 0.0, image_size / 2.0],
+                [0.0, image_size, image_size / 2.0],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float64,
+        )
+        self._dist_coeffs = np.zeros((4, 1), dtype=np.float64)
+
+    @staticmethod
+    def _rotation_matrix_to_euler(r_mat: np.ndarray) -> Tuple[float, float, float]:
+        """Decompose a rotation matrix into pitch/yaw/roll (degrees), gimbal-lock safe."""
+        sy = math.sqrt(r_mat[0, 0] ** 2 + r_mat[1, 0] ** 2)
+        singular = sy < 1e-6
+
+        if not singular:
+            pitch = math.atan2(r_mat[2, 1], r_mat[2, 2])
+            yaw = math.atan2(-r_mat[2, 0], sy)
+            roll = math.atan2(r_mat[1, 0], r_mat[0, 0])
+        else:
+            pitch = math.atan2(-r_mat[1, 2], r_mat[1, 1])
+            yaw = math.atan2(-r_mat[2, 0], sy)
+            roll = 0.0
+
+        return math.degrees(pitch), math.degrees(yaw), math.degrees(roll)
+
+    def estimate(self, kpts_5x2: np.ndarray, confs_5: Optional[np.ndarray] = None) -> HeadPoseResult:
+        """
+        Parameters
+        ----------
+        kpts_5x2 : (5, 2) keypoints in the *aligned 112x112 crop* coordinate
+                   space, ordered [nose, left_eye, right_eye, left_ear, right_ear].
+        confs_5  : optional (5,) confidences (currently used only to guard
+                   against degenerate all-zero input).
+
+        Returns
+        -------
+        HeadPoseResult
+        """
+        image_points = np.asarray(kpts_5x2, dtype=np.float64).reshape(5, 1, 2)
+
+        if confs_5 is not None and np.all(np.asarray(confs_5) < 0.05):
+            return HeadPoseResult(0.0, 0.0, 0.0, 0.0, success=False)
+
+        success, rvec, tvec = cv2.solvePnP(
+            _HEAD_MODEL_3D.reshape(5, 1, 3),
+            image_points,
+            self._camera_matrix,
+            self._dist_coeffs,
+            flags=cv2.SOLVEPNP_EPNP,
+        )
+
+        if not success:
+            success, rvec, tvec = cv2.solvePnP(
+                _HEAD_MODEL_3D.reshape(5, 1, 3),
+                image_points,
+                self._camera_matrix,
+                self._dist_coeffs,
+                flags=cv2.SOLVEPNP_ITERATIVE,
+            )
+
+        if not success:
+            return HeadPoseResult(0.0, 0.0, 0.0, 0.0, success=False)
+
+        r_mat, _ = cv2.Rodrigues(rvec)
+        pitch, yaw, roll = self._rotation_matrix_to_euler(r_mat)
+
+        yaw_penalty = _angle_penalty(yaw, _POSE_ANGLE_LIMIT_DEG, _POSE_ANGLE_FALLOFF_DEG)
+        pitch_penalty = _angle_penalty(pitch, _POSE_ANGLE_LIMIT_DEG, _POSE_ANGLE_FALLOFF_DEG)
+        roll_penalty = _angle_penalty(roll, _POSE_ROLL_LIMIT_DEG, _POSE_ROLL_FALLOFF_DEG)
+
+        pose_quality = float(np.clip(yaw_penalty * pitch_penalty * (0.85 + 0.15 * roll_penalty), 0.0, 1.0))
+
+        return HeadPoseResult(
+            pitch_deg=float(pitch),
+            yaw_deg=float(yaw),
+            roll_deg=float(roll),
+            pose_quality=pose_quality,
+            success=True,
+        )
+
+
+# =============================================================================
+# 5. MIKOVO TRACK FUSION MEMORY
+# =============================================================================
+
+class MikoVoTrackFusionMemory:
+    """
+    Maintains a quality-weighted Exponential Moving Average (EMA) of the
+    512-D identity descriptor for each active track ID, re-normalized to
+    the unit hypersphere after every update.
+
+    Low-quality observations (spoofed, blurry, extreme-pose crops) are
+    rejected outright rather than being allowed to corrupt the EMA, and
+    high-quality observations are blended in proportionally faster.
+    """
+
+    def __init__(
+        self,
+        base_alpha: float = _FUSION_BASE_ALPHA,
+        reject_threshold: float = _FUSION_REJECT_THRESHOLD,
+        descriptor_dim: int = _FUSION_DESCRIPTOR_DIM,
+    ) -> None:
+        self.base_alpha = base_alpha
+        self.reject_threshold = reject_threshold
+        self.descriptor_dim = descriptor_dim
+        self._memory: Dict[Any, np.ndarray] = {}
+        self._observation_count: Dict[Any, int] = {}
+
+    @staticmethod
+    def compute_quality_weight(
+        liveness_score: float, pose_quality: float, sharpness_score: float
+    ) -> float:
+        """Combined acceptance weight in [0,1] used to gate/scale EMA updates."""
+        return float(np.clip(liveness_score * pose_quality * sharpness_score, 0.0, 1.0))
+
+    def update(self, track_id: Any, descriptor_512d: np.ndarray, quality_weight: float) -> bool:
+        """
+        Fuse a new descriptor observation into the track's identity memory.
+
+        Returns
+        -------
+        bool — True if the observation was accepted and fused, False if it
+        was rejected (quality below `reject_threshold`, e.g. a spoof attempt
+        or a blurred/extreme-pose crop).
+        """
+        descriptor_512d = np.asarray(descriptor_512d, dtype=np.float32)
+        if descriptor_512d.shape[-1] != self.descriptor_dim:
+            raise ValueError(
+                f"Expected a {self.descriptor_dim}-D descriptor, got {descriptor_512d.shape[-1]}."
+            )
+
+        if quality_weight < self.reject_threshold:
+            return False
+
+        norm = np.linalg.norm(descriptor_512d) + 1e-9
+        descriptor_512d = descriptor_512d / norm
+
+        if track_id not in self._memory:
+            self._memory[track_id] = descriptor_512d.copy()
+            self._observation_count[track_id] = 1
+            return True
+
+        effective_alpha = float(np.clip(self.base_alpha * quality_weight, 0.0, 1.0))
+        fused = (1.0 - effective_alpha) * self._memory[track_id] + effective_alpha * descriptor_512d
+        fused_norm = np.linalg.norm(fused) + 1e-9
+        self._memory[track_id] = (fused / fused_norm).astype(np.float32)
+        self._observation_count[track_id] += 1
+        return True
+
+    def get(self, track_id: Any) -> Optional[np.ndarray]:
+        """Return the current fused unit-norm descriptor for a track, if any."""
+        return self._memory.get(track_id)
+
+    def observation_count(self, track_id: Any) -> int:
+        """Number of accepted (non-rejected) observations fused for a track."""
+        return self._observation_count.get(track_id, 0)
+
+    def reset(self, track_id: Any) -> None:
+        """Drop a track's identity memory (e.g. on track termination)."""
+        self._memory.pop(track_id, None)
+        self._observation_count.pop(track_id, None)
+
+
+# =============================================================================
+# 6. TOP-LEVEL FACADE
+# =============================================================================
+
+_DEFAULT_LIVENESS_DETECTOR = MikoVoLivenessDetector()
+_DEFAULT_POSE_ESTIMATOR = MikoVoHeadPoseEstimator(image_size=112)
+_DEFAULT_FUSION_MEMORY = MikoVoTrackFusionMemory()
+
+
+def evaluate_face_sentinel(
+    aligned_112x112_bgr: np.ndarray,
+    kpts_5x2: np.ndarray,
+    confs_5: np.ndarray,
+    track_id: Optional[Any] = None,
+    descriptor_512d: Optional[np.ndarray] = None,
+    liveness_detector: MikoVoLivenessDetector = _DEFAULT_LIVENESS_DETECTOR,
+    pose_estimator: MikoVoHeadPoseEstimator = _DEFAULT_POSE_ESTIMATOR,
+    fusion_memory: MikoVoTrackFusionMemory = _DEFAULT_FUSION_MEMORY,
+) -> SentinelReport:
+    """
+    Clean top-level facade: run liveness analysis, 3D head-pose profiling,
+    and (optionally) quality-weighted descriptor fusion, in a single call.
+
+    Parameters
+    ----------
+    aligned_112x112_bgr : (112, 112, 3) BGR aligned face crop.
+    kpts_5x2            : (5, 2) keypoints [nose, left_eye, right_eye,
+                           left_ear, right_ear] in the aligned-crop space.
+    confs_5             : (5,) keypoint confidences.
+    track_id            : optional tracker identity, enabling temporal
+                           rPPG analysis and descriptor fusion continuity.
+    descriptor_512d     : optional 512-D face descriptor (e.g. produced by
+                           `mikivo_neural_core.MikiVoFeatureExtractor`). If
+                           provided, it is fused into `fusion_memory` under
+                           `track_id`, gated by the computed quality weight.
+
+    Returns
+    -------
+    SentinelReport
+    """
+    gray = cv2.cvtColor(aligned_112x112_bgr, cv2.COLOR_BGR2GRAY)
+
+    liveness = liveness_detector.analyze(aligned_112x112_bgr, track_id=track_id)
+    pose = pose_estimator.estimate(kpts_5x2, confs_5)
+    sharpness = _laplacian_sharpness_score(gray)
+
+    quality_weight = MikoVoTrackFusionMemory.compute_quality_weight(
+        liveness.score, pose.pose_quality, sharpness
+    )
+
+    fused_descriptor_ready = (
+        liveness.is_real and pose.success and quality_weight >= fusion_memory.reject_threshold
+    )
+
+    descriptor_fused = False
+    if descriptor_512d is not None and track_id is not None:
+        descriptor_fused = fusion_memory.update(track_id, descriptor_512d, quality_weight)
+
+    return SentinelReport(
+        is_live=liveness.is_real,
+        liveness_score=liveness.score,
+        is_spoof_attack=not liveness.is_real,
+        attack_type=liveness.attack_type,
+        euler_angles=(pose.pitch_deg, pose.yaw_deg, pose.roll_deg),
+        pose_quality=pose.pose_quality,
+        fused_descriptor_ready=fused_descriptor_ready,
+        sharpness_score=sharpness,
+        quality_weight=quality_weight,
+        descriptor_fused=descriptor_fused,
+    )
+
+
+# =============================================================================
+# 7. MIKOVO RARA 11 BEHAVIORAL & KINETIC THREAT PROFILER
+# =============================================================================
+
+DEFAULT_FPS: float = 30.0
+
+# Subsystem 1: Facial Occlusion & Concealment
+OCCLUSION_CONCEALED_THRESHOLD: float = 0.45
+_KP_VIS_THRESHOLD: float = 0.45
+_LOWER_GRAD_RATIO_MASK_CEIL: float = 0.52
+_MASK_SAT_DIFF_THRESH: float = 28.0
+_DARK_FABRIC_V_THRESH: float = 65.0
+_SURGICAL_BLUE_H_RANGE: Tuple[int, int] = (85, 130)
+_SURGICAL_WHITE_S_MAX: int = 38
+_SURGICAL_WHITE_V_MIN: int = 165
+
+# Subsystem 2: Kinetic Threat & Fall Detection
+_DASH_VELOCITY_PX_SEC: float = 420.0        # Rapid sprinting threshold (px/s)
+_DASH_ACCEL_PX_SEC2: float = 650.0          # Sudden burst acceleration (px/s^2)
+_APPROACH_VH_RATIO_SEC: float = 0.35        # Relative bbox height expansion rate (vh/h per sec)
+_FALL_VY_PX_SEC: float = 220.0              # Downward vertical velocity spike (px/s)
+_FALL_WINDOW_FRAMES: int = 12               # ~0.40s @ 30 FPS
+_FALL_UPRIGHT_H_OVER_W: float = 2.0         # Standing aspect ratio h/w > 2.0
+_FALL_COLLAPSED_H_OVER_W: float = 0.90      # Collapsed aspect ratio h/w < 0.9
+
+# Subsystem 3: Trajectory Entropy & Prowler Detection
+PROWLING_SCORE_THRESHOLD: float = 0.68
+_TRAJECTORY_WINDOW: int = 45                # Sliding window length (frames)
+_MIN_PROWL_FRAMES: int = 18                 # Minimum history before scoring
+_MIN_TOTAL_PATH_PX: float = 65.0            # Ignore stationary micro-jitter
+_TORTUOSITY_SATURATION: float = 6.5         # Path length / net displacement ceiling
+_ANGULAR_BINS: int = 8                      # 8 compass octants for Shannon entropy
+
+
+@dataclass
+class OcclusionResult:
+    """Output of `MikoVoOcclusionDetector.analyze`."""
+    occlusion_ratio: float
+    is_face_concealed: bool
+    concealment_type: Optional[str]
+
+
+@dataclass
+class KineticResult:
+    """Output of `MikoVoKineticThreatAnalyzer.analyze`."""
+    velocity_px_sec: float
+    acceleration_px_sec2: float
+    is_rapid_dash: bool
+    is_rapid_approach: bool
+    is_fallen: bool
+    kinetic_event: Optional[str]
+
+
+@dataclass
+class TrajectoryEntropyResult:
+    """Output of `MikoVoTrajectoryEntropyAnalyzer.analyze`."""
+    prowling_score: float
+    is_prowling: bool
+    tortuosity: float
+    directional_entropy: float
+
+
+@dataclass
+class ThreatReport:
+    """
+    Unified behavioral & kinetic threat assessment returned by
+    `evaluate_behavioral_threat`.
+    """
+    is_threat: bool
+    threat_level: str                       # "CLEAR" | "ELEVATED" | "CRITICAL"
+    threat_category: Optional[str]          # "RAPID_DASH" | "CONCEALED_FACE" | "PROWLER_PACING" | "PERSON_FALLEN" | None
+    occlusion_ratio: float
+    is_concealed: bool
+    velocity_px_sec: float
+    prowling_score: float
+    is_fallen: bool
+    summary_text: str
+    concealment_type: Optional[str] = None
+    acceleration_px_sec2: float = 0.0
+    is_rapid_approach: bool = False
+    tortuosity: float = 1.0
+
+
+class MikoVoOcclusionDetector:
+    """
+    Vectorized facial occlusion and concealment classifier.
+    Combines keypoint confidence & bilateral symmetry analysis
+    fused with vectorized HSV / Sobel gradient micro-texture comparison
+    between upper and lower facial zones to detect surgical masks,
+    bandanas, sunglasses, and heavy balaclavas.
+    """
+    def __init__(self, threshold: float = OCCLUSION_CONCEALED_THRESHOLD) -> None:
+        self.threshold = threshold
+
+    @staticmethod
+    def _symmetry_deficit(kpts_5x2: np.ndarray, confs_5: np.ndarray) -> float:
+        nose, le, re, lea, rea = kpts_5x2
+        eps = 1e-6
+
+        d_le = float(np.linalg.norm(le - nose))
+        d_re = float(np.linalg.norm(re - nose))
+        eye_asym = abs(d_le - d_re) / (max(d_le, d_re) + eps)
+
+        d_lea = float(np.linalg.norm(lea - nose))
+        d_rea = float(np.linalg.norm(rea - nose))
+        ear_asym = abs(d_lea - d_rea) / (max(d_lea, d_rea) + eps)
+
+        eye_w = float(min(confs_5[1], confs_5[2]))
+        ear_w = float(min(confs_5[3], confs_5[4]))
+        score = 0.65 * (eye_asym * eye_w) + 0.35 * (ear_asym * ear_w)
+        return float(np.clip(score, 0.0, 1.0))
+
+    @staticmethod
+    def _crop_zone_metrics(face_crop: np.ndarray) -> Tuple[float, Optional[str], float, float]:
+        h, w = face_crop.shape[:2]
+        if h < 16 or w < 16:
+            return 0.0, None, 128.0, 128.0
+
+        x0, x1 = int(w * 0.18), int(w * 0.82)
+        upper_bgr = face_crop[int(h * 0.18):int(h * 0.48), x0:x1]
+        lower_bgr = face_crop[int(h * 0.54):int(h * 0.92), x0:x1]
+
+        hsv_up = cv2.cvtColor(upper_bgr, cv2.COLOR_BGR2HSV).astype(np.float32)
+        hsv_lo = cv2.cvtColor(lower_bgr, cv2.COLOR_BGR2HSV).astype(np.float32)
+
+        gray_up = cv2.cvtColor(upper_bgr, cv2.COLOR_BGR2GRAY)
+        gray_lo = cv2.cvtColor(lower_bgr, cv2.COLOR_BGR2GRAY)
+
+        gx_up = cv2.Sobel(gray_up, cv2.CV_32F, 1, 0, ksize=3)
+        gy_up = cv2.Sobel(gray_up, cv2.CV_32F, 0, 1, ksize=3)
+        grad_var_up = float(np.var(cv2.magnitude(gx_up, gy_up))) + 1.0
+
+        gx_lo = cv2.Sobel(gray_lo, cv2.CV_32F, 1, 0, ksize=3)
+        gy_lo = cv2.Sobel(gray_lo, cv2.CV_32F, 0, 1, ksize=3)
+        grad_var_lo = float(np.var(cv2.magnitude(gx_lo, gy_lo))) + 1.0
+
+        h_lo_mean = float(np.mean(hsv_lo[:, :, 0]))
+        s_up_mean, s_lo_mean = float(np.mean(hsv_up[:, :, 1])), float(np.mean(hsv_lo[:, :, 1]))
+        v_up_mean, v_lo_mean = float(np.mean(hsv_up[:, :, 2])), float(np.mean(hsv_lo[:, :, 2]))
+        h_up_mean = float(np.mean(hsv_up[:, :, 0]))
+
+        hue_diff = min(abs(h_up_mean - h_lo_mean), 180.0 - abs(h_up_mean - h_lo_mean))
+        sat_diff = abs(s_up_mean - s_lo_mean)
+        val_diff = abs(v_up_mean - v_lo_mean)
+
+        color_discontinuity = float(
+            np.clip((hue_diff / 45.0) * 0.45 + (sat_diff / 70.0) * 0.30 + (val_diff / 85.0) * 0.25, 0.0, 1.0)
+        )
+
+        grad_ratio = grad_var_lo / (grad_var_up + 120.0)
+        smooth_lower_score = float(np.clip(1.0 - (grad_ratio / _LOWER_GRAD_RATIO_MASK_CEIL), 0.0, 1.0))
+
+        is_surgical_blue = (_SURGICAL_BLUE_H_RANGE[0] <= h_lo_mean <= _SURGICAL_BLUE_H_RANGE[1]) and (s_lo_mean > 35.0)
+        is_surgical_white = (s_lo_mean <= _SURGICAL_WHITE_S_MAX) and (v_lo_mean >= _SURGICAL_WHITE_V_MIN) and (sat_diff > 18.0)
+
+        fabric_hint: Optional[str] = None
+        if v_up_mean < _DARK_FABRIC_V_THRESH and v_lo_mean < _DARK_FABRIC_V_THRESH and s_lo_mean < 55.0:
+            fabric_hint = "HEAVY_BALACLAVA"
+            crop_score = 0.88
+        elif is_surgical_blue or is_surgical_white:
+            fabric_hint = "SURGICAL_MASK"
+            crop_score = max(0.65, 0.55 * color_discontinuity + 0.45 * smooth_lower_score)
+        elif v_lo_mean < _DARK_FABRIC_V_THRESH and val_diff > 35.0:
+            fabric_hint = "FABRIC_BANDANA"
+            crop_score = max(0.62, 0.55 * color_discontinuity + 0.45 * smooth_lower_score)
+        elif v_up_mean < _DARK_FABRIC_V_THRESH and v_lo_mean > v_up_mean + 35.0:
+            fabric_hint = "UPPER_SUNGLASSES"
+            crop_score = 0.58
+        else:
+            crop_score = 0.55 * color_discontinuity + 0.45 * smooth_lower_score
+            if crop_score > 0.52:
+                fabric_hint = "FABRIC_BANDANA"
+
+        return float(np.clip(crop_score, 0.0, 1.0)), fabric_hint, v_up_mean, v_lo_mean
+
+    def analyze(
+        self,
+        kpts_5x2: np.ndarray,
+        confs_5: np.ndarray,
+        face_crop: Optional[np.ndarray] = None,
+    ) -> OcclusionResult:
+        kpts = np.asarray(kpts_5x2, dtype=np.float64)
+        confs = np.clip(np.asarray(confs_5, dtype=np.float64), 0.0, 1.0)
+
+        nose_conf = float(confs[0])
+        eyes_conf = float(np.mean(confs[1:3]))
+        ears_conf = float(np.mean(confs[3:5]))
+
+        weighted_vis = 0.40 * nose_conf + 0.40 * eyes_conf + 0.20 * ears_conf
+        kp_deficit = float(np.clip(1.0 - weighted_vis, 0.0, 1.0))
+        sym_deficit = self._symmetry_deficit(kpts, confs)
+
+        crop_score = 0.0
+        fabric_hint: Optional[str] = None
+        if face_crop is not None and face_crop.size > 0:
+            crop_score, fabric_hint, _, _ = self._crop_zone_metrics(face_crop)
+            occlusion_ratio = float(
+                np.clip(0.45 * kp_deficit + 0.42 * crop_score + 0.13 * sym_deficit, 0.0, 1.0)
+            )
+            if fabric_hint in ("SURGICAL_MASK", "FABRIC_BANDANA", "HEAVY_BALACLAVA"):
+                occlusion_ratio = max(occlusion_ratio, 0.72 * crop_score + 0.28 * kp_deficit)
+        else:
+            occlusion_ratio = float(np.clip(0.82 * kp_deficit + 0.18 * sym_deficit, 0.0, 1.0))
+
+        is_concealed = occlusion_ratio > self.threshold
+        concealment_type: Optional[str] = None
+
+        if is_concealed:
+            if nose_conf < _KP_VIS_THRESHOLD and eyes_conf < _KP_VIS_THRESHOLD and ears_conf < _KP_VIS_THRESHOLD:
+                concealment_type = "HEAVY_BALACLAVA"
+            elif fabric_hint == "HEAVY_BALACLAVA":
+                concealment_type = "HEAVY_BALACLAVA"
+            elif eyes_conf < _KP_VIS_THRESHOLD and nose_conf >= _KP_VIS_THRESHOLD:
+                concealment_type = "UPPER_SUNGLASSES"
+            elif fabric_hint is not None:
+                concealment_type = fabric_hint
+            elif nose_conf < _KP_VIS_THRESHOLD and eyes_conf >= _KP_VIS_THRESHOLD:
+                concealment_type = "SURGICAL_MASK"
+            else:
+                concealment_type = "FABRIC_BANDANA"
+
+        return OcclusionResult(
+            occlusion_ratio=round(occlusion_ratio, 4),
+            is_face_concealed=bool(is_concealed),
+            concealment_type=concealment_type,
+        )
+
+
+@dataclass
+class _KineticTrackMemory:
+    prev_speed_px_sec: float
+    prev_vy_px_sec: float
+    hw_ratio_history: Deque[float]
+
+
+class MikoVoKineticThreatAnalyzer:
+    """
+    Analyzes 8-state Kalman filter velocity and posture:
+      - Rapid sprinting/dash (RAPID_DASH).
+      - Perspective looming approach toward camera (RAPID_APPROACH).
+      - Sudden human collapse/fall (FALL_DETECTED / COLLAPSE).
+    """
+    def __init__(self, fps: float = DEFAULT_FPS) -> None:
+        self.fps = float(max(fps, 1.0))
+        self.dt = 1.0 / self.fps
+        self._window_len = max(4, int(round(0.40 * self.fps)))
+        self._tracks: Dict[Any, _KineticTrackMemory] = {}
+
+    def reset_track(self, track_id: Any) -> None:
+        self._tracks.pop(track_id, None)
+
+    def analyze(
+        self,
+        track_id: Any,
+        kalman_state_8d: np.ndarray,
+        bbox_xywh: Tuple[float, float, float, float],
+        frame_shape: Tuple[int, ...],
+    ) -> KineticResult:
+        state = np.asarray(kalman_state_8d, dtype=np.float64).ravel()
+        if state.size < 8:
+            state = np.pad(state, (0, max(0, 8 - state.size)))
+
+        cx, cy, a_state, h_state, vx_raw, vy_raw, va_raw, vh_raw = state[:8]
+        bx, by, bw, bh = bbox_xywh
+
+        raw_mag = math.hypot(vx_raw, vy_raw)
+        scale = self.fps if raw_mag < 75.0 else 1.0
+
+        vx = vx_raw * scale
+        vy = vy_raw * scale
+        vh = vh_raw * (self.fps if abs(vh_raw) < 40.0 else 1.0)
+
+        speed_px_sec = float(math.hypot(vx, vy))
+
+        w_eff = max(float(bw), float(a_state * h_state), 1.0)
+        h_eff = max(float(bh), float(h_state), 1.0)
+        h_over_w = h_eff / w_eff
+
+        mem = self._tracks.get(track_id)
+        if mem is None:
+            mem = _KineticTrackMemory(
+                prev_speed_px_sec=speed_px_sec,
+                prev_vy_px_sec=vy,
+                hw_ratio_history=deque(maxlen=self._window_len),
+            )
+            self._tracks[track_id] = mem
+            accel_px_sec2 = 0.0
+        else:
+            accel_px_sec2 = (speed_px_sec - mem.prev_speed_px_sec) / self.dt
+            mem.prev_speed_px_sec = speed_px_sec
+            mem.prev_vy_px_sec = vy
+
+        mem.hw_ratio_history.append(h_over_w)
+
+        max_recent_hw = max(mem.hw_ratio_history)
+        aspect_collapsed = (max_recent_hw >= _FALL_UPRIGHT_H_OVER_W) and (
+            h_over_w <= _FALL_COLLAPSED_H_OVER_W
+        )
+        va_spike = va_raw > 0.35 and h_over_w <= _FALL_COLLAPSED_H_OVER_W
+        is_fallen = bool((vy >= _FALL_VY_PX_SEC) and (aspect_collapsed or va_spike))
+
+        frame_h, frame_w = int(frame_shape[0]), int(frame_shape[1])
+        target_x, target_y = frame_w * 0.5, frame_h * 0.95
+        to_cam_x, to_cam_y = target_x - cx, target_y - cy
+        to_cam_norm = math.hypot(to_cam_x, to_cam_y) + 1e-6
+        heading_cos = (vx * to_cam_x + vy * to_cam_y) / ((speed_px_sec + 1e-6) * to_cam_norm)
+
+        rel_expansion_rate = vh / max(h_eff, 20.0)
+        is_rapid_approach = bool(
+            not is_fallen
+            and (
+                (rel_expansion_rate >= _APPROACH_VH_RATIO_SEC and speed_px_sec >= 160.0)
+                or (heading_cos >= 0.65 and speed_px_sec >= _DASH_VELOCITY_PX_SEC * 0.85 and accel_px_sec2 >= 250.0)
+            )
+        )
+
+        is_rapid_dash = bool(
+            not is_fallen
+            and (
+                speed_px_sec >= _DASH_VELOCITY_PX_SEC
+                or (speed_px_sec >= 280.0 and accel_px_sec2 >= _DASH_ACCEL_PX_SEC2)
+                or is_rapid_approach
+            )
+        )
+
+        kinetic_event: Optional[str] = None
+        if is_fallen:
+            kinetic_event = "FALL_DETECTED / COLLAPSE"
+        elif is_rapid_approach:
+            kinetic_event = "RAPID_APPROACH"
+        elif is_rapid_dash:
+            kinetic_event = "RAPID_DASH"
+
+        return KineticResult(
+            velocity_px_sec=round(speed_px_sec, 2),
+            acceleration_px_sec2=round(float(accel_px_sec2), 2),
+            is_rapid_dash=is_rapid_dash,
+            is_rapid_approach=is_rapid_approach,
+            is_fallen=is_fallen,
+            kinetic_event=kinetic_event,
+        )
+
+
+class MikoVoTrajectoryEntropyAnalyzer:
+    """
+    Maintains 45-frame sliding window of track positions:
+      1. Path Tortuosity (total_path_distance / net_displacement)
+      2. Directional Shannon Entropy across 8 compass octants
+    """
+    def __init__(
+        self,
+        window_size: int = _TRAJECTORY_WINDOW,
+        prowling_threshold: float = PROWLING_SCORE_THRESHOLD,
+    ) -> None:
+        self.window_size = window_size
+        self.prowling_threshold = prowling_threshold
+        self._trajectories: Dict[Any, Deque[Tuple[float, float]]] = {}
+
+    def reset_track(self, track_id: Any) -> None:
+        self._trajectories.pop(track_id, None)
+
+    def analyze(self, track_id: Any, center_xy: Tuple[float, float]) -> TrajectoryEntropyResult:
+        buf = self._trajectories.setdefault(track_id, deque(maxlen=self.window_size))
+        buf.append((float(center_xy[0]), float(center_xy[1])))
+
+        n_pts = len(buf)
+        if n_pts < _MIN_PROWL_FRAMES:
+            return TrajectoryEntropyResult(0.0, False, 1.0, 0.0)
+
+        pts = np.asarray(buf, dtype=np.float64)
+        deltas = np.diff(pts, axis=0)
+        step_lengths = np.hypot(deltas[:, 0], deltas[:, 1])
+        total_distance = float(np.sum(step_lengths))
+
+        if total_distance < _MIN_TOTAL_PATH_PX:
+            return TrajectoryEntropyResult(0.0, False, 1.0, 0.0)
+
+        net_displacement = float(np.hypot(pts[-1, 0] - pts[0, 0], pts[-1, 1] - pts[0, 1]))
+        tortuosity = total_distance / (net_displacement + 6.0)
+        tortuosity_score = float(
+            np.clip((tortuosity - 1.25) / (_TORTUOSITY_SATURATION - 1.25), 0.0, 1.0)
+        )
+
+        active_mask = step_lengths > 1.2
+        if int(np.sum(active_mask)) < 6:
+            return TrajectoryEntropyResult(0.0, False, round(tortuosity, 3), 0.0)
+
+        active_deltas = deltas[active_mask]
+        angles = np.arctan2(active_deltas[:, 1], active_deltas[:, 0])
+
+        bins = np.floor(((angles + math.pi) / (2.0 * math.pi)) * _ANGULAR_BINS).astype(np.int32)
+        bins = np.clip(bins, 0, _ANGULAR_BINS - 1)
+        counts = np.bincount(bins, minlength=_ANGULAR_BINS).astype(np.float64)
+        probs = counts[counts > 0] / float(angles.size)
+        shannon_entropy = float(-np.sum(probs * np.log2(probs))) / math.log2(_ANGULAR_BINS)
+
+        angle_diffs = np.diff(angles)
+        angle_diffs = (angle_diffs + math.pi) % (2.0 * math.pi) - math.pi
+        turn_var_score = float(np.clip(np.std(angle_diffs) / 1.45, 0.0, 1.0))
+        reversal_rate = float(np.mean(np.abs(angle_diffs) > 1.85))
+        reversal_score = float(np.clip(reversal_rate / 0.22, 0.0, 1.0))
+
+        directional_chaos = float(
+            np.clip(0.40 * shannon_entropy + 0.35 * turn_var_score + 0.25 * reversal_score, 0.0, 1.0)
+        )
+
+        prowling_score = float(np.clip(0.62 * tortuosity_score + 0.38 * directional_chaos, 0.0, 1.0))
+        is_prowling = prowling_score > self.prowling_threshold
+
+        return TrajectoryEntropyResult(
+            prowling_score=round(prowling_score, 4),
+            is_prowling=bool(is_prowling),
+            tortuosity=round(tortuosity, 3),
+            directional_entropy=round(directional_chaos, 4),
+        )
+
+
+_DEFAULT_OCCLUSION_DETECTOR = MikoVoOcclusionDetector()
+_DEFAULT_KINETIC_ANALYZER = MikoVoKineticThreatAnalyzer()
+_DEFAULT_ENTROPY_ANALYZER = MikoVoTrajectoryEntropyAnalyzer()
+
+
+def evaluate_behavioral_threat(
+    track_id: Any,
+    kalman_state_8d: np.ndarray,
+    bbox_xywh: Tuple[float, float, float, float],
+    kpts_5x2: np.ndarray,
+    confs_5: np.ndarray,
+    frame_shape: Tuple[int, ...],
+    face_crop: Optional[np.ndarray] = None,
+    occlusion_detector: MikoVoOcclusionDetector = _DEFAULT_OCCLUSION_DETECTOR,
+    kinetic_analyzer: MikoVoKineticThreatAnalyzer = _DEFAULT_KINETIC_ANALYZER,
+    entropy_analyzer: MikoVoTrajectoryEntropyAnalyzer = _DEFAULT_ENTROPY_ANALYZER,
+) -> ThreatReport:
+    state = np.asarray(kalman_state_8d, dtype=np.float64).ravel()
+    cx, cy = float(state[0]), float(state[1])
+
+    occ = occlusion_detector.analyze(kpts_5x2, confs_5, face_crop=face_crop)
+    kin = kinetic_analyzer.analyze(track_id, state, bbox_xywh, frame_shape)
+    ent = entropy_analyzer.analyze(track_id, (cx, cy))
+
+    threat_category: Optional[str] = None
+    threat_level: str = "CLEAR"
+
+    if kin.is_fallen:
+        threat_category = "PERSON_FALLEN"
+        threat_level = "CRITICAL"
+    elif kin.is_rapid_dash:
+        threat_category = "RAPID_DASH"
+        threat_level = "CRITICAL" if (occ.is_face_concealed or kin.is_rapid_approach) else "ELEVATED"
+    elif occ.is_face_concealed and ent.is_prowling:
+        threat_category = "CONCEALED_FACE"
+        threat_level = "CRITICAL"
+    elif occ.is_face_concealed:
+        threat_category = "CONCEALED_FACE"
+        threat_level = "CRITICAL" if occ.concealment_type == "HEAVY_BALACLAVA" else "ELEVATED"
+    elif ent.is_prowling:
+        threat_category = "PROWLER_PACING"
+        threat_level = "ELEVATED"
+
+    is_threat = threat_level != "CLEAR"
+
+    if not is_threat:
+        summary_text = (
+            f"[CLEAR] Track #{track_id}: Normal transit "
+            f"(v={kin.velocity_px_sec:.0f} px/s, occ={occ.occlusion_ratio:.2f}, prowl={ent.prowling_score:.2f})."
+        )
+    else:
+        tags = []
+        if kin.is_fallen:
+            tags.append("FALL_DETECTED/COLLAPSE")
+        if kin.is_rapid_approach:
+            tags.append(f"RAPID_APPROACH ({kin.velocity_px_sec:.0f} px/s)")
+        elif kin.is_rapid_dash:
+            tags.append(f"RAPID_DASH ({kin.velocity_px_sec:.0f} px/s)")
+        if occ.is_face_concealed:
+            tags.append(f"CONCEALED:{occ.concealment_type} (occ={occ.occlusion_ratio:.2f})")
+        if ent.is_prowling:
+            tags.append(f"PROWLING (score={ent.prowling_score:.2f}, tort={ent.tortuosity:.1f}x)")
+
+        summary_text = f"[{threat_level}] Track #{track_id} ({threat_category}): " + " | ".join(tags)
+
+    return ThreatReport(
+        is_threat=is_threat,
+        threat_level=threat_level,
+        threat_category=threat_category,
+        occlusion_ratio=occ.occlusion_ratio,
+        is_concealed=occ.is_face_concealed,
+        velocity_px_sec=kin.velocity_px_sec,
+        prowling_score=ent.prowling_score,
+        is_fallen=kin.is_fallen,
+        summary_text=summary_text,
+        concealment_type=occ.concealment_type,
+        acceleration_px_sec2=kin.acceleration_px_sec2,
+        is_rapid_approach=kin.is_rapid_approach,
+        tortuosity=ent.tortuosity,
+    )
+
+
+
+
+# =============================================================================
+# 7.2. MIKOVO RARA 11 PHYSICAL VIOLENCE, STRIKE & GRAPPLE SENTINEL
+# =============================================================================
+# =============================================================================
+# 0. COCO 17-KEYPOINT INDICES & CALIBRATION CONSTANTS
+# =============================================================================
+
+# Standard YOLOv8-pose / COCO 17-keypoint layout:
+# 0:nose, 1:l_eye, 2:r_eye, 3:l_ear, 4:r_ear,
+# 5:l_shoulder, 6:r_shoulder, 7:l_elbow, 8:r_elbow,
+# 9:l_wrist, 10:r_wrist, 11:l_hip, 12:r_hip,
+# 13:l_knee, 14:r_knee, 15:l_ankle, 16:r_ankle
+KP_NOSE: int = 0
+KP_L_EYE: int = 1
+KP_R_EYE: int = 2
+KP_L_EAR: int = 3
+KP_R_EAR: int = 4
+KP_L_SHOULDER: int = 5
+KP_R_SHOULDER: int = 6
+KP_L_ELBOW: int = 7
+KP_R_ELBOW: int = 8
+KP_L_WRIST: int = 9
+KP_R_WRIST: int = 10
+KP_L_HIP: int = 11
+KP_R_HIP: int = 12
+KP_L_KNEE: int = 13
+KP_R_KNEE: int = 14
+KP_L_ANKLE: int = 15
+KP_R_ANKLE: int = 16
+
+DEFAULT_FPS: float = 30.0
+MIN_KP_CONF: float = 0.30
+
+# Subsystem 1: Strike Velocity & Jerk Thresholds
+_STRIKE_WRIST_VEL_PX_SEC: float = 520.0         # Absolute wrist speed threshold (px/s)
+_STRIKE_EXTENSION_VEL_PX_SEC: float = 340.0     # Outward wrist-from-shoulder radial speed (px/s)
+_STRIKE_JERK_PX_SEC3: float = 18000.0           # 3rd-derivative kinematic jerk ceiling (px/s^3)
+_STRIKE_ANGULAR_ACCEL_RAD_SEC2: float = 85.0    # Elbow snap angular acceleration (rad/s^2)
+
+# Subsystem 2: Pairwise Interlock / Grapple Thresholds
+_GRAPPLE_IOU_THRESHOLD: float = 0.22            # Bounding-box intersection-over-union
+_GRAPPLE_OVERLAP_RATIO_THRESH: float = 0.38     # Intersection over smaller bbox area
+_GRAPPLE_CLOSING_SPEED_PX_SEC: float = 160.0    # Mutual closing rate (px/s)
+_GRAPPLE_REL_ACCEL_PX_SEC2: float = 380.0       # Relative convergence acceleration (px/s^2)
+
+# Subsystem 3: Chaotic Struggle Entropy Thresholds
+_STRUGGLE_WINDOW: int = 20                      # 20-frame sliding window
+_STRUGGLE_MIN_FRAMES: int = 6
+_JITTER_RMS_SATURATION_PX: float = 14.0         # High-pass centroid residual RMS (px)
+_TURBULENCE_ACCEL_STD_PX_SEC2: float = 550.0    # Acceleration standard deviation ceiling
+_VIOLENCE_SCORE_THRESHOLD: float = 0.52         # Unified aggression trigger threshold
+
+
+# =============================================================================
+# 1. REQUIRED DATACLASSES
+# =============================================================================
+
+@dataclass
+class StrikeEvent:
+    """Represents a detected limb strike (punch, slap, elbow, melee swing)."""
+    is_strike: bool
+    limb: Optional[str]                 # "LEFT_ARM" | "RIGHT_ARM" | "DUAL_ARMS" | None
+    velocity_px_sec: float
+    confidence: float
+    # Diagnostic metadata
+    track_id: Optional[Any] = None
+    jerk_px_sec3: float = 0.0
+    angular_accel_rad_sec2: float = 0.0
+
+
+@dataclass
+class GrappleEvent:
+    """Represents a multi-person proxemic collapse / physical grapple state."""
+    is_grappling: bool
+    person_ids: Tuple[Any, Any]
+    overlap_ratio: float
+    relative_accel: float
+    # Diagnostic metadata
+    closing_speed_px_sec: float = 0.0
+    iou: float = 0.0
+
+
+@dataclass
+class AggressionReport:
+    """
+    Unified output of `evaluate_aggression_dynamics`.
+
+    Core required attributes:
+        is_violent_threat : bool
+        threat_level      : str ("CLEAR", "ELEVATED", "CRITICAL")
+        threat_type       : Optional[str] ("MELEE_STRIKE", "PHYSICAL_GRAPPLE",
+                            "CHAOTIC_BRAWL", None)
+        aggression_score  : float in [0.0, 1.0]
+        summary_text      : str (operator dispatch summary)
+    """
+    is_violent_threat: bool
+    threat_level: str
+    threat_type: Optional[str]
+    aggression_score: float
+    summary_text: str
+    # Extended telemetry for downstream fusion
+    top_strike: Optional[StrikeEvent] = None
+    top_grapple: Optional[GrappleEvent] = None
+    struggle_entropy_score: float = 0.0
+
+
+# =============================================================================
+# 2. INPUT NORMALIZATION HELPERS
+# =============================================================================
+
+@dataclass
+class _NormalizedTrackSequence:
+    """Internal standardized representation of a single track's temporal history."""
+    track_id: Any
+    bboxes: np.ndarray          # (T, 4) float64 [x, y, w, h]
+    keypoints: np.ndarray       # (T, 17, 3) float64 [x, y, conf]
+
+
+def _standardize_keypoints_array(kpts: np.ndarray, bboxes: np.ndarray) -> np.ndarray:
+    """
+    Coerce an input keypoint history of shape `(T, K, C)` into a canonical
+    `(T, 17, 3)` array `[x, y, conf]`. Supports:
+      - Standard `(T, 17, 3)` YOLOv8-pose keypoints.
+      - `(T, 17, 2)` keypoints (assigns default confidence 0.85 where non-zero).
+      - Compact 9-point or 11-point upper-body subsets `[nose, le, re, lea, rea,
+        l_sh, r_sh, l_wr, r_wr, (l_hip, r_hip)]`.
+      - 5-point head keypoints `(T, 5, 2|3)` (synthesizes approximate shoulder/hip
+        anchors from bbox geometry with low confidence so centroid tracking works).
+    """
+    arr = np.asarray(kpts, dtype=np.float64)
+    if arr.ndim == 2:
+        arr = arr[None, :, :]
+    T, K, C = arr.shape
+    out = np.zeros((T, 17, 3), dtype=np.float64)
+
+    if C == 2:
+        valid = (np.abs(arr[:, :, 0]) + np.abs(arr[:, :, 1])) > 1e-3
+        conf = np.where(valid, 0.85, 0.0)[:, :, None]
+        arr = np.concatenate([arr, conf], axis=2)
+
+    if K >= 17:
+        out[:, :17, :] = arr[:, :17, :3]
+    elif K == 11:
+        # [0..4: head, 5..6: shoulders, 7..8: wrists, 9..10: hips]
+        out[:, :7, :] = arr[:, :7, :3]
+        out[:, KP_L_WRIST, :] = arr[:, 7, :3]
+        out[:, KP_R_WRIST, :] = arr[:, 8, :3]
+        out[:, KP_L_HIP, :] = arr[:, 9, :3]
+        out[:, KP_R_HIP, :] = arr[:, 10, :3]
+    elif K == 9:
+        # [0..4: head, 5..6: shoulders, 7..8: wrists]
+        out[:, :7, :] = arr[:, :7, :3]
+        out[:, KP_L_WRIST, :] = arr[:, 7, :3]
+        out[:, KP_R_WRIST, :] = arr[:, 8, :3]
+    else:
+        k_copy = min(K, 17)
+        out[:, :k_copy, :] = arr[:, :k_copy, :3]
+        # Populate approximate shoulder centers from bbox for upper-body centroid stability
+        bx, by, bw, bh = bboxes[:, 0], bboxes[:, 1], bboxes[:, 2], bboxes[:, 3]
+        out[:, KP_L_SHOULDER, 0] = bx + 0.30 * bw
+        out[:, KP_L_SHOULDER, 1] = by + 0.24 * bh
+        out[:, KP_L_SHOULDER, 2] = 0.40
+        out[:, KP_R_SHOULDER, 0] = bx + 0.70 * bw
+        out[:, KP_R_SHOULDER, 1] = by + 0.24 * bh
+        out[:, KP_R_SHOULDER, 2] = 0.40
+
+    return out
+
+
+def _parse_tracks_history(tracks_history: Any) -> List[_NormalizedTrackSequence]:
+    """
+    Flexibly parse `tracks_history` passed to `evaluate_aggression_dynamics`.
+    """
+    normalized: List[_NormalizedTrackSequence] = []
+    if not tracks_history:
+        return normalized
+
+    items: List[Tuple[Any, Any]] = []
+    if isinstance(tracks_history, Mapping):
+        items = list(tracks_history.items())
+    elif isinstance(tracks_history, Sequence):
+        for idx, entry in enumerate(tracks_history):
+            if isinstance(entry, Mapping):
+                tid = entry.get("track_id", entry.get("id", idx))
+                items.append((tid, entry))
+
+    for track_id, data in items:
+        if isinstance(data, Mapping):
+            raw_bboxes = data.get("bboxes", data.get("bbox"))
+            raw_kpts = data.get("keypoints", data.get("kpts"))
+            if raw_bboxes is None or raw_kpts is None:
+                continue
+            bboxes = np.asarray(raw_bboxes, dtype=np.float64)
+            if bboxes.ndim == 1:
+                bboxes = bboxes[None, :]
+            kpts = _standardize_keypoints_array(np.asarray(raw_kpts, dtype=np.float64), bboxes)
+            T = min(bboxes.shape[0], kpts.shape[0])
+            if T > 0:
+                normalized.append(_NormalizedTrackSequence(track_id, bboxes[-T:], kpts[-T:]))
+        elif isinstance(data, Sequence) and len(data) > 0 and isinstance(data[0], Mapping):
+            bboxes_list = [frame["bbox"] for frame in data if "bbox" in frame and "keypoints" in frame]
+            kpts_list = [frame["keypoints"] for frame in data if "bbox" in frame and "keypoints" in frame]
+            if not bboxes_list:
+                continue
+            bboxes = np.asarray(bboxes_list, dtype=np.float64)
+            kpts = _standardize_keypoints_array(np.asarray(kpts_list, dtype=np.float64), bboxes)
+            normalized.append(_NormalizedTrackSequence(track_id, bboxes, kpts))
+
+    return normalized
+
+
+# =============================================================================
+# 3. SUBSYSTEM 1: STRIKE VELOCITY & KINEMATIC JERK ANALYZER
+# =============================================================================
+
+class MikoVoStrikeVelocityAnalyzer:
+    """
+    Analyzes upper-limb (shoulder -> elbow -> wrist) kinematic chains across
+    consecutive frames to detect rapid punches, slaps, and melee strikes.
+    """
+
+    def __init__(
+        self,
+        wrist_vel_threshold: float = _STRIKE_WRIST_VEL_PX_SEC,
+        extension_vel_threshold: float = _STRIKE_EXTENSION_VEL_PX_SEC,
+        jerk_threshold: float = _STRIKE_JERK_PX_SEC3,
+        angular_accel_threshold: float = _STRIKE_ANGULAR_ACCEL_RAD_SEC2,
+    ) -> None:
+        self.wrist_vel_threshold = wrist_vel_threshold
+        self.extension_vel_threshold = extension_vel_threshold
+        self.jerk_threshold = jerk_threshold
+        self.angular_accel_threshold = angular_accel_threshold
+
+    def _analyze_single_arm(
+        self,
+        sh_xyz: np.ndarray,
+        el_xyz: np.ndarray,
+        wr_xyz: np.ndarray,
+        dt: float,
+    ) -> Tuple[float, float, float, float, float]:
+        T = wr_xyz.shape[0]
+        if T < 3:
+            return 0.0, 0.0, 0.0, 0.0, 0.0
+
+        sh_conf = sh_xyz[:, 2]
+        el_conf = el_xyz[:, 2]
+        wr_conf = wr_xyz[:, 2]
+
+        valid_sw = (sh_conf >= MIN_KP_CONF) & (wr_conf >= MIN_KP_CONF)
+        if int(np.sum(valid_sw[-min(T, 6):])) < 3:
+            return 0.0, 0.0, 0.0, 0.0, 0.0
+
+        rel_wr = wr_xyz[:, :2] - sh_xyz[:, :2]
+        rel_vel = np.diff(rel_wr, axis=0) / dt
+        wrist_speeds = np.hypot(rel_vel[:, 0], rel_vel[:, 1])
+
+        radial_dist = np.hypot(rel_wr[:, 0], rel_wr[:, 1])
+        extension_vel = np.diff(radial_dist) / dt
+
+        pair_valid = valid_sw[:-1] & valid_sw[1:]
+        if not np.any(pair_valid):
+            return 0.0, 0.0, 0.0, 0.0, 0.0
+
+        masked_speeds = np.where(pair_valid, wrist_speeds, 0.0)
+        masked_ext_vel = np.where(pair_valid, np.maximum(0.0, extension_vel), 0.0)
+
+        peak_wrist_vel = float(np.max(masked_speeds[-min(len(masked_speeds), 6):]))
+        peak_ext_vel = float(np.max(masked_ext_vel[-min(len(masked_ext_vel), 6):]))
+
+        peak_jerk = 0.0
+        if T >= 4:
+            rel_acc = np.diff(rel_vel, axis=0) / dt
+            rel_jerk = np.diff(rel_acc, axis=0) / dt
+            jerk_mag = np.hypot(rel_jerk[:, 0], rel_jerk[:, 1])
+            jerk_valid = valid_sw[:-3] & valid_sw[1:-2] & valid_sw[2:-1] & valid_sw[3:]
+            if np.any(jerk_valid):
+                peak_jerk = float(np.max(np.where(jerk_valid, jerk_mag, 0.0)[-min(len(jerk_mag), 5):]))
+
+        peak_ang_accel = 0.0
+        valid_all = valid_sw & (el_conf >= MIN_KP_CONF)
+        if T >= 4 and int(np.sum(valid_all)) >= 4:
+            v_upper = sh_xyz[:, :2] - el_xyz[:, :2]
+            v_fore = wr_xyz[:, :2] - el_xyz[:, :2]
+            dot = np.sum(v_upper * v_fore, axis=1)
+            norm_prod = (np.hypot(v_upper[:, 0], v_upper[:, 1]) * np.hypot(v_fore[:, 0], v_fore[:, 1])) + 1e-6
+            cos_theta = np.clip(dot / norm_prod, -1.0, 1.0)
+            theta = np.arccos(cos_theta)
+            ang_vel = np.diff(theta) / dt
+            ang_acc = np.abs(np.diff(ang_vel) / dt)
+            ang_valid = valid_all[:-2] & valid_all[1:-1] & valid_all[2:]
+            if np.any(ang_valid):
+                peak_ang_accel = float(np.max(np.where(ang_valid, ang_acc, 0.0)[-min(len(ang_acc), 5):]))
+
+        vel_score = float(np.clip(peak_wrist_vel / (self.wrist_vel_threshold * 1.35), 0.0, 1.0))
+        ext_score = float(np.clip(peak_ext_vel / (self.extension_vel_threshold * 1.25), 0.0, 1.0))
+        jerk_score = float(np.clip(peak_jerk / (self.jerk_threshold * 1.40), 0.0, 1.0))
+        ang_score = float(np.clip(peak_ang_accel / (self.angular_accel_threshold * 1.35), 0.0, 1.0))
+
+        if peak_ang_accel > 0.0:
+            strike_score = 0.38 * vel_score + 0.28 * ext_score + 0.20 * jerk_score + 0.14 * ang_score
+        else:
+            strike_score = 0.44 * vel_score + 0.34 * ext_score + 0.22 * jerk_score
+
+        mean_conf = float(np.mean(wr_conf[valid_sw][-min(int(np.sum(valid_sw)), 5):]))
+        return float(np.clip(strike_score, 0.0, 1.0)), peak_wrist_vel, peak_jerk, peak_ang_accel, mean_conf
+
+    def analyze_track(
+        self,
+        kpts_seq: np.ndarray,
+        fps: float = DEFAULT_FPS,
+        track_id: Optional[Any] = None,
+    ) -> StrikeEvent:
+        dt = 1.0 / max(float(fps), 1.0)
+        kpts = np.asarray(kpts_seq, dtype=np.float64)
+        if kpts.ndim != 3 or kpts.shape[0] < 3:
+            return StrikeEvent(False, None, 0.0, 0.0, track_id=track_id)
+
+        l_score, l_vel, l_jerk, l_ang, l_conf = self._analyze_single_arm(
+            kpts[:, KP_L_SHOULDER], kpts[:, KP_L_ELBOW], kpts[:, KP_L_WRIST], dt
+        )
+        r_score, r_vel, r_jerk, r_ang, r_conf = self._analyze_single_arm(
+            kpts[:, KP_R_SHOULDER], kpts[:, KP_R_ELBOW], kpts[:, KP_R_WRIST], dt
+        )
+
+        l_trig = (l_vel >= self.wrist_vel_threshold and l_score >= 0.52) or (l_score >= 0.62)
+        r_trig = (r_vel >= self.wrist_vel_threshold and r_score >= 0.52) or (r_score >= 0.62)
+
+        if l_trig and r_trig:
+            limb = "DUAL_ARMS"
+            best_vel = max(l_vel, r_vel)
+            best_jerk = max(l_jerk, r_jerk)
+            best_ang = max(l_ang, r_ang)
+            conf = float(np.clip(max(l_score, r_score) * max(l_conf, r_conf), 0.0, 1.0))
+            is_strike = True
+        elif l_score >= r_score:
+            limb = "LEFT_ARM" if l_trig else None
+            best_vel, best_jerk, best_ang = l_vel, l_jerk, l_ang
+            conf = float(np.clip(l_score * max(l_conf, 0.5), 0.0, 1.0))
+            is_strike = bool(l_trig)
+        else:
+            limb = "RIGHT_ARM" if r_trig else None
+            best_vel, best_jerk, best_ang = r_vel, r_jerk, r_ang
+            conf = float(np.clip(r_score * max(r_conf, 0.5), 0.0, 1.0))
+            is_strike = bool(r_trig)
+
+        return StrikeEvent(
+            is_strike=is_strike,
+            limb=limb,
+            velocity_px_sec=round(best_vel, 2),
+            confidence=round(conf, 4),
+            track_id=track_id,
+            jerk_px_sec3=round(best_jerk, 1),
+            angular_accel_rad_sec2=round(best_ang, 2),
+        )
+
+
+# =============================================================================
+# 4. SUBSYSTEM 2: PAIRWISE INTERLOCK & GRAPPLE ANALYZER
+# =============================================================================
+
+class MikoVoPairwiseInterlockAnalyzer:
+    """
+    Analyzes multi-person proxemic collapse across all active pairs `(i, j)`.
+    """
+
+    def __init__(
+        self,
+        overlap_threshold: float = _GRAPPLE_OVERLAP_RATIO_THRESH,
+        closing_speed_threshold: float = _GRAPPLE_CLOSING_SPEED_PX_SEC,
+        rel_accel_threshold: float = _GRAPPLE_REL_ACCEL_PX_SEC2,
+    ) -> None:
+        self.overlap_threshold = overlap_threshold
+        self.closing_speed_threshold = closing_speed_threshold
+        self.rel_accel_threshold = rel_accel_threshold
+
+    @staticmethod
+    def _pairwise_overlap_series(b1: np.ndarray, b2: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        x1_min, y1_min = b1[:, 0], b1[:, 1]
+        x1_max, y1_max = x1_min + np.maximum(b1[:, 2], 1.0), y1_min + np.maximum(b1[:, 3], 1.0)
+
+        x2_min, y2_min = b2[:, 0], b2[:, 1]
+        x2_max, y2_max = x2_min + np.maximum(b2[:, 2], 1.0), y2_min + np.maximum(b2[:, 3], 1.0)
+
+        inter_w = np.maximum(0.0, np.minimum(x1_max, x2_max) - np.maximum(x1_min, x2_min))
+        inter_h = np.maximum(0.0, np.minimum(y1_max, y2_max) - np.maximum(y1_min, y2_min))
+        inter_area = inter_w * inter_h
+
+        area1 = np.maximum(b1[:, 2], 1.0) * np.maximum(b1[:, 3], 1.0)
+        area2 = np.maximum(b2[:, 2], 1.0) * np.maximum(b2[:, 3], 1.0)
+        union_area = area1 + area2 - inter_area + 1e-6
+        min_area = np.minimum(area1, area2) + 1e-6
+
+        iou = inter_area / union_area
+        overlap_ratio = inter_area / min_area
+        return iou, overlap_ratio
+
+    def analyze_tracks(
+        self,
+        tracks: Sequence[_NormalizedTrackSequence],
+        fps: float = DEFAULT_FPS,
+    ) -> List[GrappleEvent]:
+        n_tracks = len(tracks)
+        if n_tracks < 2:
+            return []
+
+        dt = 1.0 / max(float(fps), 1.0)
+        events: List[GrappleEvent] = []
+
+        for i in range(n_tracks):
+            for j in range(i + 1, n_tracks):
+                tr_a, tr_b = tracks[i], tracks[j]
+                T = min(tr_a.bboxes.shape[0], tr_b.bboxes.shape[0], 15)
+                if T < 2:
+                    continue
+
+                ba = tr_a.bboxes[-T:]
+                bb = tr_b.bboxes[-T:]
+
+                iou_series, ov_series = self._pairwise_overlap_series(ba, bb)
+                curr_overlap = float(np.max(ov_series[-min(T, 3):]))
+                curr_iou = float(np.max(iou_series[-min(T, 3):]))
+                overlap_surge = float(curr_overlap - ov_series[0])
+
+                ca = np.column_stack([ba[:, 0] + 0.5 * ba[:, 2], ba[:, 1] + 0.5 * ba[:, 3]])
+                cb = np.column_stack([bb[:, 0] + 0.5 * bb[:, 2], bb[:, 1] + 0.5 * bb[:, 3]])
+                dist_series = np.hypot(ca[:, 0] - cb[:, 0], ca[:, 1] - cb[:, 1])
+
+                closing_speeds = -np.diff(dist_series) / dt
+                peak_closing_speed = float(np.max(np.maximum(0.0, closing_speeds)))
+
+                va = np.diff(ca, axis=0) / dt
+                vb = np.diff(cb, axis=0) / dt
+                rel_vel = va - vb
+
+                if T >= 3:
+                    rel_acc = np.diff(rel_vel, axis=0) / dt
+                    rel_acc_mag = np.hypot(rel_acc[:, 0], rel_acc[:, 1])
+                    peak_rel_accel = float(np.max(rel_acc_mag))
+                else:
+                    peak_rel_accel = float(np.hypot(rel_vel[-1, 0], rel_vel[-1, 1]) / dt)
+
+                is_grappling = bool(
+                    (
+                        curr_overlap >= self.overlap_threshold
+                        and (
+                            peak_closing_speed >= self.closing_speed_threshold
+                            or peak_rel_accel >= self.rel_accel_threshold
+                            or overlap_surge >= 0.20
+                        )
+                    )
+                    or (curr_iou >= _GRAPPLE_IOU_THRESHOLD * 1.45 and peak_rel_accel >= self.rel_accel_threshold * 0.75)
+                )
+
+                events.append(
+                    GrappleEvent(
+                        is_grappling=is_grappling,
+                        person_ids=(tr_a.track_id, tr_b.track_id),
+                        overlap_ratio=round(curr_overlap, 4),
+                        relative_accel=round(peak_rel_accel, 2),
+                        closing_speed_px_sec=round(peak_closing_speed, 2),
+                        iou=round(curr_iou, 4),
+                    )
+                )
+
+        events.sort(
+            key=lambda e: (e.is_grappling, e.overlap_ratio * 0.6 + min(e.relative_accel / 1000.0, 1.0) * 0.4),
+            reverse=True,
+        )
+        return events
+
+
+# =============================================================================
+# 5. SUBSYSTEM 3: CHAOTIC STRUGGLE ENTROPY ANALYZER
+# =============================================================================
+
+class MikoVoChaoticStruggleEntropy:
+    """
+    Measures kinetic turbulent energy and high-frequency spatial jitter of
+    upper-body centroids across a 20-frame sliding window.
+    """
+
+    def __init__(self, window_size: int = _STRUGGLE_WINDOW) -> None:
+        self.window_size = window_size
+
+    @staticmethod
+    def _extract_upper_body_centroids(track: _NormalizedTrackSequence, window: int) -> np.ndarray:
+        bboxes = track.bboxes[-window:]
+        kpts = track.keypoints[-window:]
+        T = bboxes.shape[0]
+
+        torso_indices = [KP_NOSE, KP_L_SHOULDER, KP_R_SHOULDER, KP_L_HIP, KP_R_HIP]
+        sub_kpts = kpts[:, torso_indices, :2]
+        sub_confs = kpts[:, torso_indices, 2]
+        sub_confs = np.where(sub_confs >= MIN_KP_CONF, sub_confs, 0.0)
+
+        conf_sum = np.sum(sub_confs, axis=1, keepdims=True)
+        weighted_xy = np.sum(sub_kpts * sub_confs[:, :, None], axis=1) / np.maximum(conf_sum, 1e-6)
+
+        bbox_upper_xy = np.column_stack([
+            bboxes[:, 0] + 0.50 * bboxes[:, 2],
+            bboxes[:, 1] + 0.35 * bboxes[:, 3],
+        ])
+
+        has_kpts = (conf_sum[:, 0] > 0.35)[:, None]
+        centroids = np.where(has_kpts, weighted_xy, bbox_upper_xy)
+        return centroids
+
+    def analyze_track(self, track: _NormalizedTrackSequence, fps: float = DEFAULT_FPS) -> float:
+        T = min(track.bboxes.shape[0], self.window_size)
+        if T < _STRUGGLE_MIN_FRAMES:
+            return 0.0
+
+        dt = 1.0 / max(float(fps), 1.0)
+        centroids = self._extract_upper_body_centroids(track, self.window_size)
+
+        kernel = np.array([0.25, 0.50, 0.25], dtype=np.float64)
+        smooth_x = np.convolve(centroids[:, 0], kernel, mode="valid")
+        smooth_y = np.convolve(centroids[:, 1], kernel, mode="valid")
+        res_x = centroids[1:-1, 0] - smooth_x
+        res_y = centroids[1:-1, 1] - smooth_y
+        jitter_rms = float(np.sqrt(np.mean(res_x ** 2 + res_y ** 2)))
+        jitter_score = float(np.clip(jitter_rms / _JITTER_RMS_SATURATION_PX, 0.0, 1.0))
+
+        vel = np.diff(centroids, axis=0) / dt
+        speeds = np.hypot(vel[:, 0], vel[:, 1])
+        if float(np.max(speeds)) < 25.0:
+            return 0.0
+
+        v1, v2 = vel[:-1], vel[1:]
+        dot = np.sum(v1 * v2, axis=1)
+        denom = (np.hypot(v1[:, 0], v1[:, 1]) * np.hypot(v2[:, 0], v2[:, 1])) + 1e-6
+        cos_angles = dot / denom
+        active_steps = (speeds[:-1] > 18.0) & (speeds[1:] > 18.0)
+        if np.any(active_steps):
+            reversals = float(np.mean((cos_angles[active_steps] < -0.10).astype(np.float64)))
+        else:
+            reversals = 0.0
+        reversal_score = float(np.clip(reversals / 0.42, 0.0, 1.0))
+
+        acc = np.diff(vel, axis=0) / dt
+        acc_mag = np.hypot(acc[:, 0], acc[:, 1])
+        turb_std = float(np.std(acc_mag))
+        turb_score = float(np.clip(turb_std / _TURBULENCE_ACCEL_STD_PX_SEC2, 0.0, 1.0))
+
+        struggle_score = 0.42 * jitter_score + 0.33 * reversal_score + 0.25 * turb_score
+        return float(np.clip(struggle_score, 0.0, 1.0))
+
+
+# =============================================================================
+# 6. TOP-LEVEL FACADE FUNCTION
+# =============================================================================
+
+_DEFAULT_STRIKE_ANALYZER = MikoVoStrikeVelocityAnalyzer()
+_DEFAULT_INTERLOCK_ANALYZER = MikoVoPairwiseInterlockAnalyzer()
+_DEFAULT_ENTROPY_ANALYZER = MikoVoChaoticStruggleEntropy()
+
+
+def evaluate_aggression_dynamics(
+    tracks_history: Any,
+    current_frame_shape: Tuple[int, ...],
+    fps: float = DEFAULT_FPS,
+    strike_analyzer: MikoVoStrikeVelocityAnalyzer = _DEFAULT_STRIKE_ANALYZER,
+    interlock_analyzer: MikoVoPairwiseInterlockAnalyzer = _DEFAULT_INTERLOCK_ANALYZER,
+    entropy_analyzer: MikoVoChaoticStruggleEntropy = _DEFAULT_ENTROPY_ANALYZER,
+) -> AggressionReport:
+    _ = current_frame_shape
+    tracks = _parse_tracks_history(tracks_history)
+
+    if not tracks:
+        return AggressionReport(
+            is_violent_threat=False,
+            threat_level="CLEAR",
+            threat_type=None,
+            aggression_score=0.0,
+            summary_text="[CLEAR] No active tracks in scene.",
+        )
+
+    strike_events: List[StrikeEvent] = []
+    struggle_scores: List[float] = []
+
+    for tr in tracks:
+        s_ev = strike_analyzer.analyze_track(tr.keypoints, fps=fps, track_id=tr.track_id)
+        strike_events.append(s_ev)
+        struggle_scores.append(entropy_analyzer.analyze_track(tr, fps=fps))
+
+    strike_events.sort(key=lambda e: (e.is_strike, e.confidence, e.velocity_px_sec), reverse=True)
+    top_strike = strike_events[0] if strike_events else None
+    max_struggle = float(max(struggle_scores)) if struggle_scores else 0.0
+
+    grapple_events = interlock_analyzer.analyze_tracks(tracks, fps=fps)
+    top_grapple = grapple_events[0] if grapple_events else None
+
+    strike_component = top_strike.confidence if top_strike is not None else 0.0
+    if top_strike is not None and top_strike.is_strike:
+        strike_component = max(strike_component, 0.72)
+
+    grapple_component = 0.0
+    if top_grapple is not None:
+        grapple_component = float(
+            np.clip(
+                0.55 * (top_grapple.overlap_ratio / _GRAPPLE_OVERLAP_RATIO_THRESH)
+                + 0.45 * (top_grapple.relative_accel / (_GRAPPLE_REL_ACCEL_PX_SEC2 * 1.5)),
+                0.0,
+                1.0,
+            )
+        )
+        if top_grapple.is_grappling:
+            grapple_component = max(grapple_component, 0.74)
+
+    peak_signal = max(strike_component, grapple_component, max_struggle)
+    synergy_boost = 0.15 * min(strike_component, max_struggle) + 0.18 * min(grapple_component, max_struggle)
+    aggression_score = float(np.clip(peak_signal + synergy_boost, 0.0, 1.0))
+
+    has_strike = bool(top_strike is not None and top_strike.is_strike)
+    has_grapple = bool(top_grapple is not None and top_grapple.is_grappling)
+    has_struggle = max_struggle >= 0.60
+
+    is_violent_threat = bool(
+        has_strike or has_grapple or has_struggle or (aggression_score >= _VIOLENCE_SCORE_THRESHOLD)
+    )
+
+    threat_type: Optional[str] = None
+    threat_level: str = "CLEAR"
+
+    if is_violent_threat:
+        if (has_grapple and has_strike) or (has_grapple and has_struggle) or (has_strike and has_struggle):
+            threat_type = "CHAOTIC_BRAWL"
+            threat_level = "CRITICAL"
+        elif has_grapple:
+            threat_type = "PHYSICAL_GRAPPLE"
+            threat_level = "CRITICAL" if aggression_score >= 0.78 else "ELEVATED"
+        elif has_strike:
+            threat_type = "MELEE_STRIKE"
+            threat_level = "CRITICAL" if (top_strike and top_strike.velocity_px_sec >= 720.0) else "ELEVATED"
+        else:
+            threat_type = "CHAOTIC_BRAWL"
+            threat_level = "ELEVATED"
+
+    if not is_violent_threat:
+        summary_text = (
+            f"[CLEAR] Scene nominal across {len(tracks)} track(s) "
+            f"(aggression={aggression_score:.2f}, struggle_entropy={max_struggle:.2f})."
+        )
+    else:
+        details: List[str] = []
+        if has_strike and top_strike is not None:
+            details.append(
+                f"STRIKE[Track #{top_strike.track_id} {top_strike.limb} "
+                f"v={top_strike.velocity_px_sec:.0f}px/s conf={top_strike.confidence:.2f}]"
+            )
+        if has_grapple and top_grapple is not None:
+            p1, p2 = top_grapple.person_ids
+            details.append(
+                f"GRAPPLE[Tracks #{p1}<->#{p2} ov={top_grapple.overlap_ratio:.2f} "
+                f"rel_acc={top_grapple.relative_accel:.0f}px/s^2]"
+            )
+        if max_struggle >= 0.45:
+            details.append(f"TURBULENCE[entropy={max_struggle:.2f}]")
+
+        summary_text = (
+            f"[{threat_level}] {threat_type} (score={aggression_score:.2f}): "
+            + " | ".join(details)
+        )
+
+    return AggressionReport(
+        is_violent_threat=is_violent_threat,
+        threat_level=threat_level,
+        threat_type=threat_type,
+        aggression_score=round(aggression_score, 4),
+        summary_text=summary_text,
+        top_strike=top_strike,
+        top_grapple=top_grapple,
+        struggle_entropy_score=round(max_struggle, 4),
+    )
+
+
+# =============================================================================
+# 8. MIKOVO RARA 11 SHRINK-WRAPPED ANATOMICAL BODY & HEAD FITTER
+# =============================================================================
+
+# Anthropometric head proportions relative to Inter-Ocular Distance (IOD)
+_HEAD_WIDTH_PER_IOD: float = 2.60
+_HEAD_HEIGHT_PER_IOD: float = 3.40
+_EYE_LINE_FROM_CROWN_FRAC: float = 0.42
+_HEAD_WIDTH_PER_EAR_SPAN: float = 1.08
+
+_SEGMENT_HALF_WIDTH_RATIOS: Dict[str, float] = {
+    "torso": 0.60,
+    "upper_arm": 0.22,
+    "forearm": 0.18,
+    "thigh": 0.32,
+    "calf": 0.23,
+}
+
+_KNEE_STRAIGHT_DEG: float = 155.0
+_KNEE_BENT_SITTING_DEG: Tuple[float, float] = (65.0, 125.0)
+_KNEE_BENT_CROUCH_DEG: float = 95.0
+_HIP_BENT_CROUCH_DEG: float = 110.0
+_TORSO_LEAN_DEG: float = 22.0
+_ARM_EXTEND_RATIO: float = 1.35
+
+_EMA_ALPHA_MIN: float = 0.25
+_EMA_ALPHA_MAX: float = 0.92
+_EMA_JUMP_NORM_SATURATION: float = 0.55
+
+_SHRINKWRAP_SEARCH_FRAC: float = 0.14
+_SHRINKWRAP_DOWNSAMPLE_MAX_DIM: int = 160
+_SHRINKWRAP_MIN_ROI_PX: int = 18
+
+
+@dataclass
+class AnatomicalBoundsReport:
+    """
+    Unified output of `fit_anatomical_person_bounds`.
+    """
+    body_bbox: Tuple[float, float, float, float]
+    head_bbox: Tuple[float, float, float, float]
+    confidence: float
+    posture_type: str
+    tight_aspect_ratio: float
+
+
+def _clip_box_to_frame(
+    box: Tuple[float, float, float, float], frame_shape: Optional[Tuple[int, ...]]
+) -> Tuple[float, float, float, float]:
+    x, y, w, h = box
+    if frame_shape is None:
+        return (max(0.0, x), max(0.0, y), max(w, 1.0), max(h, 1.0))
+
+    frame_h, frame_w = frame_shape[0], frame_shape[1]
+    x0 = float(np.clip(x, 0.0, max(frame_w - 1.0, 0.0)))
+    y0 = float(np.clip(y, 0.0, max(frame_h - 1.0, 0.0)))
+    x1 = float(np.clip(x + w, 1.0, float(frame_w)))
+    y1 = float(np.clip(y + h, 1.0, float(frame_h)))
+    return (x0, y0, max(x1 - x0, 1.0), max(y1 - y0, 1.0))
+
+
+def _bbox_from_points(points: np.ndarray) -> Tuple[float, float, float, float]:
+    x_min, y_min = float(np.min(points[:, 0])), float(np.min(points[:, 1]))
+    x_max, y_max = float(np.max(points[:, 0])), float(np.max(points[:, 1]))
+    return (x_min, y_min, max(x_max - x_min, 1.0), max(y_max - y_min, 1.0))
+
+
+def _segment_square_points(p1: np.ndarray, p2: np.ndarray, half_width: float) -> np.ndarray:
+    offsets = np.array([[half_width, half_width], [half_width, -half_width],
+                         [-half_width, half_width], [-half_width, -half_width]])
+    return np.vstack([p1 + offsets, p2 + offsets])
+
+
+class MikoVoSkeletonFittedBox:
+    """
+    Reconstructs a tight anatomical bounding rectangle directly from COCO
+    17-keypoint body geometry using Dempster-style anthropometric volumetric
+    bone-segment projection (head oval, torso capsule, limb cylinders).
+    """
+
+    def __init__(self, min_kp_conf: float = MIN_KP_CONF) -> None:
+        self.min_kp_conf = min_kp_conf
+
+    @staticmethod
+    def _compute_reference_scale(kpts: np.ndarray, raw_bbox: Tuple[float, float, float, float]) -> float:
+        l_sh, r_sh = kpts[KP_L_SHOULDER], kpts[KP_R_SHOULDER]
+        if l_sh[2] >= MIN_KP_CONF and r_sh[2] >= MIN_KP_CONF:
+            d = float(np.linalg.norm(l_sh[:2] - r_sh[:2]))
+            if d > 4.0:
+                return d
+
+        l_hip, r_hip = kpts[KP_L_HIP], kpts[KP_R_HIP]
+        if l_hip[2] >= MIN_KP_CONF and r_hip[2] >= MIN_KP_CONF:
+            d = float(np.linalg.norm(l_hip[:2] - r_hip[:2])) * 1.08
+            if d > 4.0:
+                return d
+
+        return max(raw_bbox[2] * 0.42, 10.0)
+
+    @staticmethod
+    def _estimate_head_box(kpts: np.ndarray, reference_scale: float) -> Optional[Tuple[float, float, float, float]]:
+        nose, l_eye, r_eye = kpts[KP_NOSE], kpts[KP_L_EYE], kpts[KP_R_EYE]
+        l_ear, r_ear = kpts[KP_L_EAR], kpts[KP_R_EAR]
+
+        eyes_valid = l_eye[2] >= MIN_KP_CONF and r_eye[2] >= MIN_KP_CONF
+        iod = float(np.linalg.norm(l_eye[:2] - r_eye[:2])) if eyes_valid else 0.0
+
+        if eyes_valid and iod > 3.0:
+            eye_center = (l_eye[:2] + r_eye[:2]) / 2.0
+            head_width_iod = iod * _HEAD_WIDTH_PER_IOD
+            head_height = iod * _HEAD_HEIGHT_PER_IOD
+        elif nose[2] >= MIN_KP_CONF:
+            eye_center = nose[:2].copy()
+            head_width_iod = reference_scale * 0.78
+            head_height = reference_scale * 1.02
+        else:
+            return None
+
+        ears_valid = l_ear[2] >= MIN_KP_CONF and r_ear[2] >= MIN_KP_CONF
+        if ears_valid:
+            ear_span = float(np.linalg.norm(l_ear[:2] - r_ear[:2])) * _HEAD_WIDTH_PER_EAR_SPAN
+            head_width = (head_width_iod + ear_span) / 2.0 if eyes_valid else ear_span
+        else:
+            head_width = head_width_iod
+
+        crown_y = eye_center[1] - _EYE_LINE_FROM_CROWN_FRAC * head_height
+        chin_y = crown_y + head_height
+        left_x = eye_center[0] - head_width / 2.0
+        right_x = eye_center[0] + head_width / 2.0
+
+        return (float(left_x), float(crown_y), float(right_x - left_x), float(chin_y - crown_y))
+
+    def fit(
+        self,
+        keypoints_17x3: np.ndarray,
+        raw_bbox: Tuple[float, float, float, float],
+    ) -> Tuple[Tuple[float, float, float, float], Tuple[float, float, float, float], float]:
+        kpts = np.asarray(keypoints_17x3, dtype=np.float64)
+        if kpts.shape != (17, 3):
+            raise ValueError(f"Expected keypoints shape (17, 3), got {kpts.shape}")
+
+        reference_scale = self._compute_reference_scale(kpts, raw_bbox)
+        all_points = []
+        used_confs = []
+
+        # --- Torso capsule: shoulder-mid -> hip-mid ---
+        l_sh, r_sh = kpts[KP_L_SHOULDER], kpts[KP_R_SHOULDER]
+        l_hip, r_hip = kpts[KP_L_HIP], kpts[KP_R_HIP]
+        shoulder_mid = None
+        hip_mid = None
+        if l_sh[2] >= MIN_KP_CONF or r_sh[2] >= MIN_KP_CONF:
+            valid = [p for p in (l_sh, r_sh) if p[2] >= MIN_KP_CONF]
+            shoulder_mid = np.mean([p[:2] for p in valid], axis=0)
+            used_confs.extend([p[2] for p in valid])
+        if l_hip[2] >= MIN_KP_CONF or r_hip[2] >= MIN_KP_CONF:
+            valid = [p for p in (l_hip, r_hip) if p[2] >= MIN_KP_CONF]
+            hip_mid = np.mean([p[:2] for p in valid], axis=0)
+            used_confs.extend([p[2] for p in valid])
+
+        if shoulder_mid is not None and hip_mid is not None:
+            hw = reference_scale * _SEGMENT_HALF_WIDTH_RATIOS["torso"] / 2.0
+            all_points.append(_segment_square_points(shoulder_mid, hip_mid, hw))
+            if l_sh[2] >= MIN_KP_CONF and r_sh[2] >= MIN_KP_CONF:
+                all_points.append(np.vstack([l_sh[:2], r_sh[:2]]))
+            if l_hip[2] >= MIN_KP_CONF and r_hip[2] >= MIN_KP_CONF:
+                all_points.append(np.vstack([l_hip[:2], r_hip[:2]]))
+
+        # --- Limb segments ---
+        limb_segments = (
+            (KP_L_SHOULDER, KP_L_ELBOW, "upper_arm"),
+            (KP_R_SHOULDER, KP_R_ELBOW, "upper_arm"),
+            (KP_L_ELBOW, KP_L_WRIST, "forearm"),
+            (KP_R_ELBOW, KP_R_WRIST, "forearm"),
+            (KP_L_HIP, KP_L_KNEE, "thigh"),
+            (KP_R_HIP, KP_R_KNEE, "thigh"),
+            (KP_L_KNEE, KP_L_ANKLE, "calf"),
+            (KP_R_KNEE, KP_R_ANKLE, "calf"),
+        )
+        for idx_a, idx_b, seg_key in limb_segments:
+            pa, pb = kpts[idx_a], kpts[idx_b]
+            if pa[2] >= MIN_KP_CONF and pb[2] >= MIN_KP_CONF:
+                hw = reference_scale * _SEGMENT_HALF_WIDTH_RATIOS[seg_key] / 2.0
+                all_points.append(_segment_square_points(pa[:2], pb[:2], hw))
+                used_confs.extend([pa[2], pb[2]])
+
+        # --- Head oval ---
+        head_box = self._estimate_head_box(kpts, reference_scale)
+        if head_box is not None:
+            hx, hy, hw_, hh_ = head_box
+            all_points.append(np.array([[hx, hy], [hx + hw_, hy + hh_]]))
+            used_confs.append(float(max(kpts[KP_NOSE, 2], kpts[KP_L_EYE, 2], kpts[KP_R_EYE, 2])))
+        else:
+            rx, ry, rw, rh = raw_bbox
+            head_box = (rx + rw * 0.28, ry, rw * 0.44, rh * 0.22)
+
+        if not all_points:
+            return raw_bbox, head_box, 0.05
+
+        stacked = np.vstack(all_points)
+        body_box = _bbox_from_points(stacked)
+        confidence = float(np.clip(np.mean(used_confs) if used_confs else 0.1, 0.0, 1.0))
+
+        return body_box, head_box, confidence
+
+
+class MikoVoSilhouetteShrinkWrap:
+    """
+    Refines a skeleton-fitted bounding box by snapping its borders onto the
+    true outer silhouette/clothing edges using Sobel gradient + Otsu threshold.
+    """
+
+    def __init__(
+        self,
+        search_frac: float = _SHRINKWRAP_SEARCH_FRAC,
+        downsample_max_dim: int = _SHRINKWRAP_DOWNSAMPLE_MAX_DIM,
+    ) -> None:
+        self.search_frac = search_frac
+        self.downsample_max_dim = downsample_max_dim
+
+    def refine(
+        self,
+        frame: np.ndarray,
+        box: Tuple[float, float, float, float],
+    ) -> Tuple[float, float, float, float]:
+        frame_h, frame_w = frame.shape[0], frame.shape[1]
+        x, y, w, h = box
+        margin_x = w * self.search_frac
+        margin_y = h * self.search_frac
+
+        rx0 = int(np.clip(x - margin_x, 0, frame_w - 1))
+        ry0 = int(np.clip(y - margin_y, 0, frame_h - 1))
+        rx1 = int(np.clip(x + w + margin_x, 1, frame_w))
+        ry1 = int(np.clip(y + h + margin_y, 1, frame_h))
+
+        roi = frame[ry0:ry1, rx0:rx1]
+        if roi.size == 0 or roi.shape[0] < _SHRINKWRAP_MIN_ROI_PX or roi.shape[1] < _SHRINKWRAP_MIN_ROI_PX:
+            return box
+
+        roi_h, roi_w = roi.shape[0], roi.shape[1]
+        scale = min(1.0, self.downsample_max_dim / max(roi_h, roi_w))
+        if scale < 1.0:
+            small = cv2.resize(roi, (max(1, int(roi_w * scale)), max(1, int(roi_h * scale))), interpolation=cv2.INTER_AREA)
+        else:
+            small = roi
+
+        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+        gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+        gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+        mag = cv2.magnitude(gx, gy)
+        mag_norm = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+        _, edge_mask = cv2.threshold(mag_norm, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        edge_bin = (edge_mask > 0).astype(np.float32)
+
+        s_h, s_w = edge_bin.shape[0], edge_bin.shape[1]
+
+        sx0 = (x - rx0) * scale
+        sy0 = (y - ry0) * scale
+        sx1 = (x + w - rx0) * scale
+        sy1 = (y + h - ry0) * scale
+        s_margin_x = margin_x * scale
+        s_margin_y = margin_y * scale
+
+        col_density = edge_bin.sum(axis=0)
+        row_density = edge_bin.sum(axis=1)
+
+        def _snap_1d(density: np.ndarray, center: float, search_margin: float, length: int) -> float:
+            lo = int(np.clip(center - search_margin, 0, length - 1))
+            hi = int(np.clip(center + search_margin, 1, length))
+            if hi <= lo:
+                return center
+            band = density[lo:hi]
+            if band.size == 0 or float(np.max(band)) < 1e-3:
+                return center
+            best_idx = lo + int(np.argmax(band))
+            return float(best_idx)
+
+        new_sx0 = _snap_1d(col_density, sx0, s_margin_x, s_w)
+        new_sx1 = _snap_1d(col_density, sx1, s_margin_x, s_w)
+        new_sy0 = _snap_1d(row_density, sy0, s_margin_y, s_h)
+        new_sy1 = _snap_1d(row_density, sy1, s_margin_y, s_h)
+
+        if new_sx1 <= new_sx0:
+            new_sx0, new_sx1 = sx0, sx1
+        if new_sy1 <= new_sy0:
+            new_sy0, new_sy1 = sy0, sy1
+
+        inv_scale = 1.0 / scale
+        new_x = rx0 + new_sx0 * inv_scale
+        new_y = ry0 + new_sy0 * inv_scale
+        new_w = (new_sx1 - new_sx0) * inv_scale
+        new_h = (new_sy1 - new_sy0) * inv_scale
+
+        if new_w < 4.0 or new_h < 4.0:
+            return box
+        return (float(new_x), float(new_y), float(new_w), float(new_h))
+
+
+@dataclass
+class _ZoneSmootherState:
+    body_box: np.ndarray
+    head_box: np.ndarray
+
+
+class MikoVoDualZoneFitter:
+    """
+    Produces two locked anatomical zones (`head_bbox`, `body_bbox`) and
+    applies an adaptive alpha-beta/EMA temporal smoother per track ID.
+    """
+
+    def __init__(
+        self,
+        skeleton_fitter: Optional[MikoVoSkeletonFittedBox] = None,
+        silhouette_refiner: Optional[MikoVoSilhouetteShrinkWrap] = None,
+        alpha_min: float = _EMA_ALPHA_MIN,
+        alpha_max: float = _EMA_ALPHA_MAX,
+    ) -> None:
+        self.skeleton_fitter = skeleton_fitter or MikoVoSkeletonFittedBox()
+        self.silhouette_refiner = silhouette_refiner or MikoVoSilhouetteShrinkWrap()
+        self.alpha_min = alpha_min
+        self.alpha_max = alpha_max
+        self._state: Dict[Any, _ZoneSmootherState] = {}
+
+    @staticmethod
+    def _adaptive_alpha(prev_box: np.ndarray, new_box: np.ndarray, alpha_min: float, alpha_max: float) -> float:
+        prev_cx, prev_cy = prev_box[0] + prev_box[2] / 2.0, prev_box[1] + prev_box[3] / 2.0
+        new_cx, new_cy = new_box[0] + new_box[2] / 2.0, new_box[1] + new_box[3] / 2.0
+        center_jump = float(np.hypot(new_cx - prev_cx, new_cy - prev_cy))
+        ref_dim = max(float(prev_box[2]), float(prev_box[3]), 1.0)
+        normalized_jump = np.clip(center_jump / (ref_dim * _EMA_JUMP_NORM_SATURATION), 0.0, 1.0)
+        return float(alpha_min + normalized_jump * (alpha_max - alpha_min))
+
+    def _smooth(self, track_id: Any, body_box: np.ndarray, head_box: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        state = self._state.get(track_id)
+        if state is None:
+            self._state[track_id] = _ZoneSmootherState(body_box=body_box.copy(), head_box=head_box.copy())
+            return body_box, head_box
+
+        alpha_body = self._adaptive_alpha(state.body_box, body_box, self.alpha_min, self.alpha_max)
+        alpha_head = self._adaptive_alpha(state.head_box, head_box, self.alpha_min, self.alpha_max)
+
+        smoothed_body = alpha_body * body_box + (1.0 - alpha_body) * state.body_box
+        smoothed_head = alpha_head * head_box + (1.0 - alpha_head) * state.head_box
+
+        state.body_box = smoothed_body
+        state.head_box = smoothed_head
+        return smoothed_body, smoothed_head
+
+    def reset_track(self, track_id: Any) -> None:
+        self._state.pop(track_id, None)
+
+    def fit(
+        self,
+        keypoints_17x3: np.ndarray,
+        raw_bbox: Tuple[float, float, float, float],
+        frame: Optional[np.ndarray] = None,
+        track_id: Optional[Any] = None,
+        frame_shape: Optional[Tuple[int, ...]] = None,
+    ) -> AnatomicalBoundsReport:
+        body_box, head_box, confidence = self.skeleton_fitter.fit(keypoints_17x3, raw_bbox)
+
+        if frame is not None and frame.size > 0:
+            body_box = self.silhouette_refiner.refine(frame, body_box)
+            head_refiner = MikoVoSilhouetteShrinkWrap(search_frac=0.08, downsample_max_dim=96)
+            head_box = head_refiner.refine(frame, head_box)
+
+        resolved_frame_shape = frame_shape if frame_shape is not None else (frame.shape if frame is not None else None)
+
+        body_arr = np.array(body_box, dtype=np.float64)
+        head_arr = np.array(head_box, dtype=np.float64)
+
+        if track_id is not None:
+            body_arr, head_arr = self._smooth(track_id, body_arr, head_arr)
+
+        body_final = _clip_box_to_frame(tuple(body_arr.tolist()), resolved_frame_shape)
+        head_final = _clip_box_to_frame(tuple(head_arr.tolist()), resolved_frame_shape)
+
+        posture_type = _classify_posture(np.asarray(keypoints_17x3, dtype=np.float64), body_final)
+        aspect_ratio = float(body_final[3] / max(body_final[2], 1e-6))
+
+        return AnatomicalBoundsReport(
+            body_bbox=body_final,
+            head_bbox=head_final,
+            confidence=round(confidence, 4),
+            posture_type=posture_type,
+            tight_aspect_ratio=round(aspect_ratio, 4),
+        )
+
+
+def _joint_angle_deg(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> Optional[float]:
+    v1 = a - b
+    v2 = c - b
+    denom = (np.linalg.norm(v1) * np.linalg.norm(v2)) + 1e-9
+    cos_theta = float(np.clip(np.dot(v1, v2) / denom, -1.0, 1.0))
+    return float(np.degrees(np.arccos(cos_theta)))
+
+
+def _classify_posture(kpts: np.ndarray, body_box: Tuple[float, float, float, float]) -> str:
+    def conf(idx: int) -> float:
+        return float(kpts[idx, 2])
+
+    def visible(idx: int) -> bool:
+        return conf(idx) >= MIN_KP_CONF
+
+    core_visible = sum(
+        visible(i) for i in (KP_L_SHOULDER, KP_R_SHOULDER, KP_L_HIP, KP_R_HIP)
+    )
+    if core_visible < 2:
+        return "PARTIAL_VISIBILITY"
+
+    torso_angle_deg = 0.0
+    sh_pts = [kpts[i, :2] for i in (KP_L_SHOULDER, KP_R_SHOULDER) if visible(i)]
+    hip_pts = [kpts[i, :2] for i in (KP_L_HIP, KP_R_HIP) if visible(i)]
+    if sh_pts and hip_pts:
+        shoulder_mid = np.mean(sh_pts, axis=0)
+        hip_mid = np.mean(hip_pts, axis=0)
+        dx, dy = shoulder_mid[0] - hip_mid[0], shoulder_mid[1] - hip_mid[1]
+        torso_angle_deg = float(np.degrees(np.arctan2(abs(dx), abs(dy) + 1e-6)))
+
+    knee_angles = []
+    for hip_i, knee_i, ankle_i in ((KP_L_HIP, KP_L_KNEE, KP_L_ANKLE), (KP_R_HIP, KP_R_KNEE, KP_R_ANKLE)):
+        if visible(hip_i) and visible(knee_i) and visible(ankle_i):
+            ang = _joint_angle_deg(kpts[hip_i, :2], kpts[knee_i, :2], kpts[ankle_i, :2])
+            if ang is not None:
+                knee_angles.append(ang)
+
+    hip_angles = []
+    for sh_i, hip_i, knee_i in ((KP_L_SHOULDER, KP_L_HIP, KP_L_KNEE), (KP_R_SHOULDER, KP_R_HIP, KP_R_KNEE)):
+        if visible(sh_i) and visible(hip_i) and visible(knee_i):
+            ang = _joint_angle_deg(kpts[sh_i, :2], kpts[hip_i, :2], kpts[knee_i, :2])
+            if ang is not None:
+                hip_angles.append(ang)
+
+    avg_knee_angle = float(np.mean(knee_angles)) if knee_angles else None
+    avg_hip_angle = float(np.mean(hip_angles)) if hip_angles else None
+
+    arms_extended = False
+    if sh_pts:
+        reference_scale = float(np.linalg.norm(sh_pts[0] - sh_pts[-1])) if len(sh_pts) == 2 else None
+        if reference_scale is None or reference_scale < 4.0:
+            _, _, body_w, _ = body_box
+            reference_scale = body_w * 0.55
+        for sh_i, wr_i in ((KP_L_SHOULDER, KP_L_WRIST), (KP_R_SHOULDER, KP_R_WRIST)):
+            if visible(sh_i) and visible(wr_i):
+                horiz_dist = abs(float(kpts[wr_i, 0] - kpts[sh_i, 0]))
+                if horiz_dist >= reference_scale * _ARM_EXTEND_RATIO:
+                    arms_extended = True
+                    break
+
+    if avg_knee_angle is not None and avg_hip_angle is not None:
+        if avg_knee_angle < _KNEE_BENT_CROUCH_DEG and avg_hip_angle < _HIP_BENT_CROUCH_DEG:
+            return "CROUCHING"
+        if (_KNEE_BENT_SITTING_DEG[0] <= avg_knee_angle <= _KNEE_BENT_SITTING_DEG[1]
+                and avg_hip_angle < 150.0):
+            return "SITTING"
+
+    if torso_angle_deg >= _TORSO_LEAN_DEG:
+        return "LEANING"
+
+    if avg_knee_angle is not None and avg_knee_angle < _KNEE_STRAIGHT_DEG and avg_hip_angle is not None and avg_hip_angle < 150.0:
+        return "SITTING"
+
+    if arms_extended:
+        return "STANDING_ARMS_EXTENDED"
+
+    if avg_knee_angle is None and avg_hip_angle is None:
+        return "PARTIAL_VISIBILITY"
+
+    return "STANDING"
+
+
+_DEFAULT_DUAL_ZONE_FITTER = MikoVoDualZoneFitter()
+
+
+def fit_anatomical_person_bounds(
+    keypoints_17x3: np.ndarray,
+    raw_bbox: Tuple[float, float, float, float],
+    frame: Optional[np.ndarray] = None,
+    track_id: Optional[Any] = None,
+    frame_shape: Optional[Tuple[int, ...]] = None,
+    fitter: MikoVoDualZoneFitter = _DEFAULT_DUAL_ZONE_FITTER,
+) -> AnatomicalBoundsReport:
+    return fitter.fit(
+        keypoints_17x3=keypoints_17x3,
+        raw_bbox=raw_bbox,
+        frame=frame,
+        track_id=track_id,
+        frame_shape=frame_shape,
+    )
+
+
+# =============================================================================
+# 12. SUBSYSTEM 12: TACTICAL BODY-CAM MESH & DYNAMIC WIREFRAME HUD
+# =============================================================================
+
+BBox = Tuple[float, float, float, float]
+Color = Tuple[int, int, int]
+Vertices = List[Tuple[int, int]]
+
+TACTICAL_CYAN: Color = (255, 215, 0)
+SECURITY_EMERALD: Color = (88, 209, 48)
+THREAT_AMBER: Color = (10, 159, 255)
+
+# COCO limb connectivity.
+_BONES = (
+    (5, 7), (7, 9), (6, 8), (8, 10),
+    (11, 13), (13, 15), (12, 14), (14, 16),
+)
+_RADIUS_RATIOS = np.array(
+    [0.15, 0.12, 0.15, 0.12, 0.22, 0.16, 0.22, 0.16],
+    dtype=np.float32,
+)
+
+
+@dataclass(frozen=True)
+class HullResult:
+    """Ordered source-frame perimeter plus uncalibrated geometry telemetry."""
+    vertices: np.ndarray
+    confidence: float
+    posture: str
+    height_px: float
+    fallback: bool
+
+
+def _validate_frame(frame: np.ndarray) -> None:
+    """Require writable uint8 BGR input without silently copying it."""
+    if (
+        not isinstance(frame, np.ndarray)
+        or frame.dtype != np.uint8
+        or frame.ndim != 3
+        or frame.shape[2] != 3
+        or min(frame.shape[:2]) < 2
+    ):
+        raise ValueError("frame must be uint8 BGR with shape (H, W, 3).")
+    if not frame.flags.writeable:
+        raise ValueError("frame must be writable.")
+
+
+def _prepare(
+    keypoints: np.ndarray,
+    bbox: BBox,
+    shape: Tuple[int, ...],
+    threshold: float,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Sanitize missing landmarks and intersect the candidate box with frame."""
+    kpts = np.asarray(keypoints, dtype=np.float32)
+    if kpts.shape != (17, 3):
+        raise ValueError("keypoints must have shape (17, 3).")
+
+    box = np.asarray(bbox, dtype=np.float64)
+    if box.shape != (4,) or not np.isfinite(box).all():
+        raise ValueError("bbox must contain four finite values.")
+    if np.any(box[2:] <= 0):
+        raise ValueError("bbox width and height must be positive.")
+
+    height, width = shape[:2]
+    lo = np.maximum(box[:2], 0.0)
+    hi = np.minimum(box[:2] + box[2:], (width, height))
+    if np.any(hi <= lo):
+        raise ValueError("bbox does not intersect the frame.")
+
+    clean = np.where(np.isfinite(kpts), kpts, 0.0).copy()
+    clean[:, 2] = np.clip(clean[:, 2], 0.0, 1.0)
+
+    valid = (
+        np.isfinite(kpts).all(axis=1)
+        & (clean[:, 2] >= threshold)
+        & (clean[:, 0] >= 0)
+        & (clean[:, 0] < width)
+        & (clean[:, 1] >= 0)
+        & (clean[:, 1] < height)
+    )
+
+    tolerance = 0.30 * box[2:]
+    valid &= (
+        (clean[:, :2] >= box[:2] - tolerance)
+        & (clean[:, :2] <= box[:2] + box[2:] + tolerance)
+    ).all(axis=1)
+
+    return clean, valid, np.concatenate((lo, hi - lo))
+
+
+def _resample_closed(contour: np.ndarray, count: int) -> np.ndarray:
+    """Uniform arc-length resampling with deterministic winding/start vertex."""
+    points = np.asarray(contour, dtype=np.float32).reshape(-1, 2)
+    following = np.roll(points, -1, axis=0)
+    lengths = np.linalg.norm(following - points, axis=1)
+    keep = lengths > 1e-6
+    points = points[keep]
+    lengths = lengths[keep]
+
+    if len(points) < 3:
+        raise ValueError("Contour has fewer than three distinct vertices.")
+
+    signed_area = np.sum(
+        points[:, 0] * np.roll(points[:, 1], -1)
+        - points[:, 1] * np.roll(points[:, 0], -1)
+    )
+    if signed_area < 0:
+        points = points[::-1].copy()
+
+    points = np.roll(points, -int(np.argmin(points[:, 1])), axis=0)
+    following = np.roll(points, -1, axis=0)
+    lengths = np.linalg.norm(following - points, axis=1)
+    cumulative = np.concatenate(([0.0], np.cumsum(lengths)))
+    samples = np.arange(count) * cumulative[-1] / count
+    indices = np.searchsorted(cumulative, samples, side="right") - 1
+    indices = np.clip(indices, 0, len(points) - 1)
+    fraction = (samples - cumulative[indices]) / np.maximum(
+        lengths[indices], 1e-6
+    )
+    return (
+        points[indices]
+        + fraction[:, None] * (following[indices] - points[indices])
+    ).astype(np.float32)
+
+
+class MikoVoAnatomicalContourHull:
+    def __init__(
+        self,
+        vertex_count: int = 20,
+        mask_size: int = 160,
+        min_confidence: float = 0.30,
+    ) -> None:
+        if not 12 <= vertex_count <= 24:
+            raise ValueError("vertex_count must be between 12 and 24.")
+        if not 64 <= mask_size <= 512:
+            raise ValueError("mask_size must be between 64 and 512.")
+        if not 0.0 <= min_confidence <= 1.0:
+            raise ValueError("min_confidence must be in [0, 1].")
+        self.vertex_count = vertex_count
+        self.mask_size = mask_size
+        self.min_confidence = min_confidence
+
+    @staticmethod
+    def _posture(kpts: np.ndarray, valid: np.ndarray) -> str:
+        if not valid[[5, 6, 11, 12]].all():
+            return "PARTIAL"
+
+        shoulder = kpts[[5, 6], :2].mean(axis=0)
+        hip = kpts[[11, 12], :2].mean(axis=0)
+        torso = hip - shoulder
+        if abs(float(torso[0])) > 0.55 * max(abs(float(torso[1])), 1.0):
+            return "LEANING"
+
+        if valid[[13, 14, 15, 16]].all():
+            knees = kpts[[13, 14], :2]
+            thighs = kpts[[11, 12], :2] - knees
+            calves = kpts[[15, 16], :2] - knees
+            denominator = (
+                np.linalg.norm(thighs, axis=1)
+                * np.linalg.norm(calves, axis=1)
+            )
+            if np.all(denominator > 1.0):
+                cosine = np.sum(thighs * calves, axis=1) / denominator
+                angles = np.degrees(np.arccos(np.clip(cosine, -1, 1)))
+                if float(np.mean(angles)) < 125.0:
+                    return "BENT_LEGS"
+
+        return "UPRIGHT"
+
+    def compute(
+        self,
+        keypoints: np.ndarray,
+        bbox: BBox,
+        frame_shape: Tuple[int, ...],
+    ) -> HullResult:
+        kpts, valid, box = _prepare(
+            keypoints, bbox, frame_shape, self.min_confidence
+        )
+        x, y, width, height = box
+
+        def fallback() -> HullResult:
+            rectangle = np.array(
+                [[x, y], [x + width, y],
+                 [x + width, y + height], [x, y + height]],
+                dtype=np.float32,
+            )
+            return HullResult(
+                _resample_closed(rectangle, self.vertex_count),
+                0.0, "UNKNOWN", float(height), True,
+            )
+
+        if int(valid[5:].sum()) < 4:
+            return fallback()
+
+        scales: List[float] = []
+        for left, right, multiplier in ((5, 6, 1.0), (11, 12, 1.25)):
+            if valid[left] and valid[right]:
+                distance = float(np.linalg.norm(
+                    kpts[left, :2] - kpts[right, :2]
+                ))
+                if distance > 2.0:
+                    scales.append(distance * multiplier)
+
+        if valid[[5, 6, 11, 12]].all():
+            torso_length = float(np.linalg.norm(
+                kpts[[5, 6], :2].mean(axis=0)
+                - kpts[[11, 12], :2].mean(axis=0)
+            ))
+            if torso_length > 2.0:
+                scales.append(0.65 * torso_length)
+
+        scale = float(np.median(scales)) if scales else 0.42 * width
+        scale = float(np.clip(scale, 3.0, max(width, height) * 0.65))
+
+        observed = kpts[valid, :2]
+        low = observed.min(axis=0) - scale * 0.95
+        high = observed.max(axis=0) + scale * 0.95
+        low = np.maximum(low, 0.0)
+        high = np.minimum(high, frame_shape[1::-1])
+        extent = np.maximum(high - low, 1.0)
+        raster_scale = (self.mask_size - 3.0) / float(extent.max())
+        dimensions = np.maximum(
+            4, np.ceil(extent * raster_scale).astype(np.int32) + 3
+        )
+        mask = np.zeros((int(dimensions[1]), int(dimensions[0])), np.uint8)
+        mapped = np.rint((kpts[:, :2] - low) * raster_scale + 1).astype(
+            np.int32
+        )
+
+        def point(index: int) -> Tuple[int, int]:
+            return int(mapped[index, 0]), int(mapped[index, 1])
+
+        torso_indices = np.array([5, 6, 12, 11])
+        torso_visible = torso_indices[valid[torso_indices]]
+        if len(torso_visible) >= 3:
+            torso_hull = cv2.convexHull(mapped[torso_visible])
+            cv2.fillConvexPoly(mask, torso_hull, 255)
+            radius = max(1, int(round(scale * 0.08 * raster_scale)))
+            cv2.polylines(
+                mask, [torso_hull], True, 255, 2 * radius + 1
+            )
+        elif len(torso_visible) == 2:
+            cv2.line(
+                mask, point(int(torso_visible[0])),
+                point(int(torso_visible[1])), 255,
+                max(2, int(scale * 0.30 * raster_scale)),
+            )
+
+        for (start, end), ratio in zip(_BONES, _RADIUS_RATIOS):
+            if valid[start] and valid[end]:
+                radius = max(1, int(round(
+                    scale * float(ratio) * raster_scale
+                )))
+                cv2.line(mask, point(start), point(end), 255, 2 * radius)
+                cv2.circle(mask, point(start), radius, 255, -1)
+                cv2.circle(mask, point(end), radius, 255, -1)
+
+        for index in np.flatnonzero(valid[5:]) + 5:
+            radius = max(1, int(scale * 0.10 * raster_scale))
+            cv2.circle(mask, point(int(index)), radius, 255, -1)
+
+        head_visible = np.flatnonzero(valid[:5])
+        if len(head_visible):
+            center = kpts[head_visible, :2].mean(axis=0)
+            head_width = scale * 0.54
+            head_height = scale * 0.70
+            angle = 0.0
+
+            if valid[1] and valid[2]:
+                eye_vector = kpts[2, :2] - kpts[1, :2]
+                iod = float(np.linalg.norm(eye_vector))
+                if iod > 1.0:
+                    head_width = float(np.clip(
+                        iod * 2.6, scale * 0.35, scale * 0.90
+                    ))
+                    head_height = head_width * 1.30
+                    center = kpts[[1, 2], :2].mean(axis=0)
+                    angle = math.degrees(math.atan2(
+                        float(eye_vector[1]), float(eye_vector[0])
+                    ))
+                    down = np.array(
+                        [-eye_vector[1], eye_vector[0]], dtype=np.float32
+                    ) / iod
+                    if down[1] < 0:
+                        down = -down
+                    center = center + down * head_height * 0.08
+
+            mapped_center = np.rint(
+                (center - low) * raster_scale + 1
+            ).astype(np.int32)
+            axes = (
+                max(1, int(head_width * raster_scale * 0.5)),
+                max(1, int(head_height * raster_scale * 0.5)),
+            )
+            cv2.ellipse(
+                mask, tuple(map(int, mapped_center)), axes,
+                angle, 0, 360, 255, -1,
+            )
+
+            shoulders = np.array([5, 6])[valid[[5, 6]]]
+            if len(shoulders):
+                neck = mapped[shoulders].mean(axis=0).astype(np.int32)
+                cv2.line(
+                    mask, tuple(map(int, mapped_center)),
+                    tuple(map(int, neck)), 255,
+                    max(2, int(scale * 0.23 * raster_scale)),
+                )
+
+        contours, _ = cv2.findContours(
+            mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        contours = [c for c in contours if cv2.contourArea(c) > 1.0]
+        if not contours:
+            return fallback()
+
+        disconnected = len(contours) > 1
+        if disconnected:
+            contour = cv2.convexHull(np.concatenate(contours, axis=0))
+        else:
+            contour = contours[0]
+
+        if len(contour) < 3:
+            return fallback()
+
+        vertices = _resample_closed(contour, self.vertex_count)
+        vertices = (vertices - 1.0) / raster_scale + low
+        coverage = float(valid.sum()) / 17.0
+        confidence = float(kpts[valid, 2].mean()) * math.sqrt(coverage)
+        if disconnected:
+            confidence *= 0.75
+
+        return HullResult(
+            vertices.astype(np.float32),
+            float(np.clip(confidence, 0.0, 1.0)),
+            self._posture(kpts, valid),
+            float(np.ptp(vertices[:, 1])),
+            disconnected,
+        )
+
+
+@dataclass
+class _MeshState:
+    vertices: np.ndarray
+    timestamp: float
+
+
+class MikoVoTemporalMeshStabilizer:
+    def __init__(
+        self,
+        min_alpha: float = 0.25,
+        deadband_px: float = 0.35,
+        ttl_seconds: float = 2.0,
+        max_tracks: int = 256,
+    ) -> None:
+        self.min_alpha = min_alpha
+        self.deadband_px = deadband_px
+        self.ttl_seconds = ttl_seconds
+        self.max_tracks = max_tracks
+        self._states: dict[Hashable, _MeshState] = {}
+        self._calls = 0
+
+    def reset_track(self, track_id: Hashable) -> None:
+        self._states.pop(track_id, None)
+
+    def clear(self) -> None:
+        self._states.clear()
+
+    def update(
+        self,
+        track_id: Hashable,
+        vertices: np.ndarray,
+        timestamp: Optional[float] = None,
+    ) -> np.ndarray:
+        now = time.monotonic() if timestamp is None else float(timestamp)
+        current = np.asarray(vertices, dtype=np.float32)
+        if (
+            current.ndim != 2
+            or current.shape[1] != 2
+            or len(current) < 3
+            or not np.isfinite(current).all()
+            or not math.isfinite(now)
+        ):
+            raise ValueError("Invalid vertices or timestamp.")
+
+        self._calls += 1
+        if self._calls % 128 == 0:
+            stale = [
+                key for key, state in self._states.items()
+                if now - state.timestamp > self.ttl_seconds
+            ]
+            for key in stale:
+                del self._states[key]
+
+        state = self._states.get(track_id)
+        if (
+            state is None
+            or state.vertices.shape != current.shape
+            or not 0 < now - state.timestamp <= self.ttl_seconds
+        ):
+            result = current.copy()
+        else:
+            previous = state.vertices
+            count = len(current)
+
+            indices = (
+                np.arange(count)[None, :] + np.arange(count)[:, None]
+            ) % count
+            candidates = current[indices]
+            centered = candidates - candidates.mean(axis=1, keepdims=True)
+            old_centered = previous - previous.mean(axis=0)
+            costs = np.mean((centered - old_centered) ** 2, axis=(1, 2))
+            aligned = candidates[int(np.argmin(costs))]
+
+            residual = aligned - previous
+            distance = np.linalg.norm(residual, axis=1)
+            scale = max(float(np.ptp(aligned, axis=0).max()), 16.0)
+            dt = min(max(now - state.timestamp, 1e-3), 0.2)
+
+            fast = distance > max(4.0, scale * 0.045)
+            alpha = self.min_alpha + (1.0 - self.min_alpha) * np.clip(
+                distance / max(scale * 0.045, 4.0), 0.0, 1.0
+            )
+            step = residual * alpha[:, None]
+            step_length = np.linalg.norm(step, axis=1)
+            max_step = max(0.75, scale * 2.0 * dt)
+            step *= np.minimum(
+                1.0, max_step / np.maximum(step_length, 1e-6)
+            )[:, None]
+            step[fast] = residual[fast]
+            step[distance <= self.deadband_px] = 0.0
+            result = previous + step
+
+        if track_id not in self._states and len(self._states) >= self.max_tracks:
+            oldest = min(
+                self._states, key=lambda key: self._states[key].timestamp
+            )
+            del self._states[oldest]
+
+        self._states[track_id] = _MeshState(result.copy(), now)
+        return result
+
+
+class MikoVoTacticalHUDPainter:
+    def __init__(self, node_radius: int = 3, crosshairs: bool = False) -> None:
+        self.node_radius = node_radius
+        self.crosshairs = crosshairs
+
+    def paint(
+        self,
+        frame: np.ndarray,
+        vertices: np.ndarray,
+        track_id: Hashable,
+        confidence: float,
+        posture: str,
+        height_px: float,
+        color: Color,
+        show_nodes: bool,
+        show_mesh: bool,
+        show_telemetry: bool,
+        alpha: float,
+    ) -> np.ndarray:
+        if alpha <= 0 or not (show_nodes or show_mesh or show_telemetry):
+            return frame
+
+        points = np.rint(vertices).astype(np.int32)
+        frame_h, frame_w = frame.shape[:2]
+        points[:, 0] = np.clip(points[:, 0], 0, frame_w - 1)
+        points[:, 1] = np.clip(points[:, 1], 0, frame_h - 1)
+
+        label_id = str(track_id).encode("ascii", "replace").decode("ascii")[:20]
+        label = (
+            f"ID {label_id} | {posture} | "
+            f"H {height_px:.0f}px | Q {confidence:.2f}"
+        )
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.38
+        (text_w, text_h), baseline = cv2.getTextSize(
+            label, font, font_scale, 1
+        )
+        text_x = int(np.clip(
+            points[:, 0].min(), 0, max(frame_w - text_w - 8, 0)
+        ))
+        apex = int(points[:, 1].min())
+        text_y = apex - 12
+        if text_y < text_h + 6:
+            text_y = min(frame_h - baseline - 4, apex + text_h + 12)
+        text_y = max(text_h + 2, text_y)
+
+        padding = self.node_radius + 7
+        lo = points.min(axis=0) - padding
+        hi = points.max(axis=0) + padding + 1
+        if show_telemetry:
+            lo = np.minimum(lo, (text_x, text_y - text_h - 5))
+            hi = np.maximum(hi, (
+                text_x + text_w + 8, text_y + baseline + 5
+            ))
+        x0, y0 = np.maximum(lo, 0).astype(int)
+        x1, y1 = np.minimum(hi, (frame_w, frame_h)).astype(int)
+        if x1 <= x0 or y1 <= y0:
+            return frame
+
+        roi = frame[y0:y1, x0:x1]
+        overlay = roi.copy()
+        local = points - np.array([x0, y0], dtype=np.int32)
+        line = local.reshape(-1, 1, 2)
+        dim = tuple(int(channel * 0.28) for channel in color)
+        mid = tuple(int(channel * 0.58) for channel in color)
+        core = tuple(min(255, int(channel * 0.35 + 165)) for channel in color)
+
+        if show_mesh:
+            cv2.polylines(overlay, [line], True, dim, 4, cv2.LINE_AA)
+            cv2.polylines(overlay, [line], True, color, 1, cv2.LINE_AA)
+
+        if show_nodes:
+            for px, py in local:
+                center = (int(px), int(py))
+                cv2.circle(
+                    overlay, center, self.node_radius + 3,
+                    dim, -1, cv2.LINE_AA,
+                )
+                cv2.circle(
+                    overlay, center, self.node_radius + 1,
+                    mid, -1, cv2.LINE_AA,
+                )
+                cv2.circle(
+                    overlay, center, self.node_radius,
+                    color, -1, cv2.LINE_AA,
+                )
+                cv2.circle(overlay, center, 1, core, -1, cv2.LINE_AA)
+                if self.crosshairs:
+                    radius = self.node_radius + 5
+                    cv2.line(
+                        overlay, (int(px - radius), int(py)),
+                        (int(px + radius), int(py)), color, 1, cv2.LINE_AA,
+                    )
+                    cv2.line(
+                        overlay, (int(px), int(py - radius)),
+                        (int(px), int(py + radius)), color, 1, cv2.LINE_AA,
+                    )
+
+        if show_telemetry:
+            left, top = text_x - x0, text_y - y0
+            cv2.rectangle(
+                overlay, (left, top - text_h - 4),
+                (left + text_w + 7, top + baseline + 3),
+                (14, 19, 22), -1,
+            )
+            cv2.line(
+                overlay, (left, top - text_h - 4),
+                (left + text_w + 7, top - text_h - 4),
+                color, 1, cv2.LINE_AA,
+            )
+            cv2.putText(
+                overlay, label, (left + 3, top),
+                font, font_scale, color, 1, cv2.LINE_AA,
+            )
+
+        cv2.addWeighted(overlay, alpha, roi, 1.0 - alpha, 0, dst=roi)
+        return frame
+
+
+class TacticalBodycamMesh:
+    def __init__(self, vertex_count: int = 20) -> None:
+        self.hull = MikoVoAnatomicalContourHull(vertex_count=vertex_count)
+        self.stabilizer = MikoVoTemporalMeshStabilizer()
+        self.painter = MikoVoTacticalHUDPainter()
+        self._lock = threading.RLock()
+
+    def reset_track(self, track_id: Hashable) -> None:
+        with self._lock:
+            self.stabilizer.reset_track(track_id)
+
+    def render(
+        self,
+        frame: np.ndarray,
+        keypoints: np.ndarray,
+        bbox: BBox,
+        track_id: Hashable,
+        color: Color = (0, 215, 255),
+        show_nodes: bool = True,
+        show_mesh: bool = True,
+        show_telemetry: bool = True,
+        alpha: float = 0.75,
+        timestamp: Optional[float] = None,
+    ) -> Tuple[np.ndarray, Vertices]:
+        _validate_frame(frame)
+        alpha = float(np.clip(alpha, 0.0, 1.0))
+        channels = np.asarray(color, dtype=np.float64)
+        bgr = tuple(int(np.clip(value, 0, 255)) for value in channels)
+
+        with self._lock:
+            try:
+                geometry = self.hull.compute(keypoints, bbox, frame.shape)
+            except Exception:
+                x, y, width, height = bbox
+                rect = np.array([[x, y], [x + width, y], [x + width, y + height], [x, y + height]], dtype=np.float32)
+                geometry = HullResult(_resample_closed(rect, self.hull.vertex_count), 0.0, "UNKNOWN", float(height), True)
+
+            vertices = self.stabilizer.update(
+                track_id, geometry.vertices, timestamp
+            )
+            vertices[:, 0] = np.clip(
+                vertices[:, 0], 0, frame.shape[1] - 1
+            )
+            vertices[:, 1] = np.clip(
+                vertices[:, 1], 0, frame.shape[0] - 1
+            )
+            self.painter.paint(
+                frame, vertices, track_id, geometry.confidence,
+                geometry.posture, geometry.height_px, bgr,
+                show_nodes, show_mesh, show_telemetry, alpha,
+            )
+
+        rounded = np.rint(vertices).astype(np.int32)
+        result = [(int(x), int(y)) for x, y in rounded]
+        return frame, result
+
+
+_DEFAULT_TACTICAL_MESH = TacticalBodycamMesh()
+
+
+def render_tactical_bodycam_mesh(
+    frame: np.ndarray,
+    keypoints: np.ndarray,
+    bbox: Tuple[int, int, int, int],
+    track_id: int,
+    color: Color = (0, 215, 255),
+    show_nodes: bool = True,
+    show_mesh: bool = True,
+    show_telemetry: bool = True,
+    alpha: float = 0.75,
+) -> Tuple[np.ndarray, Vertices]:
+    return _DEFAULT_TACTICAL_MESH.render(
+        frame, keypoints, bbox, track_id, color,
+        show_nodes, show_mesh, show_telemetry, alpha,
+    )
+
+
+# =============================================================================
+# 9. MIKOVO RARA 11 VISION & TRACKING ENGINE
+# =============================================================================
+
+
+class MikoVoRaRa11VisionEngine:
+    """
+    MikoVo RaRa 11 Autonomous AI Vision Core:
+      - YOLOv8 Neural Backbone + SVD Weighted Umeyama Alignment
+      - 512-Dimensional Deep Metric Embeddings (< 3.5ms on CPU)
+      - 8-State Kalman Filter Temporal Tracking with Mahalanobis Gating
+      - Virtual Tripwire & ROI Spatial Filtering
+      - Circular Frame Buffer for Instant Video Alert Dispatch
+      - Thread-Safe RLock Frame Publishing & Camera Fallback Test Pattern Stream
+    """
+    def __init__(self, db: FaceDatabase):
+        self.db = db
+        self.tracker = MikoVoRaRa11MultiKalmanTracker()
+        self._lock = threading.RLock()
+        self.running = False
+        self.cap = None
+        self.is_simulated = False
+        self._probe_thread = None
+        self.feature_extractor = _DEFAULT_EXTRACTOR
+        self.latest_frame = None
+        self.latest_annotated = None
+        self.last_detections = []
+        self.stats = {"fps": 0.0, "person_count": 0}
+        self.last_alert_time = 0.0
+        self.reported_tracks = set()
+
+        # MikoVo RaRa 11 Biometrics & Passive Liveness Core
+        self.liveness_detector = MikoVoLivenessDetector()
+        self.pose_estimator = MikoVoHeadPoseEstimator(image_size=112)
+        self.fusion_memory = MikoVoTrackFusionMemory()
+
+        # MikoVo RaRa 11 Behavioral Threat Profilers
+        self.occlusion_detector = MikoVoOcclusionDetector()
+        self.kinetic_analyzer = MikoVoKineticThreatAnalyzer()
+        self.entropy_analyzer = MikoVoTrajectoryEntropyAnalyzer()
+        self.aggression_strike_analyzer = MikoVoStrikeVelocityAnalyzer()
+        self.aggression_interlock_analyzer = MikoVoPairwiseInterlockAnalyzer()
+        self.aggression_entropy_analyzer = MikoVoChaoticStruggleEntropy()
+        self.latest_aggression_report = None
+
+        # MikoVo RaRa 11 Anatomical Body & Head Shrink-Wrap Fitter
+        self.anatomical_fitter = MikoVoDualZoneFitter()
+
+        # MikoVo RaRa 11 Tactical Body-Cam Mesh & Connected Nodes Core
+        self.tactical_mesh = TacticalBodycamMesh(vertex_count=20)
+
+        # Circular buffer for pre-incident video clip (~4 sec @ 15 FPS)
+        self.frame_buffer = deque(maxlen=60)
+        self.latest_annotated_mat = None
+
+        self.model = None
+        if HAS_YOLO:
+            weights = (
+                MIKOVO_WEIGHTS
+                if MIKOVO_WEIGHTS.exists()
+                else (POSE_WEIGHTS if POSE_WEIGHTS.exists() else BASE_WEIGHTS)
+            )
+            if not weights.exists():
+                try:
+                    tmp_m = YOLO("yolov8n-pose.pt")
+                    if POSE_WEIGHTS.exists():
+                        import shutil
+                        shutil.move(str(POSE_WEIGHTS), str(MIKOVO_WEIGHTS))
+                    weights = MIKOVO_WEIGHTS
+                except Exception:
+                    pass
+            if weights.exists():
+                try:
+                    self.model = YOLO(str(weights))
+                    self.model.fuse()
+                except Exception:
+                    self.model = None
+
+        self._fps_count = 0
+        self._fps_time = time.time()
+
+    def start(self, index=0):
+        with self._lock:
+            if self.running:
+                return True
+            cap = None
+            # Bounded retry: up to 3 attempts with 150ms delay
+            for attempt in range(3):
+                cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+                if cap.isOpened():
+                    break
+                cap.release()
+                cap = cv2.VideoCapture(index)
+                if cap.isOpened():
+                    break
+                cap.release()
+                time.sleep(0.15)
+
+            if cap and cap.isOpened():
+                self.cap = cap
+                self.is_simulated = False
+            else:
+                self.cap = None
+                self.is_simulated = True
+                print(f"[MikoVo RaRa 11] Camera #{index} unavailable. Initializing Animated Tactical Test-Pattern Stream.")
+                if not self._probe_thread or not self._probe_thread.is_alive():
+                    self._probe_thread = threading.Thread(target=self._camera_probe_loop, args=(index,), daemon=True)
+                    self._probe_thread.start()
+
+            self.running = True
+
+        threading.Thread(target=self._loop, daemon=True).start()
+        return True
+
+    def _camera_probe_loop(self, index):
+        """Background thread auto-probing for hardware camera re-connection."""
+        while self.running and self.is_simulated:
+            time.sleep(3.0)
+            if not self.running or not self.is_simulated:
+                break
+            try:
+                cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+                if not cap.isOpened():
+                    cap.release()
+                    cap = cv2.VideoCapture(index)
+                if cap.isOpened():
+                    ret, test_f = cap.read()
+                    if ret and test_f is not None:
+                        with self._lock:
+                            self.cap = cap
+                            self.is_simulated = False
+                            print(f"[MikoVo RaRa 11] Hardware Camera #{index} Auto-Recovered Successfully.")
+                            break
+                    cap.release()
+            except Exception:
+                pass
+
+    def _generate_test_pattern_frame(self, w=1280, h=720):
+        """Generates dynamic tactical test pattern when hardware sensor is offline."""
+        frame = np.zeros((h, w, 3), dtype=np.uint8)
+        # Background dark tactical grid
+        grid_size = 40
+        frame[::grid_size, :, :] = (25, 28, 34)
+        frame[:, ::grid_size, :] = (25, 28, 34)
+
+        # Dynamic radar sweep line
+        now_t = time.time()
+        sweep_x = int((now_t * 220) % w)
+        cv2.line(frame, (sweep_x, 0), (sweep_x, h), (0, 180, 255), 1, cv2.LINE_AA)
+
+        # Central HUD crosshairs & concentric target circles
+        cx, cy = w // 2, h // 2
+        cv2.drawMarker(frame, (cx, cy), (70, 75, 110), cv2.MARKER_CROSS, 40, 1)
+        cv2.circle(frame, (cx, cy), 130, (45, 50, 75), 1, cv2.LINE_AA)
+        cv2.circle(frame, (cx, cy), 260, (30, 35, 55), 1, cv2.LINE_AA)
+
+        # Status badge
+        cv2.rectangle(frame, (cx - 330, cy - 65), (cx + 330, cy + 65), (14, 16, 24), -1)
+        cv2.rectangle(frame, (cx - 330, cy - 65), (cx + 330, cy + 65), (0, 165, 255), 2)
+        cv2.putText(frame, "CAM_OFFLINE: SIMULATED SENSOR PATTERN", (cx - 305, cy - 18),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 215, 255), 2, cv2.LINE_AA)
+        cv2.putText(frame, "MikoVo RaRa 11 AI Neural Vision Core [STANDBY / PROBING]", (cx - 280, cy + 18),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (160, 180, 205), 1, cv2.LINE_AA)
+        cv2.putText(frame, f"AUTO-PROBING HARDWARE SENSOR...  {datetime.now().strftime('%H:%M:%S.%f')[:-4]}", (cx - 270, cy + 45),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (88, 209, 48), 1, cv2.LINE_AA)
+
+        # Bottom telemetry
+        cv2.putText(frame, f"FPS: {self.stats.get('fps', 30.0):.1f} | SENSOR: VIRTUAL_SYNTH | RES: {w}x{h}", (20, h - 22),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (130, 150, 175), 1, cv2.LINE_AA)
+        return frame
+
+    def get_snapshot(self):
+        """Thread-safe snapshot getter for frame publishing."""
+        with self._lock:
+            raw_f = self.latest_frame
+            ann_f = self.latest_annotated
+            dets = list(self.last_detections) if self.last_detections else []
+            st = dict(self.stats)
+            sim = self.is_simulated
+            return raw_f, ann_f, dets, st, sim
+
+    def stop(self):
+        self.running = False
+        time.sleep(0.15)
+        with self._lock:
+            if self.cap:
+                self.cap.release()
+                self.cap = None
+        self.latest_annotated = None
+        self.latest_frame = None
+        self.latest_annotated_mat = None
+
+    def _is_within_schedule(self):
+        if not config.get("schedule_enabled", False):
+            return True
+        try:
+            start_str = config.get("schedule_start", "22:00")
+            end_str = config.get("schedule_end", "07:00")
+            now_dt = datetime.datetime.now()
+            cur_min = now_dt.hour * 60 + now_dt.minute
+            sh, sm = map(int, start_str.split(":"))
+            eh, em = map(int, end_str.split(":"))
+            start_min = sh * 60 + sm
+            end_min = eh * 60 + em
+            if start_min <= end_min:
+                return start_min <= cur_min <= end_min
+            else:
+                return cur_min >= start_min or cur_min <= end_min
+        except Exception:
+            return True
+
+    def _is_in_roi(self, smooth_box, frame_shape):
+        if not config.get("roi_enabled"):
+            return True
+        poly = config.get("roi_polygon")
+        if not poly or len(poly) < 3:
+            return True
+
+        fh, fw = frame_shape[:2]
+        pts = np.array([[int(p[0] * fw), int(p[1] * fh)] for p in poly], dtype=np.int32)
+        feet_pt = (smooth_box[0] + smooth_box[2] // 2, smooth_box[1] + smooth_box[3])
+        return cv2.pointPolygonTest(pts, feet_pt, False) >= 0
+
+    def _loop(self):
+        while self.running:
+            frame = None
+            with self._lock:
+                cap = self.cap
+                sim = self.is_simulated
+
+            if sim or cap is None:
+                time.sleep(0.04)
+                frame = self._generate_test_pattern_frame()
+            else:
+                ok, frame = cap.read()
+                if not ok or frame is None:
+                    with self._lock:
+                        self.is_simulated = True
+                        if self.cap:
+                            try: self.cap.release()
+                            except Exception: pass
+                            self.cap = None
+                        if not self._probe_thread or not self._probe_thread.is_alive():
+                            self._probe_thread = threading.Thread(
+                                target=self._camera_probe_loop,
+                                args=(int(config.get("camera_index", 0)),),
+                                daemon=True
+                            )
+                            self._probe_thread.start()
+                    frame = self._generate_test_pattern_frame()
+
+            self._fps_count += 1
+            now = time.time()
+            if now - self._fps_time >= 1.0:
+                self.stats["fps"] = round(self._fps_count / (now - self._fps_time), 1)
+                self._fps_count = 0
+                self._fps_time = now
+
+            line_y = float(config.get("tripwire_y", 0.55)) * frame.shape[0] if config.get("tripwire_enabled") else None
+            loiter_limit = float(config.get("loitering_sec", 10))
+
+            detections = self._detect(frame)
+            tracked = self.tracker.update(detections, frame.shape, line_y=line_y, loiter_limit=loiter_limit, now=now)
+
+            # Evaluate MikoVo RaRa 11 Behavioral & Kinetic Threats + Anatomical Fitter
+            for d in tracked:
+                kalman_state = d.get("kalman_state")
+                kpts = d.get("kpts")
+                confs = d.get("kp_conf")
+                full_kpts = d.get("full_kpts")
+                face_crop = d.get("face_crop")
+                tid = d.get("track_id", 1)
+                bbox = d.get("smooth_bbox", d["bbox"])
+
+                # MikoVo RaRa 11 Shrink-Wrapped Anatomical Bounds (Body & Head Envelope)
+                raw_box_tuple = (float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3]))
+                if full_kpts is not None and len(full_kpts) >= 5:
+                    k17 = full_kpts if len(full_kpts) == 17 else _standardize_keypoints_array(full_kpts, np.array([raw_box_tuple]))[0]
+                elif kpts is not None and len(kpts) >= 5:
+                    k5 = np.column_stack([kpts[:5], confs[:5] if confs is not None else np.ones(5)])
+                    k17 = _standardize_keypoints_array(k5, np.array([raw_box_tuple]))[0]
+                else:
+                    k17 = np.zeros((17, 3), dtype=np.float64)
+
+                d["k17"] = k17
+
+                anat_rep = self.anatomical_fitter.fit(
+                    keypoints_17x3=k17,
+                    raw_bbox=raw_box_tuple,
+                    frame=frame,
+                    track_id=tid,
+                    frame_shape=frame.shape
+                )
+                d["anatomical"] = anat_rep
+                d["body_bbox"] = [int(v) for v in anat_rep.body_bbox]
+                d["head_bbox"] = [int(v) for v in anat_rep.head_bbox]
+                d["posture"] = anat_rep.posture_type
+
+                kpts_5x2 = kpts if (kpts is not None and len(kpts) >= 5) else np.zeros((5, 2))
+                confs_5 = confs if confs is not None else np.ones(5, dtype=np.float64) * 0.8
+                k_state_8d = kalman_state if kalman_state is not None else np.array([bbox[0] + bbox[2]/2.0, bbox[1] + bbox[3]/2.0, bbox[2]/float(max(1, bbox[3])), float(bbox[3]), 0.0, 0.0, 0.0, 0.0])
+
+                threat_report = evaluate_behavioral_threat(
+                    track_id=tid,
+                    kalman_state_8d=k_state_8d,
+                    bbox_xywh=tuple(bbox),
+                    kpts_5x2=kpts_5x2,
+                    confs_5=confs_5,
+                    frame_shape=frame.shape,
+                    face_crop=face_crop,
+                    occlusion_detector=self.occlusion_detector,
+                    kinetic_analyzer=self.kinetic_analyzer,
+                    entropy_analyzer=self.entropy_analyzer,
+                )
+                d["threat"] = threat_report
+
+            # Evaluate MikoVo RaRa 11 Multi-Person Physical Aggression & Struggle Sentinel
+            tracks_hist = {}
+            for trk_id, trk in self.tracker.trackers.items():
+                if len(trk.bbox_history) >= 2:
+                    tracks_hist[trk_id] = {
+                        "bboxes": np.array(trk.bbox_history, dtype=np.float64),
+                        "keypoints": np.array(trk.kpts_history, dtype=np.float64)
+                    }
+            agg_report = evaluate_aggression_dynamics(
+                tracks_hist,
+                frame.shape,
+                fps=float(self.stats.get("fps", 30.0)) or 30.0,
+                strike_analyzer=self.aggression_strike_analyzer,
+                interlock_analyzer=self.aggression_interlock_analyzer,
+                entropy_analyzer=self.aggression_entropy_analyzer
+            )
+            self.latest_aggression_report = agg_report
+
+            active_detections = []
+            for d in tracked:
+                in_roi = self._is_in_roi(d.get("smooth_bbox", d["bbox"]), frame.shape)
+                d["in_roi"] = in_roi
+                if in_roi:
+                    active_detections.append(d)
+
+            annotated = self._draw(frame.copy(), tracked)
+            _, jpg = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            _, raw = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+
+            with self._lock:
+                self.last_detections = tracked
+                self.stats["person_count"] = len(active_detections)
+                self.latest_annotated_mat = annotated
+                self.frame_buffer.append(annotated.copy())
+                self.latest_annotated = jpg.tobytes()
+                self.latest_frame = raw.tobytes()
+
+            # Record hourly traffic statistic
+            current_hour = datetime.now().hour
+            if active_detections:
+                state["hourly_traffic"][current_hour] += 1
+
+            # Automated Telegram Alert Dispatch
+            if active_detections and not state["is_paused"] and config.get("auto_send"):
+                cooldown = max(2, int(config.get("cooldown_sec", 6)))
+                if now - self.last_alert_time >= cooldown:
+                    track_ids = [d.get("track_id") for d in active_detections]
+                    should_alert = True
+
+                    # 1. Active Hours Schedule Check
+                    if not self._is_within_schedule():
+                        should_alert = False
+
+                    # 2. Alert Trigger Filter
+                    if should_alert:
+                        trigger_mode = config.get("alert_trigger", "stranger_only")
+                        has_unknown = any(not d.get("name") for d in active_detections)
+                        has_known = any(bool(d.get("name")) for d in active_detections)
+                        has_roi = any(d.get("in_roi") for d in active_detections)
+                        has_loitering = any(d.get("is_loitering") for d in active_detections)
+                        has_unreported_track = any(t not in self.reported_tracks for t in track_ids)
+                        has_threat = any(d.get("threat") and d["threat"].threat_level in ("ELEVATED", "CRITICAL") for d in active_detections)
+
+                        if trigger_mode == "stranger_only":
+                            should_alert = has_unknown or has_loitering or has_threat
+                        elif trigger_mode == "roi_only":
+                            should_alert = has_roi
+                        elif trigger_mode == "known_only":
+                            should_alert = has_known or has_threat
+                        else:
+                            if config.get("only_new_person"):
+                                should_alert = has_unknown or has_unreported_track or has_loitering or has_threat
+                            else:
+                                should_alert = True
+
+                    if should_alert:
+                        self.last_alert_time = now
+                        for t in track_ids:
+                            self.reported_tracks.add(t)
+                        self._trigger_alert(active_detections)
+
+            time.sleep(0.01)
+
+    def _detect(self, frame):
+        detections = []
+        h, w = frame.shape[:2]
+
+        if self.model is not None:
+            results = self.model.predict(frame, classes=[0], conf=0.40, verbose=False, imgsz=640)
+            for r in results:
+                kpts_tensor = getattr(r, "keypoints", None)
+                kpts_arr = kpts_tensor.data if kpts_tensor is not None else None
+
+                for idx, box in enumerate(r.boxes):
+                    x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+                    conf = float(box.conf[0])
+                    x1, y1 = max(0, x1), max(0, y1)
+                    x2, y2 = min(w, x2), min(h, y2)
+                    bw, bh = x2 - x1, y2 - y1
+
+                    if bw < 28 or bh < 38:
+                        continue
+
+                    kpts = kpts_arr[idx].cpu().numpy() if kpts_arr is not None and idx < len(kpts_arr) else None
+                    if kpts is not None and len(kpts) >= 5:
+                        kp_pts = kpts[:5, :2]
+                        kp_conf = kpts[:5, 2] if kpts.shape[-1] >= 3 else np.ones(5, dtype=np.float32)
+                    else:
+                        kp_pts, kp_conf = None, None
+
+                    # MikoVo RaRa 11 Neural Core Alignment + Descriptor Extraction
+                    aligned_face, emb, align_res = mikovo_rara11_extract_face_descriptor(
+                        frame, (x1, y1, bw, bh), kp_pts, kp_conf
+                    )
+
+                    # MikoVo RaRa 11 Liveness & Head Pose Sentinel
+                    sentinel = evaluate_face_sentinel(
+                        aligned_face,
+                        align_res.canonical_keypoints,
+                        kp_conf if kp_conf is not None else np.ones(5),
+                        liveness_detector=self.liveness_detector,
+                        pose_estimator=self.pose_estimator,
+                        fusion_memory=self.fusion_memory
+                    )
+
+                    # If spoof attack detected, reject authentication!
+                    if sentinel.is_spoof_attack:
+                        name, match_score = None, 0.0
+                    else:
+                        name, match_score = self.db.find_match(emb)
+
+                    detections.append({
+                        "bbox": [x1, y1, bw, bh],
+                        "score": conf,
+                        "name": name,
+                        "match_score": match_score,
+                        "embedding": emb,
+                        "face_crop": aligned_face,
+                        "kpts": kp_pts,
+                        "kp_conf": kp_conf,
+                        "full_kpts": kpts,
+                        "sentinel": sentinel,
+                        "is_live": sentinel.is_live,
+                        "liveness_score": sentinel.liveness_score,
+                        "is_spoof": sentinel.is_spoof_attack,
+                        "attack_type": sentinel.attack_type,
+                        "euler_angles": sentinel.euler_angles,
+                        "pose_quality": sentinel.pose_quality,
+                    })
+        return detections
+
+    def _draw(self, frame, detections):
+        h, w = frame.shape[:2]
+
+        # Draw ROI Security Zone
+        if config.get("roi_enabled"):
+            poly = config.get("roi_polygon")
+            if poly and len(poly) >= 3:
+                pts = np.array([[int(p[0] * w), int(p[1] * h)] for p in poly], dtype=np.int32)
+                overlay = frame.copy()
+                cv2.fillPoly(overlay, [pts], (255, 69, 58))
+                cv2.addWeighted(overlay, 0.15, frame, 0.85, 0, frame)
+                cv2.polylines(frame, [pts], True, (255, 69, 58), 2, cv2.LINE_AA)
+                cv2.putText(frame, "RESTRICTED SECURITY ZONE", (pts[0][0] + 5, pts[0][1] - 8),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 69, 58), 1, cv2.LINE_AA)
+
+        # Draw Tripwire Line
+        if config.get("tripwire_enabled"):
+            line_y = int(float(config.get("tripwire_y", 0.55)) * h)
+            cv2.line(frame, (0, line_y), (w, line_y), (0, 215, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, "TRIPWIRE LINE [ IN / OUT ]", (20, line_y - 8),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 215, 255), 1, cv2.LINE_AA)
+
+        # MikoVo RaRa 11 Neural Watermark
+        cv2.putText(frame, "MikoVo RaRa 11", (18, 28),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 1, cv2.LINE_AA)
+
+        if self.latest_aggression_report and self.latest_aggression_report.is_violent_threat:
+            rep = self.latest_aggression_report
+            cv2.rectangle(frame, (16, 38), (min(w - 16, 560), 72), (0, 0, 180), -1)
+            cv2.putText(frame, f"! VIOLENCE ALERT: {rep.threat_type} ({rep.aggression_score:.2f}) !",
+                        (24, 61), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 2, cv2.LINE_AA)
+
+        for det in detections:
+            # Use shrink-wrapped anatomical body bbox if available
+            body_box = det.get("body_bbox")
+            head_box = det.get("head_bbox")
+            posture = det.get("posture")
+            if body_box is not None:
+                x, y, bw, bh = body_box
+            else:
+                x, y, bw, bh = det.get("smooth_bbox", det["bbox"])
+
+            name = det.get("name")
+            tid = det.get("track_id", 1)
+            is_loiter = det.get("is_loitering", False)
+            in_roi = det.get("in_roi", True)
+
+            is_spoof = det.get("is_spoof", False)
+            attack_type = det.get("attack_type")
+            threat = det.get("threat")
+
+            if threat and threat.threat_level == "CRITICAL":
+                color = (0, 0, 255) # Alert Red for Critical Threat
+            elif is_spoof:
+                color = (0, 0, 255) # Alert Red for Spoof Attacks
+            elif threat and threat.threat_level == "ELEVATED":
+                color = (0, 140, 255) # Intense Orange for Elevated Threat
+            elif is_loiter:
+                color = (0, 0, 255) # Warning Red
+            elif not in_roi:
+                color = (120, 120, 120) # Outside Zone Grey
+            elif name:
+                color = (48, 209, 88) # Authorized Green
+            else:
+                color = (0, 165, 255) # Unknown Amber
+
+            # 1. MikoVo RaRa 11 Tactical Body-Cam Connected Mesh & Nodes (Subsystem 12)
+            k17 = det.get("k17")
+            raw_box = tuple(det.get("smooth_bbox", det["bbox"]))
+            if k17 is None:
+                k17 = np.zeros((17, 3), dtype=np.float64)
+
+            try:
+                self.tactical_mesh.render(
+                    frame=frame,
+                    keypoints=k17,
+                    bbox=raw_box,
+                    track_id=tid,
+                    color=color,
+                    show_nodes=True,
+                    show_mesh=True,
+                    show_telemetry=False,
+                    alpha=0.82
+                )
+            except Exception:
+                pass
+
+            # Label pill
+            if threat and threat.is_threat:
+                if threat.is_fallen:
+                    prefix = "EMERGENCY: FALL DETECTED! "
+                elif threat.threat_category == "CONCEALED_FACE":
+                    prefix = f"ALERT: CONCEALED ({threat.concealment_type or 'MASK'}) "
+                elif threat.threat_category == "RAPID_DASH":
+                    prefix = f"ALERT: DASH ({threat.velocity_px_sec:.0f}px/s) "
+                elif threat.threat_category == "PROWLER_PACING":
+                    prefix = f"ALERT: PROWLER (score={threat.prowling_score:.2f}) "
+                else:
+                    prefix = f"THREAT: {threat.threat_category} "
+            elif is_spoof:
+                prefix = f"SPOOF ALERT! ({attack_type or 'Fake Face'}) "
+            elif is_loiter:
+                prefix = "LOITERING! "
+            else:
+                prefix = ""
+
+            live_pct = int(det.get("liveness_score", 1.0) * 100)
+            live_txt = f" [Live: {live_pct}%]" if not is_spoof else " [FAKE]"
+            id_txt = f"{name} ({det.get('match_score', 0.94)*100:.0f}%)" if name else f"Unknown ({det['score']*100:.0f}%)"
+            posture_txt = f" [{posture}]" if (posture and posture not in ("STANDING", "UNKNOWN", "PARTIAL_VISIBILITY")) else ""
+            label = f"MikoVo RaRa 11 #{tid}{posture_txt} | {prefix}{id_txt}{live_txt}"
+
+            # 2. Sleek Translucent Tactical HUD Label Badge
+            (tw, th), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.42, 1)
+            ly = max(22, y - 8)
+            pad_x, pad_y = 6, 4
+            lx0, ly0 = max(0, x), max(0, ly - th - pad_y - 2)
+            lx1, ly1 = min(w, x + tw + pad_x * 2), min(h, ly + pad_y)
+
+            if lx1 > lx0 and ly1 > ly0:
+                roi_label = frame[ly0:ly1, lx0:lx1]
+                ov_label = roi_label.copy()
+                cv2.rectangle(ov_label, (0, 0), (lx1 - lx0, ly1 - ly0), (14, 19, 22), -1)
+                cv2.line(ov_label, (0, 0), (lx1 - lx0, 0), color, 2, cv2.LINE_AA)
+                cv2.addWeighted(ov_label, 0.82, roi_label, 0.18, 0, dst=roi_label)
+                cv2.putText(frame, label, (lx0 + pad_x, ly - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (245, 245, 250), 1, cv2.LINE_AA)
+
+            # 3. Threat diagnostic sub-badge
+            if threat and threat.is_threat:
+                diag = f"Occ: {threat.occlusion_ratio:.2f} | Vel: {threat.velocity_px_sec:.0f} px/s | Prowl: {threat.prowling_score:.2f}"
+                (dtw, dth), _ = cv2.getTextSize(diag, cv2.FONT_HERSHEY_SIMPLEX, 0.36, 1)
+                dly = y + bh + 16
+                if dly < h - 5:
+                    dlx0, dly0 = max(0, x), max(0, dly - dth - 3)
+                    dlx1, dly1 = min(w, x + dtw + 10), min(h, dly + 3)
+                    if dlx1 > dlx0 and dly1 > dly0:
+                        roi_d = frame[dly0:dly1, dlx0:dlx1]
+                        ov_d = roi_d.copy()
+                        cv2.rectangle(ov_d, (0, 0), (dlx1 - dlx0, dly1 - dly0), (14, 19, 22), -1)
+                        cv2.line(ov_d, (0, 0), (dlx1 - dlx0, 0), color, 1, cv2.LINE_AA)
+                        cv2.addWeighted(ov_d, 0.82, roi_d, 0.18, 0, dst=roi_d)
+                        cv2.putText(frame, diag, (dlx0 + 4, dly - 1), cv2.FONT_HERSHEY_SIMPLEX, 0.36, (240, 240, 245), 1, cv2.LINE_AA)
+
+        return frame
+
+    def _encode_mp4_clip(self, frames):
+        if not frames:
+            return b""
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tf:
+            tmp_path = tf.name
+        try:
+            h, w = frames[0].shape[:2]
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(tmp_path, fourcc, 15.0, (w, h))
+            for f in frames:
+                out.write(f)
+            out.release()
+            with open(tmp_path, "rb") as f:
+                data = f.read()
+            return data
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+    def _trigger_alert(self, detections):
+        count = len(detections)
+        identified = [d["name"] for d in detections if d.get("name")]
+        has_loitering = any(d.get("is_loitering") for d in detections)
+        custom_cap = config.get("custom_caption", "هشدار تردد MikoVo RaRa 11")
+
+        state["stats"]["total_captures"] += 1
+        has_spoof = any(d.get("is_spoof") for d in detections)
+        if has_spoof:
+            spoof_types = [d.get("attack_type") or "تصویر جعلی" for d in detections if d.get("is_spoof")]
+            custom_cap = f"🚨 هشدار ضدتقلب MikoVo RaRa 11: تلاش برای دور زدن بیومتریک با {', '.join(spoof_types)} شناسایی و دفع شد!"
+
+        if self.latest_aggression_report and self.latest_aggression_report.is_violent_threat:
+            state["stats"]["threat_count"] = state["stats"].get("threat_count", 0) + 1
+            agg = self.latest_aggression_report
+            if agg.threat_type == "CHAOTIC_BRAWL":
+                custom_cap = f"🚨 هشدار اضطراری MikoVo RaRa 11: نزاع و درگیری فیزیکی شدید در صحنه شناسایی شد! (امتیاز: {agg.aggression_score:.2f})"
+            elif agg.threat_type == "PHYSICAL_GRAPPLE":
+                custom_cap = f"🚨 هشدار امنیتی MikoVo RaRa 11: گلاویز شدن و درگیری نزدیک دو نفر ثبت شد! (امتیاز: {agg.aggression_score:.2f})"
+            elif agg.threat_type == "MELEE_STRIKE":
+                custom_cap = f"⚡ هشدار امنیتی MikoVo RaRa 11: پرتاب ضربه سریع فیزیکی یا مشت ثبت شد! (امتیاز: {agg.aggression_score:.2f})"
+
+        threat_d = next((d for d in detections if d.get("threat") and d["threat"].threat_level in ("ELEVATED", "CRITICAL")), None)
+        if threat_d:
+            state["stats"]["threat_count"] = state["stats"].get("threat_count", 0) + 1
+            t_report = threat_d["threat"]
+            t_cat = t_report.threat_category
+            if t_cat == "PERSON_FALLEN":
+                custom_cap = "🚨 وضعیت اضطراری MikoVo RaRa 11: سقوط ناگهانی / بیهوشی شخص در صحنه شناسایی شد!"
+            elif t_cat == "CONCEALED_FACE":
+                c_type = t_report.occlusion.concealment_type or "ماسک یا پوشش"
+                custom_cap = f"⚠️ هشدار امنیتی MikoVo RaRa 11: فرد مشکوک با چهره پوشانده شده ({c_type}) شناسایی شد!"
+            elif t_cat == "RAPID_DASH":
+                custom_cap = "⚡ هشدار امنیتی MikoVo RaRa 11: دویدن یا حمله ناگهانی و هجوم پرسرعت فرد ثبت شد!"
+            elif t_cat == "PROWLER_PACING":
+                custom_cap = "👁️ هشدار پایش محیطی MikoVo RaRa 11: پرسه زدن مکرر و مشکوک (Prowler) در محدوده ثبت شد!"
+            else:
+                custom_cap = f"⚠️ هشدار رفتاری MikoVo RaRa 11: تهدید رفتاری ({t_report.threat_level}) ثبت شد!"
+
+        names_str = ", ".join(identified) if identified else "ناشناس"
+        if threat_d and threat_d["threat"].threat_category:
+            t_cat = threat_d["threat"].threat_category
+            if t_cat == "PERSON_FALLEN":
+                names_str = f"🚑 سقوط/بیهوشی ({names_str})"
+            elif t_cat == "CONCEALED_FACE":
+                c_type = threat_d["threat"].occlusion.concealment_type or "ماسک"
+                names_str = f"🎭 چهره پوشانده ({c_type})"
+            elif t_cat == "RAPID_DASH":
+                names_str = f"⚡ هجوم سریع ({names_str})"
+            elif t_cat == "PROWLER_PACING":
+                names_str = f"🔄 پرسه زنی ({names_str})"
+        elif has_spoof:
+            names_str = f"🚨 جعل چهره ({', '.join(spoof_types)})"
+
+        log_entry = {
+            "id": int(time.time() * 1000),
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "persons": count,
+            "names": names_str,
+            "type": "ویدیو MP4" if config.get("alert_media") == "video" else "عکس JPG",
+            "telegram": "در حال ارسال...",
+        }
+        state["logs"].insert(0, log_entry)
+        if len(state["logs"]) > 50:
+            state["logs"].pop()
+
+        def alert_worker():
+            media_type = config.get("alert_media", "photo")
+            if media_type == "video":
+                clip_frames = list(self.frame_buffer)
+                for _ in range(25):
+                    time.sleep(0.06)
+                    if self.latest_annotated_mat is not None:
+                        clip_frames.append(self.latest_annotated_mat.copy())
+                mp4_bytes = self._encode_mp4_clip(clip_frames)
+                ok = telegram.dispatch_video(mp4_bytes, count, identified, custom_cap, is_loitering=has_loitering)
+                if not ok and self.latest_annotated:
+                    ok = telegram.dispatch_photo(self.latest_annotated, count, identified, custom_cap, is_loitering=has_loitering)
+            else:
+                ok = telegram.dispatch_photo(self.latest_annotated, count, identified, custom_cap, is_loitering=has_loitering)
+
+            log_entry["telegram"] = "ارسال شد" if ok else "ارسال ناموفق"
+            if ok:
+                state["stats"]["telegram_sent"] += 1
+
+        threading.Thread(target=alert_worker, daemon=True).start()
+
+    def register_face(self, name: str, image_b64: Optional[str] = None):
+        if not name or not name.strip():
+            return False, "نام شخص الزامی است"
+        name = name.strip()
+
+        frame = None
+        if image_b64:
+            try:
+                b64_clean = image_b64.split(",", 1)[1] if "," in image_b64 else image_b64
+                img_data = base64.b64decode(b64_clean)
+                nparr = np.frombuffer(img_data, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            except Exception as e:
+                return False, f"خطا در پردازش تصویر ارسالی: {e}"
+
+        if frame is None:
+            with self._lock:
+                raw_bytes = self.latest_frame
+            if not raw_bytes:
+                return False, "هیچ فریمی از دوربین در دسترس نیست. لطفاً عکس آپلود کنید یا دوربین را روشن نمایید"
+            nparr = np.frombuffer(raw_bytes, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if frame is None:
+            return False, "فریم تصویر معتبر نیست"
+
+        # Detect face & extract embedding
+        detections = self._detect(frame)
+        if not detections:
+            return False, "شخصی یا چهره‌ای در تصویر تشخیص داده نشد"
+
+        det = detections[0]
+        if det.get("is_spoof"):
+            return False, "خطای امنیتی: تصویر زنده نیست (تلاش برای ثبت عکس چاپی یا صفحه نمایش)!"
+
+        crop = det.get("face_crop")
+        if crop is None or crop.size == 0:
+            bbox = det.get("bbox", [0, 0, frame.shape[1], frame.shape[0]])
+            x, y, w, h = [int(v) for v in bbox]
+            x, y = max(0, x), max(0, y)
+            w = max(1, min(frame.shape[1] - x, w))
+            h = max(1, min(frame.shape[0] - y, h))
+            crop = frame[y:y+h, x:x+w]
+
+        thumb = cv2.resize(crop, (64, 64))
+        _, jpg = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        thumb_b64 = "data:image/jpeg;base64," + base64.b64encode(jpg.tobytes()).decode()
+
+        emb = det.get("embedding")
+        if emb is None:
+            _, emb, _ = mikovo_rara11_extract_face_descriptor(frame, (0, 0, frame.shape[1], frame.shape[0]))
+
+        rec = self.db.add(name, emb, thumb_b64)
+        return True, rec["id"]
+
+
+# ===================================================================
 # 3. Telegram Bot Gateway (Photo, MP4 Video, Remote Commands & Summary)
 # ===================================================================
 class TelegramBot:
@@ -2057,18 +4459,21 @@ class TelegramBot:
         except Exception:
             return False
 
-    def test(self):
-        token = config.get("bot_token", "").strip()
-        chat_id = config.get("chat_id", "").strip()
-        if not token or not chat_id:
+    def test(self, token: Optional[str] = None, chat_id: Optional[str] = None):
+        tok = (token or config.get("bot_token", "")).strip()
+        cid = (chat_id or config.get("chat_id", "")).strip()
+        if not tok or not cid:
             return False, "توکن یا شناسه چت تنظیم نشده است"
         try:
             r = requests.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": chat_id, "text": "✅ اتصال با سرور پایش MikoTim و موتور هوش مصنوعی MikoVo RaRa 11 با موفقیت برقرار شد."},
+                f"https://api.telegram.org/bot{tok}/sendMessage",
+                json={"chat_id": cid, "text": "✅ اتصال با سرور پایش MikoTim و موتور هوش مصنوعی MikoVo RaRa 11 با موفقیت برقرار شد."},
                 timeout=8
             )
-            return r.json().get("ok", False), "OK"
+            res = r.json()
+            if res.get("ok"):
+                return True, "ارتباط با بات تلگرام با موفقیت تأیید شد."
+            return False, res.get("description", "خطا در تلگرام")
         except Exception as e:
             return False, str(e)
 
@@ -2193,6 +4598,139 @@ def api_mikivo_info():
         ]
     )
 
+def mask_secret(secret: str) -> str:
+    """Masks secret tokens (e.g. 1234••••abcd or ••••••••)."""
+    if not secret:
+        return ""
+    if len(secret) <= 8:
+        return "••••••••"
+    return secret[:4] + "••••••••" + secret[-4:]
+
+@app.route("/api/mode", methods=["GET", "POST", "OPTIONS"])
+def api_mode():
+    if request.method == "OPTIONS": return jsonify(ok=True)
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        mode = data.get("mode")
+        if mode not in ("client_edge", "server_vision"):
+            return jsonify(ok=False, error="Invalid mode. Must be 'client_edge' or 'server_vision'"), 400
+        state["vision_mode"] = mode
+        config["vision_mode"] = mode
+        save_config(config)
+
+        # Release server camera in Mode A to avoid competing with browser getUserMedia()
+        if mode == "client_edge":
+            detector.stop()
+            state["is_streaming"] = False
+        else:
+            detector.start(index=int(config.get("camera_index", 0)))
+            state["is_streaming"] = True
+        return jsonify(ok=True, mode=state["vision_mode"])
+    return jsonify(mode=state.get("vision_mode", "server_vision"))
+
+@app.route("/api/detections", methods=["GET", "POST", "OPTIONS"])
+def api_detections():
+    if request.method == "OPTIONS": return jsonify(ok=True)
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        dets = data.get("detections", [])
+        fps = float(data.get("fps", 0.0))
+        count = int(data.get("count", len(dets)))
+        state["client_detections"] = dets
+        state["client_fps"] = fps
+        if count > 0:
+            state["stats"]["total_captures"] += 1
+            current_hour = datetime.now().hour
+            state["hourly_traffic"][current_hour] += 1
+        return jsonify(ok=True)
+
+    mode = state.get("vision_mode", "server_vision")
+    if mode == "server_vision":
+        dets = []
+        for d in detector.last_detections:
+            dets.append({
+                "track_id": d.get("track_id"),
+                "bbox": d.get("smooth_bbox", d.get("bbox")),
+                "body_bbox": d.get("body_bbox"),
+                "head_bbox": d.get("head_bbox"),
+                "name": d.get("name"),
+                "confidence": float(d.get("score", 0.8)),
+                "posture": d.get("posture", "UPRIGHT_STANDING"),
+                "in_roi": d.get("in_roi", False),
+                "is_loitering": d.get("is_loitering", False),
+            })
+        return jsonify(
+            mode="server_vision",
+            count=detector.stats["person_count"],
+            fps=detector.stats["fps"],
+            is_simulated=detector.is_simulated,
+            detections=dets,
+            timestamp=time.time()
+        )
+    else:
+        return jsonify(
+            mode="client_edge",
+            count=len(state.get("client_detections", [])),
+            fps=state.get("client_fps", 0.0),
+            detections=state.get("client_detections", []),
+            timestamp=time.time()
+        )
+
+@app.route("/api/analytics", methods=["GET", "OPTIONS"])
+def api_analytics():
+    if request.method == "OPTIONS": return jsonify(ok=True)
+    traffic = state["hourly_traffic"]
+    max_idx = int(np.argmax(traffic)) if any(traffic) else datetime.now().hour
+    max_val = int(traffic[max_idx]) if any(traffic) else 0
+    return jsonify(
+        hourly_traffic=traffic,
+        total_captures=state["stats"]["total_captures"],
+        in_count=state["stats"]["in_count"],
+        out_count=state["stats"]["out_count"],
+        loitering_count=state["stats"]["loitering_count"],
+        threat_count=state["stats"].get("threat_count", 0),
+        faces_count=len(face_db.records),
+        peak_hour=max_idx,
+        peak_count=max_val,
+    )
+
+@app.route("/api/telegram/send", methods=["POST", "OPTIONS"])
+def api_telegram_send():
+    if request.method == "OPTIONS": return jsonify(ok=True)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(ok=False, error="Invalid JSON payload"), 400
+
+    photo_b64 = data.get("photo")
+    if not photo_b64:
+        return jsonify(ok=False, error="Field 'photo' (base64) is required"), 400
+
+    caption = str(data.get("caption", ""))
+    count = int(data.get("count", 1))
+    names = data.get("names", [])
+    if not isinstance(names, list):
+        names = [str(names)]
+    is_loitering = bool(data.get("is_loitering", False))
+
+    try:
+        b64_clean = photo_b64.split(",", 1)[1] if "," in photo_b64 else photo_b64
+        jpeg_bytes = base64.b64decode(b64_clean)
+    except Exception as e:
+        return jsonify(ok=False, error=f"Invalid image base64 data: {e}"), 400
+
+    ok = telegram.dispatch_photo(
+        jpeg_bytes=jpeg_bytes,
+        count=count,
+        identified_names=names,
+        caption=caption,
+        is_loitering=is_loitering
+    )
+    if ok:
+        state["stats"]["telegram_sent"] += 1
+        return jsonify(ok=True, message="Alert successfully sent to Telegram")
+    else:
+        return jsonify(ok=False, error="Telegram dispatch failed. Verify bot token and chat ID."), 502
+
 @app.route("/api/start", methods=["POST", "OPTIONS"])
 def api_start():
     if request.method == "OPTIONS": return jsonify(ok=True)
@@ -2211,6 +4749,8 @@ def api_stop():
 def api_status():
     return jsonify(
         streaming=state["is_streaming"],
+        vision_mode=state.get("vision_mode", "server_vision"),
+        is_simulated=detector.is_simulated,
         fps=detector.stats["fps"],
         person_count=detector.stats["person_count"],
         total_captures=state["stats"]["total_captures"],
@@ -2234,9 +4774,19 @@ def api_status():
 @app.route("/api/register", methods=["POST", "OPTIONS"])
 def api_register():
     if request.method == "OPTIONS": return jsonify(ok=True)
-    name = (request.json or {}).get("name", "").strip()
-    ok, msg = detector.register_face(name)
-    return jsonify(ok=ok, message=msg)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(ok=False, error="Payload must be a JSON object"), 400
+
+    name = str(data.get("name", "")).strip()
+    if not name:
+        return jsonify(ok=False, error="Name is required"), 400
+
+    photo_b64 = data.get("photo") or data.get("image")
+    ok, msg = detector.register_face(name, image_b64=photo_b64)
+    if not ok:
+        return jsonify(ok=False, message=msg), 400
+    return jsonify(ok=True, message=msg)
 
 @app.route("/api/faces", methods=["GET", "OPTIONS"])
 def api_faces():
@@ -2255,12 +4805,47 @@ def api_clear():
 def api_settings():
     if request.method == "OPTIONS": return jsonify(ok=True)
     if request.method == "POST":
-        data = request.json or {}
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(ok=False, error="Payload must be a JSON object"), 400
+
+        # Validate types and preserve masked secrets
+        if "bot_token" in data:
+            tok = str(data["bot_token"]).strip()
+            if "••••" in tok or (not tok and config.get("bot_token")):
+                data.pop("bot_token")  # Keep existing unmasked token
+
+        if "cooldown_sec" in data:
+            try:
+                val = float(data["cooldown_sec"])
+                if val < 1.0:
+                    return jsonify(ok=False, error="cooldown_sec must be >= 1.0"), 400
+                data["cooldown_sec"] = val
+            except (ValueError, TypeError):
+                return jsonify(ok=False, error="cooldown_sec must be a number"), 400
+
+        if "loitering_sec" in data:
+            try:
+                val = float(data["loitering_sec"])
+                if val < 1.0:
+                    return jsonify(ok=False, error="loitering_sec must be >= 1.0"), 400
+                data["loitering_sec"] = val
+            except (ValueError, TypeError):
+                return jsonify(ok=False, error="loitering_sec must be a number"), 400
+
+        if "camera_index" in data:
+            try:
+                data["camera_index"] = int(data["camera_index"])
+            except (ValueError, TypeError):
+                return jsonify(ok=False, error="camera_index must be an integer"), 400
+
         config.update(data)
         save_config(config)
         return jsonify(ok=True)
+
     s = config.copy()
     s["has_token"] = bool(s.get("bot_token"))
+    s["bot_token"] = mask_secret(s.get("bot_token", ""))
     return jsonify(s)
 
 @app.route("/api/summary", methods=["GET", "POST", "OPTIONS"])
@@ -2279,8 +4864,14 @@ def api_summary():
 
 @app.route("/api/test_telegram", methods=["POST", "OPTIONS"])
 def api_test_tg():
-    ok, msg = telegram.test()
-    return jsonify(ok=ok, message=msg)
+    if request.method == "OPTIONS": return jsonify(ok=True)
+    data = request.get_json(silent=True) or {}
+    custom_tok = data.get("token")
+    custom_chat = data.get("chat_id")
+    ok, msg = telegram.test(token=custom_tok, chat_id=custom_chat)
+    if not ok:
+        return jsonify(ok=False, message=msg), 400
+    return jsonify(ok=True, message=msg)
 
 
 if __name__ == "__main__":
