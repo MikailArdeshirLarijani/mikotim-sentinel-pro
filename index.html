@@ -834,14 +834,6 @@
                 </svg>
                 <span id="navLogs">وقایع و لاگ‌ها</span>
             </button>
-            <button class="nav-dock-item" id="tabAnalytics" onclick="switchView('viewAnalytics')">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="20" x2="18" y2="10"/>
-                    <line x1="12" y1="20" x2="12" y2="4"/>
-                    <line x1="6" y1="20" x2="6" y2="14"/>
-                </svg>
-                <span id="navAnalytics">داشبورد تحلیلی</span>
-            </button>
             <button class="nav-dock-item" id="tabFaces" onclick="switchView('viewFaces')">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -861,10 +853,6 @@
         </nav>
 
         <div class="header-actions">
-            <div class="pill-btn" id="schedulePill" style="cursor:default; background:var(--bg-pill); border:1px solid var(--border-hairline); padding:6px 12px;">
-                <span style="color:var(--apple-blue); font-size:0.9rem;">⏰</span>
-                <span id="tScheduleStatus" style="font-size:0.8rem; font-weight:600;">۲۴ ساعته (فعال)</span>
-            </div>
             <button class="pill-btn" onclick="toggleStealthMode()" id="stealthBtn" title="حالت استتار (Stealth Mode)">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
@@ -897,17 +885,7 @@
                     <canvas id="overlayCanvas"></canvas>
 
                     <!-- Interactive ROI Zone Editor Banner -->
-                    <div id="roiEditorBanner" style="display:none; position:absolute; top:14px; left:14px; right:14px; background:rgba(20,20,22,0.92); backdrop-filter:blur(24px); border:1px solid rgba(255,69,58,0.4); border-radius:14px; padding:10px 18px; z-index:30; display:flex; align-items:center; justify-content:space-between; box-shadow:0 12px 30px rgba(0,0,0,0.5);">
-                        <div style="display:flex; align-items:center; gap:8px; font-size:0.83rem; font-weight:600;">
-                            <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#ff453a; box-shadow:0 0 8px #ff453a;"></span>
-                            <span id="tRoiInstruct">روی تصویر کلیک کنید تا ۴ گوشه محدوده مشخص شود (0/4)</span>
-                        </div>
-                        <div style="display:flex; gap:8px;">
-                            <button class="pill-btn" onclick="saveRoiZone()" style="background:#30d158; color:#fff; border:none; padding:5px 12px; font-size:0.75rem; font-weight:700;">ذخیره محدوده</button>
-                            <button class="pill-btn" onclick="clearRoiZone()" style="padding:5px 12px; font-size:0.75rem;">پاک کردن</button>
-                            <button class="pill-btn" onclick="cancelRoiEditor()" style="padding:5px 12px; font-size:0.75rem;">بستن</button>
-                        </div>
-                    </div>
+                    
 
                     <div id="camIdle" class="screen-idle">
                         <div class="idle-radar">
@@ -1060,31 +1038,7 @@
             </div>
         </section>
 
-        <!-- ==================== SECTION 3: ANALYTICS DASHBOARD ==================== -->
-        <section id="viewAnalytics" class="app-view">
-            <div class="glass-card" style="padding:24px;">
-                <div class="section-header">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="20" x2="18" y2="10"/>
-                            <line x1="12" y1="20" x2="12" y2="4"/>
-                            <line x1="6" y1="20" x2="6" y2="14"/>
-                        </svg>
-                        <span id="tChartTitle">توزیع زمانی تردد امروز (ساعات ۲۴گانه شبانه‌روز)</span>
-                    </div>
-                    <button class="pill-btn" onclick="requestTelegramSummary()" id="tBtnSummary">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                            <polyline points="22,6 12,13 2,6"/>
-                        </svg>
-                        <span id="tSendSummary">ارسال گزارش خلاصه به تلگرام</span>
-                    </button>
-                </div>
-                <div id="hourlyChart" style="display:flex; align-items:flex-end; gap:6px; height:180px; margin-top:24px; padding-top:20px; border-bottom:1px solid var(--border-subtle);"></div>
-            </div>
-        </section>
-
-        <!-- ==================== SECTION 4: FACE PROFILES ==================== -->
+        <!-- ==================== SECTION 3: FACE PROFILES ==================== -->
         <section id="viewFaces" class="app-view">
             <div class="glass-card" style="padding:24px;">
                 <div class="section-header">
@@ -1148,17 +1102,17 @@
                     <div class="form-field">
                         <label id="tMediaLabel">نوع رسانه هشدار:</label>
                         <select id="selAlertMedia" class="apple-input">
-                            <option value="photo">📸 ارسال تک‌عکس باکیفیت (Photo)</option>
-                            <option value="video">🎬 ارسال ویدیوی ۵ ثانیه‌ای (MP4 Video)</option>
+                            <option value="photo">ارسال تک‌عکس باکیفیت (Single Photo)</option>
+                            <option value="video">ارسال کلیپ ویدیویی MP4 (5-Sec Clip)</option>
                         </select>
                     </div>
                     <div class="form-field">
                         <label id="tTriggerLabel">شرط و اولویت ارسال هشدار:</label>
                         <select id="selAlertTrigger" class="apple-input">
-                            <option value="stranger_only">👤 فقط چهره‌های جدید و ناشناس (غریبه)</option>
-                            <option value="all">⚡ تمام ترددها و حرکات (حساسیت کامل)</option>
-                            <option value="roi_only">🎯 فقط ورود به محدوده امنیتی (ROI Intrusion)</option>
-                            <option value="known_only">✅ فقط افراد مجاز و آشنا</option>
+                            <option value="stranger_only">فقط چهره‌های جدید و ناشناس (غریبه)</option>
+                            <option value="all">تمام ترددها و حرکات (حساسیت کامل)</option>
+                            <option value="roi_only">فقط نفوذ به محدوده امنیتی (ROI)</option>
+                            <option value="known_only">فقط چهره‌های مجاز و آشنا</option>
                         </select>
                     </div>
                     <div class="switch-row">
@@ -1215,15 +1169,30 @@
                     </div>
                     <div style="margin-top:10px;">
                         <label style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:6px; display:block;">الگوهای آماده سریع:</label>
-                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                            <button type="button" class="pill-btn" onclick="setSchedulePreset('22:00', '07:00')">🌙 شبانه (۲۲ تا ۷)</button>
-                            <button type="button" class="pill-btn" onclick="setSchedulePreset('08:00', '17:00')">🏢 اداری (۸ تا ۱۷)</button>
-                            <button type="button" class="pill-btn" onclick="setSchedulePreset('18:00', '08:00')">🔒 غیر اداری (۱۸ تا ۸)</button>
-                            <button type="button" class="pill-btn" onclick="disableSchedulePreset()">⚡ ۲۴ ساعته</button>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button type="button" class="pill-btn" onclick="setSchedulePreset('22:00', '07:00')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                                <span>شبانه (۲۲:۰۰ تا ۰۷:۰۰)</span>
+                            </button>
+                            <button type="button" class="pill-btn" onclick="setSchedulePreset('08:00', '17:00')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><path d="M9 22v-4h6v4"/></svg>
+                                <span>اداری (۰۸:۰۰ تا ۱۷:۰۰)</span>
+                            </button>
+                            <button type="button" class="pill-btn" onclick="setSchedulePreset('18:00', '08:00')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                <span>غیر اداری (۱۸:۰۰ تا ۰۸:۰۰)</span>
+                            </button>
+                            <button type="button" class="pill-btn" onclick="disableSchedulePreset()">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                <span>پایش ۲۴ ساعته</span>
+                            </button>
                         </div>
                     </div>
                     <div style="margin-top:14px; padding:12px; background:rgba(10,132,255,0.08); border:1px solid rgba(10,132,255,0.2); border-radius:12px; font-size:0.8rem; line-height:1.6; color:var(--text-secondary);">
-                        💡 <strong style="color:var(--text-primary);">نحوه کارکرد:</strong> در خارج از بازه زمانی تعیین‌شده، سامانه در حالت «سکوت» کار می‌کند؛ وقایع در جدول لاگ ثبت می‌شوند اما پیام تلگرام یا آژیر محلی ارسال نمی‌شود.
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--apple-blue)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        <strong style="color:var(--text-primary); font-size:0.83rem;">نحوه کارکرد بازه زمانی:</strong>
+                    </div> در خارج از بازه زمانی تعیین‌شده، سامانه در حالت «سکوت» کار می‌کند؛ وقایع در جدول لاگ ثبت می‌شوند اما پیام تلگرام یا آژیر محلی ارسال نمی‌شود.
                     </div>
                 </div>
 
@@ -1243,6 +1212,16 @@
                             <input type="checkbox" id="chkRoi">
                             <span class="slider"></span>
                         </label>
+                    </div>
+                    <div style="display:flex; gap:8px; margin-bottom:12px;">
+                        <button type="button" class="pill-btn" onclick="applyDefaultRoi()" style="font-size:0.78rem;">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
+                            <span>کادر پیش‌فرض مرکزی</span>
+                        </button>
+                        <button type="button" class="pill-btn" onclick="clearRoiZone()" style="font-size:0.78rem;">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                            <span>پاکسازی نقاط</span>
+                        </button>
                     </div>
                     <div class="switch-row">
                         <span id="tTripwireEnable">شمارنده خطی رفت‌وآمد (Tripwire):</span>
@@ -1568,10 +1547,10 @@
             video.style.transform = isMirrored ? 'scaleX(-1)' : 'none';
             const mText = document.getElementById('tMirrorStatus');
             if (mText) if (mText) mText.innerText = isMirrored
-                ? (currentLang === 'fa' ? '🪞 آینه: روشن' : '🪞 Mirror: ON')
-                : (currentLang === 'fa' ? '🪞 آینه: خاموش' : '🪞 Mirror: OFF');
+                ? (currentLang === 'fa' ? 'آینه: روشن' : 'Mirror: ON')
+                : (currentLang === 'fa' ? 'آینه: خاموش' : 'Mirror: OFF');
             const btnM = document.getElementById('btnMirrorAction');
-            if (btnM) btnM.innerHTML = isMirrored ? '<span>🪞 آینه (فعال)</span>' : '<span>🪞 حالت آینه‌ای</span>';
+            if (btnM) btnM.innerHTML = isMirrored ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg><span>آینه (فعال)</span>' : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg><span>حالت آینه‌ای</span>';
             saveConfig();
         }
 
@@ -1608,10 +1587,10 @@
                 const sEnd = document.getElementById('scheduleEnd').value || '07:00';
                 const activeNow = isWithinSchedule();
                 if (activeNow) {
-                    pill.innerText = currentLang === 'fa' ? `⏰ پایش فعال (${sStart} - ${sEnd})` : `⏰ Active (${sStart} - ${sEnd})`;
+                    pill.innerText = currentLang === 'fa' ? `پایش فعال (${sStart} - ${sEnd})` : `Active (${sStart} - ${sEnd})`;
                     pill.style.color = 'var(--apple-green)';
                 } else {
-                    pill.innerText = currentLang === 'fa' ? `🌙 حالت سکوت (${sStart} - ${sEnd})` : `🌙 Silent (${sStart} - ${sEnd})`;
+                    pill.innerText = currentLang === 'fa' ? `حالت سکوت (${sStart} - ${sEnd})` : `Silent (${sStart} - ${sEnd})`;
                     pill.style.color = 'var(--apple-amber)';
                 }
             }
@@ -1635,22 +1614,34 @@
 
         function startRoiEditor() {
             switchView('viewMonitor');
-            isEditingRoi = true;
-            document.getElementById('roiEditorBanner').style.display = 'flex';
-            updateRoiBanner();
-            notify(currentLang === 'fa' ? 'حالت تنظیم محدوده فعال شد؛ روی ۴ نقطه از کادر کلیک کنید' : 'ROI editor active; click points on screen');
+            isEditingRoi = !isEditingRoi;
+            if (isEditingRoi) {
+                roiPoints = [];
+                notify(currentLang === 'fa' ? 'حالت انتخاب محدوده فعال شد؛ روی ۴ نقطه از تصویر کلیک کنید' : 'Click 4 corners on screen to place ROI');
+                const btn = document.getElementById('btnRoiEdit');
+                if (btn) btn.classList.add('apple-btn-primary');
+            } else {
+                const btn = document.getElementById('btnRoiEdit');
+                if (btn) btn.classList.remove('apple-btn-primary');
+            }
         }
 
         function updateRoiBanner() {
             const count = roiPoints.length;
-            document.getElementById('tRoiInstruct').innerText = currentLang === 'fa'
-                ? `روی تصویر کلیک کنید تا ۴ گوشه محدوده مشخص شود (${count}/4)`
-                : `Click on feed to place 4 corners (${count}/4)`;
+            notify(currentLang === 'fa' ? `نقطه ${count} از ۴ ثبت شد` : `Point ${count}/4 placed`);
+            if (count >= 4) {
+                saveRoiZone();
+            }
         }
 
         function clearRoiZone() {
             roiPoints = [];
-            updateRoiBanner();
+            isEditingRoi = false;
+            document.getElementById('chkRoi').checked = false;
+            saveConfig();
+            notify(currentLang === 'fa' ? 'نقاط محدوده امنیتی پاکسازی شد' : 'ROI points cleared');
+            const btn = document.getElementById('btnRoiEdit');
+            if (btn) btn.classList.remove('apple-btn-primary');
         }
 
         function saveRoiZone() {
@@ -1659,15 +1650,17 @@
                 return;
             }
             isEditingRoi = false;
-            document.getElementById('roiEditorBanner').style.display = 'none';
             document.getElementById('chkRoi').checked = true;
             saveConfig();
             notify(currentLang === 'fa' ? 'محدوده امنیتی ذخیره و فعال شد' : 'Security zone saved & activated');
+            const btn = document.getElementById('btnRoiEdit');
+            if (btn) btn.classList.remove('apple-btn-primary');
         }
 
         function cancelRoiEditor() {
             isEditingRoi = false;
-            document.getElementById('roiEditorBanner').style.display = 'none';
+            const btn = document.getElementById('btnRoiEdit');
+            if (btn) btn.classList.remove('apple-btn-primary');
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -2036,7 +2029,7 @@
             ctx.moveTo(rx + bw - edge, y + bh); ctx.lineTo(rx + bw, y + bh); ctx.lineTo(rx + bw, y + bh - edge);
             ctx.stroke();
 
-            const prefix = isIntruder ? '⚠️ نفوذ: ' : '';
+            const prefix = isIntruder ? 'نفوذ: ' : '';
             const whoTxt = isKnown ? det.name : (currentLang === 'fa' ? 'ناشناس' : 'Unknown');
             const confPct = isKnown ? 94 : Math.round(det.score * 100);
             const label = `MikoVo RaRa 11 • ${prefix}${whoTxt} (${confPct}%)`;
@@ -2273,7 +2266,7 @@
                 const tagEl = document.getElementById(`tag_${now}`);
                 try {
                     const blob = await (await fetch(imgUrl)).blob();
-                    const captionText = `🛡 MikoTim Sentinel Pro | MikoVo RaRa 11 AI\n📌 ${document.getElementById('customCaption').value.trim()}\n👥 Persons: ${persons.length}\n🎯 Identity: ${identifiedStr}\n⏱ ${timeStr}`;
+                    const captionText = `[MikoTim Sentinel Pro | MikoVo RaRa 11]\n${document.getElementById('customCaption').value.trim()}\nPersons: ${persons.length}\nIdentity: ${identifiedStr}\nTime: ${timeStr}`;
 
                     const fd = new FormData();
                     fd.append('chat_id', chatId);
@@ -2337,7 +2330,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         chat_id: chatId,
-                        text: '✅ MikoTim Sentinel Pro - ارتباط مستقیم و زنده برقرار است!'
+                        text: '[OK] MikoTim Sentinel Pro - ارتباط مستقیم و زنده برقرار است!'
                     })
                 });
                 const d = await res.json();
