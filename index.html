@@ -812,7 +812,7 @@
             </div>
             <div class="brand-title">
                 <span>MikoTim Sentinel Pro</span>
-                <span class="brand-tag">MikiVo Neural 512-D</span>
+                <span class="brand-tag">MikoVo RaRa 11 Neural 512-D</span>
                 <div class="hud-badge" id="schedulePill" style="display:inline-flex; align-items:center; gap:6px;">
                     <span style="color:var(--apple-blue);">⏰</span>
                     <span id="tScheduleStatus" style="font-size:0.78rem;">۲۴ ساعته (فعال)</span>
@@ -1146,7 +1146,7 @@
                     </div>
                     <div class="form-field">
                         <label id="tCaptionLabel">عنوان هشدار:</label>
-                        <input type="text" id="customCaption" class="apple-input" value="هشدار تردد هوشمند MikiVo">
+                        <input type="text" id="customCaption" class="apple-input" value="هشدار تردد هوشمند MikoVo RaRa 11">
                     </div>
                     <div class="form-field">
                         <label id="tMediaLabel">نوع رسانه هشدار:</label>
@@ -2042,7 +2042,7 @@
             const prefix = isIntruder ? '⚠️ نفوذ: ' : '';
             const whoTxt = isKnown ? det.name : (currentLang === 'fa' ? 'ناشناس' : 'Unknown');
             const confPct = isKnown ? 94 : Math.round(det.score * 100);
-            const label = `MikiVo • ${prefix}${whoTxt} (${confPct}%)`;
+            const label = `MikoVo RaRa 11 • ${prefix}${whoTxt} (${confPct}%)`;
 
             ctx.font = '700 13px -apple-system, Vazirmatn, sans-serif';
             const tw = ctx.measureText(label).width;
@@ -2276,7 +2276,7 @@
                 const tagEl = document.getElementById(`tag_${now}`);
                 try {
                     const blob = await (await fetch(imgUrl)).blob();
-                    const captionText = `🛡 MikoTim Sentinel Pro | MikiVo AI\n📌 ${document.getElementById('customCaption').value.trim()}\n👥 Persons: ${persons.length}\n🎯 Identity: ${identifiedStr}\n⏱ ${timeStr}`;
+                    const captionText = `🛡 MikoTim Sentinel Pro | MikoVo RaRa 11 AI\n📌 ${document.getElementById('customCaption').value.trim()}\n👥 Persons: ${persons.length}\n🎯 Identity: ${identifiedStr}\n⏱ ${timeStr}`;
 
                     const fd = new FormData();
                     fd.append('chat_id', chatId);
