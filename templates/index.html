@@ -1,89 +1,167 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="fa" dir="rtl" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MikoTim Sentinel Pro</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&family=Vazirmatn:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-base: #0b0f19;
-            --bg-surface: #111827;
-            --bg-elevated: #1f2937;
-            --border: rgba(255, 255, 255, 0.08);
-            --border-hover: #3b82f6;
-            --text-main: #f9fafb;
-            --text-muted: #9ca3af;
-            --emerald: #10b981;
-            --amber: #f59e0b;
-            --rose: #ef4444;
-            --blue: #3b82f6;
-            --radius: 12px;
-            --sans: 'Vazirmatn', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            --mono: 'JetBrains Mono', monospace;
+            --bg-canvas: #000000;
+            --bg-elevated: rgba(28, 28, 30, 0.68);
+            --bg-surface: rgba(44, 44, 46, 0.55);
+            --bg-surface-hover: rgba(58, 58, 60, 0.7);
+            --bg-pill: rgba(255, 255, 255, 0.08);
+            --border-hairline: rgba(255, 255, 255, 0.12);
+            --border-subtle: rgba(255, 255, 255, 0.07);
+            --text-primary: #f5f5f7;
+            --text-secondary: #86868b;
+            --text-tertiary: #636366;
+            --apple-blue: #0a84ff;
+            --apple-blue-hover: #0071e3;
+            --apple-green: #30d158;
+            --apple-green-glow: rgba(48, 209, 88, 0.35);
+            --apple-amber: #ff9f0a;
+            --apple-red: #ff453a;
+            --apple-red-glow: rgba(255, 69, 58, 0.35);
+            --blur-strength: 32px;
+            --radius-outer: 24px;
+            --radius-card: 20px;
+            --radius-btn: 14px;
+            --shadow-float: 0 16px 40px -8px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.08);
+            --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Vazirmatn", sans-serif;
+            --font-mono: "SF Mono", "JetBrains Mono", monospace;
+            --transition-smooth: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         [data-theme="light"] {
-            --bg-base: #f3f4f6;
-            --bg-surface: #ffffff;
-            --bg-elevated: #e5e7eb;
-            --border: rgba(0, 0, 0, 0.08);
-            --border-hover: #2563eb;
-            --text-main: #111827;
-            --text-muted: #4b5563;
+            --bg-canvas: #f5f5f7;
+            --bg-elevated: rgba(255, 255, 255, 0.78);
+            --bg-surface: rgba(242, 242, 247, 0.7);
+            --bg-surface-hover: rgba(229, 229, 234, 0.85);
+            --bg-pill: rgba(0, 0, 0, 0.05);
+            --border-hairline: rgba(0, 0, 0, 0.1);
+            --border-subtle: rgba(0, 0, 0, 0.05);
+            --text-primary: #1d1d1f;
+            --text-secondary: #6e6e73;
+            --text-tertiary: #86868b;
+            --shadow-float: 0 16px 36px -8px rgba(0, 0, 0, 0.08), 0 0 1px 1px rgba(0, 0, 0, 0.04);
         }
 
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
         body {
-            font-family: var(--sans);
-            background: var(--bg-base);
-            color: var(--text-main);
+            font-family: var(--font-display);
+            background-color: var(--bg-canvas);
+            color: var(--text-primary);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            overflow-x: hidden;
+            transition: background-color 0.4s ease, color 0.4s ease;
         }
 
+        /* Ambient Apple-grade background gradient glow */
+        .ambient-glow {
+            position: fixed;
+            width: 700px;
+            height: 700px;
+            border-radius: 50%;
+            top: -200px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: radial-gradient(circle, rgba(10, 132, 255, 0.12) 0%, rgba(48, 209, 88, 0.06) 40%, transparent 70%);
+            filter: blur(80px);
+            pointer-events: none;
+            z-index: 0;
+            animation: breathe 10s ease-in-out infinite alternate;
+        }
+
+        @keyframes breathe {
+            0% { transform: translateX(-50%) scale(0.9); opacity: 0.6; }
+            100% { transform: translateX(-50%) scale(1.15); opacity: 1; }
+        }
+
+        /* Top Floating Frosted Navigation */
         header {
-            background: var(--bg-surface);
-            border-bottom: 1px solid var(--border);
-            padding: 0.8rem 1.5rem;
+            position: sticky;
+            top: 14px;
+            margin: 0 auto;
+            width: calc(100% - 32px);
+            max-width: 1560px;
+            z-index: 50;
+            background: var(--bg-elevated);
+            backdrop-filter: blur(var(--blur-strength)) saturate(190%);
+            -webkit-backdrop-filter: blur(var(--blur-strength)) saturate(190%);
+            border: 1px solid var(--border-hairline);
+            border-radius: 22px;
+            padding: 10px 22px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            position: sticky;
-            top: 0;
-            z-index: 40;
+            box-shadow: var(--shadow-float);
+            animation: slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
-        .brand {
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .brand-badge {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
         }
 
-        .brand-logo {
-            width: 34px;
-            height: 34px;
-            border-radius: 8px;
-            background: linear-gradient(135deg, var(--blue), var(--emerald));
+        .brand-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 11px;
+            background: linear-gradient(145deg, #2c2c2e, #1c1c1e);
+            border: 1px solid rgba(255, 255, 255, 0.16);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 700;
-            color: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: var(--transition-smooth);
         }
 
-        .brand h1 {
-            font-size: 1.1rem;
+        [data-theme="light"] .brand-icon {
+            background: linear-gradient(145deg, #ffffff, #e5e5ea);
+            border-color: rgba(0, 0, 0, 0.08);
+        }
+
+        .brand-icon:hover {
+            transform: scale(1.06) rotate(2deg);
+        }
+
+        .brand-title {
+            font-size: 1.05rem;
             font-weight: 700;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand-tag {
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 99px;
+            background: var(--bg-pill);
+            color: var(--apple-blue);
+            border: 1px solid var(--border-hairline);
+            font-family: var(--font-mono);
         }
 
         .header-actions {
@@ -92,393 +170,762 @@
             gap: 8px;
         }
 
-        .btn-subtle {
-            background: var(--bg-elevated);
-            border: 1px solid var(--border);
-            color: var(--text-main);
-            padding: 6px 12px;
-            border-radius: 8px;
+        .pill-btn {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-hairline);
+            color: var(--text-primary);
+            padding: 7px 14px;
+            border-radius: 99px;
             font-family: inherit;
-            font-size: 0.85rem;
+            font-size: 0.82rem;
+            font-weight: 500;
             cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: var(--transition-smooth);
         }
 
-        .btn-subtle:hover {
-            border-color: var(--border-hover);
+        .pill-btn:hover {
+            background: var(--bg-surface-hover);
+            transform: translateY(-1px);
         }
 
+        .pill-btn:active {
+            transform: scale(0.96);
+        }
+
+        /* Layout Grid */
         main {
+            position: relative;
+            z-index: 1;
             flex: 1;
-            padding: 1.25rem;
-            max-width: 1600px;
-            width: 100%;
-            margin: 0 auto;
+            width: calc(100% - 32px);
+            max-width: 1560px;
+            margin: 22px auto 36px;
             display: grid;
-            grid-template-columns: 1fr 380px;
-            gap: 1.25rem;
+            grid-template-columns: 1fr 390px;
+            gap: 22px;
+            animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
-        @media (max-width: 1024px) {
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 1120px) {
             main {
                 grid-template-columns: 1fr;
             }
         }
 
-        .viewport-pane {
-            display: flex;
-            flex-direction: column;
-            gap: 1.25rem;
+        /* Viewport Container (Glass Card) */
+        .glass-card {
+            background: var(--bg-elevated);
+            backdrop-filter: blur(var(--blur-strength)) saturate(180%);
+            -webkit-backdrop-filter: blur(var(--blur-strength)) saturate(180%);
+            border: 1px solid var(--border-hairline);
+            border-radius: var(--radius-card);
+            box-shadow: var(--shadow-float);
+            position: relative;
+            overflow: hidden;
+            transition: var(--transition-smooth);
         }
 
-        .video-box {
-            background: #000;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
+        .glass-card:hover {
+            border-color: rgba(255, 255, 255, 0.18);
+        }
+
+        .viewport-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Apple Screen Stage */
+        .screen-stage {
             position: relative;
+            width: 100%;
             aspect-ratio: 16 / 9;
+            background: #000;
+            border-radius: calc(var(--radius-card) - 4px);
             overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
+            box-shadow: inset 0 0 1px 1px rgba(255, 255, 255, 0.08);
         }
 
-        .video-box img {
+        .screen-stage img {
             width: 100%;
             height: 100%;
             object-fit: contain;
             display: block;
+            transition: opacity 0.4s ease;
         }
 
-        .video-idle {
+        .screen-idle {
             position: absolute;
             inset: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: var(--text-muted);
-            gap: 10px;
-            background: var(--bg-surface);
+            gap: 16px;
+            color: var(--text-secondary);
+            background: radial-gradient(circle at center, rgba(30, 30, 35, 0.95) 0%, rgba(10, 10, 14, 0.98) 100%);
+            transition: var(--transition-smooth);
         }
 
-        .live-tag {
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            background: rgba(0, 0, 0, 0.7);
-            border: 1px solid var(--border);
-            padding: 4px 10px;
-            border-radius: 99px;
-            font-size: 0.75rem;
+        .idle-radar {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            position: relative;
             display: flex;
             align-items: center;
-            gap: 6px;
+            justify-content: center;
         }
 
-        .dot {
-            width: 7px;
-            height: 7px;
+        .idle-radar::before {
+            content: "";
+            position: absolute;
+            inset: -8px;
             border-radius: 50%;
-            background: var(--rose);
+            border: 1px dashed rgba(255, 255, 255, 0.08);
+            animation: radarSpin 20s linear infinite;
         }
 
-        .dot.active {
-            background: var(--emerald);
-            box-shadow: 0 0 8px var(--emerald);
+        @keyframes radarSpin {
+            to { transform: rotate(360deg); }
         }
 
-        .action-bar {
-            background: var(--bg-surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 0.75rem 1rem;
+        /* Floating HUD Indicator */
+        .hud-status-badge {
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            background: rgba(18, 18, 20, 0.75);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-hairline);
+            padding: 6px 14px;
+            border-radius: 99px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
             display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 10;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        [dir="ltr"] .hud-status-badge {
+            right: auto;
+            left: 18px;
+        }
+
+        .status-dot-pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--apple-red);
+            box-shadow: 0 0 10px var(--apple-red-glow);
+            transition: var(--transition-smooth);
+        }
+
+        .status-dot-pulse.active {
+            background: var(--apple-green);
+            box-shadow: 0 0 12px var(--apple-green-glow);
+            animation: pulseGlow 2s infinite;
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.8; }
+        }
+
+        /* Apple Control Bar */
+        .control-bar {
+            padding: 12px 18px;
+            display: flex;
+            flex-wrap: wrap;
             align-items: center;
             justify-content: space-between;
-            gap: 8px;
+            gap: 12px;
+            border-top: 1px solid var(--border-subtle);
         }
 
-        .btn {
+        .btn-stack {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .apple-btn {
             font-family: inherit;
-            font-size: 0.85rem;
+            font-size: 0.86rem;
             font-weight: 600;
-            padding: 8px 16px;
-            border-radius: 8px;
-            border: none;
+            letter-spacing: -0.01em;
+            padding: 9px 18px;
+            border-radius: var(--radius-btn);
+            border: 1px solid transparent;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+            transition: var(--transition-smooth);
+            user-select: none;
         }
 
-        .btn-primary {
-            background: var(--emerald);
+        .apple-btn-primary {
+            background: var(--apple-green);
+            color: #000;
+            font-weight: 700;
+            box-shadow: 0 4px 18px var(--apple-green-glow);
+        }
+
+        .apple-btn-primary:hover {
+            transform: translateY(-1.5px);
+            filter: brightness(1.08);
+            box-shadow: 0 6px 24px var(--apple-green-glow);
+        }
+
+        .apple-btn-stop {
+            background: var(--apple-red);
             color: #fff;
+            box-shadow: 0 4px 18px var(--apple-red-glow);
         }
 
-        .btn-stop {
-            background: var(--rose);
-            color: #fff;
+        .apple-btn-stop:hover {
+            transform: translateY(-1.5px);
+            filter: brightness(1.08);
         }
 
-        .btn-dark {
-            background: var(--bg-elevated);
-            color: var(--text-main);
-            border: 1px solid var(--border);
+        .apple-btn-secondary {
+            background: var(--bg-surface);
+            border-color: var(--border-hairline);
+            color: var(--text-primary);
         }
 
-        .btn-dark:hover {
-            border-color: var(--border-hover);
+        .apple-btn-secondary:hover {
+            background: var(--bg-surface-hover);
+            transform: translateY(-1px);
         }
 
-        .stat-cards {
+        .apple-btn:active {
+            transform: scale(0.96);
+        }
+
+        /* KPI Bento Grid */
+        .bento-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
+            gap: 14px;
         }
 
-        @media (max-width: 640px) {
-            .stat-cards {
+        @media (max-width: 768px) {
+            .bento-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
 
-        .card {
-            background: var(--bg-surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 1rem;
+        .bento-tile {
+            background: var(--bg-elevated);
+            backdrop-filter: blur(var(--blur-strength));
+            -webkit-backdrop-filter: blur(var(--blur-strength));
+            border: 1px solid var(--border-hairline);
+            border-radius: 18px;
+            padding: 16px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            transition: var(--transition-smooth);
+            position: relative;
+            overflow: hidden;
         }
 
-        .card-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            margin-bottom: 4px;
-            display: block;
+        .bento-tile::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
+            pointer-events: none;
         }
 
-        .card-num {
-            font-family: var(--mono);
-            font-size: 1.5rem;
+        .bento-tile:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .bento-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .bento-label {
+            font-size: 0.76rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .bento-icon {
+            opacity: 0.6;
+        }
+
+        .bento-value {
+            font-family: var(--font-mono);
+            font-size: 1.7rem;
             font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--text-primary);
+            margin-top: 2px;
         }
 
-        .table-wrap {
+        /* Incident Table Section */
+        .table-section {
+            padding: 18px 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .section-header {
+            font-size: 0.95rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .table-scroll {
             max-height: 250px;
             overflow-y: auto;
-            border: 1px solid var(--border);
-            border-radius: 8px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            background: rgba(0, 0, 0, 0.2);
         }
 
-        table {
+        table.apple-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 0.8rem;
             text-align: right;
         }
 
-        [dir="ltr"] table {
+        [dir="ltr"] table.apple-table {
             text-align: left;
         }
 
-        th {
-            background: var(--bg-elevated);
-            color: var(--text-muted);
-            padding: 8px 12px;
+        table.apple-table th {
+            background: var(--bg-surface);
+            padding: 10px 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
             position: sticky;
             top: 0;
+            z-index: 2;
+            border-bottom: 1px solid var(--border-hairline);
         }
 
-        td {
-            padding: 8px 12px;
-            border-bottom: 1px solid var(--border);
+        table.apple-table td {
+            padding: 9px 14px;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-primary);
         }
 
-        .sidebar-pane {
+        table.apple-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .pill-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
+
+        .pill-tag.sent {
+            background: rgba(48, 209, 88, 0.16);
+            color: var(--apple-green);
+        }
+
+        .pill-tag.pending {
+            background: rgba(255, 159, 10, 0.16);
+            color: var(--apple-amber);
+        }
+
+        /* Sidebar Pane & Apple Segmented Control */
+        .sidebar-section {
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 18px;
         }
 
-        .tabs {
+        .segmented-control {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-hairline);
+            padding: 4px;
+            border-radius: 16px;
             display: flex;
-            border-bottom: 1px solid var(--border);
             gap: 4px;
         }
 
-        .tab-link {
+        .segment-btn {
+            flex: 1;
             background: transparent;
             border: none;
-            color: var(--text-muted);
+            color: var(--text-secondary);
             padding: 8px 12px;
+            border-radius: 12px;
             font-family: inherit;
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             font-weight: 600;
             cursor: pointer;
-            border-bottom: 2px solid transparent;
-        }
-
-        .tab-link.active {
-            color: var(--blue);
-            border-bottom-color: var(--blue);
-        }
-
-        .input-row {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            margin-bottom: 10px;
-        }
-
-        .input-row label {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-        }
-
-        .input-ctrl {
-            background: var(--bg-elevated);
-            border: 1px solid var(--border);
-            color: var(--text-main);
-            padding: 7px 10px;
-            border-radius: 6px;
-            font-family: inherit;
-            font-size: 0.85rem;
-            outline: none;
-        }
-
-        .input-ctrl:focus {
-            border-color: var(--border-hover);
-        }
-
-        .toggle-row {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 4px 0;
-            font-size: 0.8rem;
-            color: var(--text-muted);
+            justify-content: center;
+            gap: 6px;
+            transition: var(--transition-smooth);
         }
 
-        .list-box {
+        .segment-btn.active {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-hairline);
+        }
+
+        .sidebar-card {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .form-field {
             display: flex;
             flex-direction: column;
             gap: 6px;
-            max-height: 200px;
-            overflow-y: auto;
-            margin-top: 8px;
         }
 
-        .profile-chip {
+        .form-field label {
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .apple-input {
+            width: 100%;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-hairline);
+            color: var(--text-primary);
+            padding: 9px 14px;
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 0.86rem;
+            outline: none;
+            transition: var(--transition-smooth);
+        }
+
+        .apple-input:focus {
+            border-color: var(--apple-blue);
+            box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+            background: var(--bg-surface-hover);
+        }
+
+        /* Apple Switch Control */
+        .switch-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: var(--bg-elevated);
-            padding: 6px 10px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            font-size: 0.8rem;
+            padding: 6px 0;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
         }
 
-        .btn-trash {
-            background: none;
-            border: none;
-            color: var(--rose);
+        .apple-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 26px;
+        }
+
+        .apple-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
             cursor: pointer;
+            inset: 0;
+            background-color: var(--bg-surface-hover);
+            border: 1px solid var(--border-hairline);
+            border-radius: 34px;
+            transition: 0.3s;
         }
 
+        .slider::before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            border-radius: 50%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        input:checked + .slider {
+            background-color: var(--apple-green);
+            border-color: transparent;
+        }
+
+        input:checked + .slider::before {
+            transform: translateX(18px);
+        }
+
+        /* Profile Chips List */
+        .profile-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 210px;
+            overflow-y: auto;
+            margin-top: 4px;
+        }
+
+        .profile-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-hairline);
+            border-radius: 12px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.83rem;
+            transition: var(--transition-smooth);
+        }
+
+        .profile-card:hover {
+            background: var(--bg-surface-hover);
+            transform: translateX(-2px);
+        }
+
+        [dir="ltr"] .profile-card:hover {
+            transform: translateX(2px);
+        }
+
+        .btn-icon-danger {
+            background: transparent;
+            border: none;
+            color: var(--apple-red);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition-smooth);
+        }
+
+        .btn-icon-danger:hover {
+            background: rgba(255, 69, 58, 0.15);
+        }
+
+        /* Floating Toasts */
         #toasts {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
+            bottom: 24px;
+            left: 24px;
             display: flex;
             flex-direction: column;
-            gap: 6px;
-            z-index: 100;
+            gap: 10px;
+            z-index: 1000;
         }
 
-        [dir="ltr"] #toasts {
-            right: auto;
-            left: 20px;
+        [dir="rtl"] #toasts {
+            left: auto;
+            right: 24px;
         }
 
-        .toast-item {
-            background: var(--bg-surface);
-            border: 1px solid var(--border);
-            padding: 8px 14px;
-            border-radius: 8px;
-            font-size: 0.82rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        .apple-toast {
+            background: var(--bg-elevated);
+            backdrop-filter: blur(28px) saturate(190%);
+            -webkit-backdrop-filter: blur(28px) saturate(190%);
+            border: 1px solid var(--border-hairline);
+            color: var(--text-primary);
+            padding: 12px 18px;
+            border-radius: 16px;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+            font-size: 0.84rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 260px;
+            animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(16px) scale(0.96); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
         }
     </style>
 </head>
 <body>
 
+    <div class="ambient-glow"></div>
+
     <header>
-        <div class="brand">
-            <div class="brand-logo">M</div>
-            <h1>MikoTim Sentinel Pro</h1>
+        <div class="brand-badge">
+            <div class="brand-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <circle cx="12" cy="11" r="3"/>
+                </svg>
+            </div>
+            <div class="brand-title">
+                <span>MikoTim Sentinel Pro</span>
+                <span class="brand-tag">3x AI Engine</span>
+            </div>
         </div>
         <div class="header-actions">
-            <button class="btn-subtle" onclick="toggleLang()" id="langBtn">English</button>
-            <button class="btn-subtle" onclick="toggleTheme()" id="themeBtn">🌙</button>
+            <button class="pill-btn" onclick="toggleLang()" id="langBtn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="2" y1="12" x2="22" y2="12"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+                <span>English</span>
+            </button>
+            <button class="pill-btn" onclick="toggleTheme()" id="themeBtn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+            </button>
         </div>
     </header>
 
     <main>
-        <section class="viewport-pane">
-            <div class="video-box">
-                <img id="camFeed" src="/video_feed" style="display:none;" alt="Camera">
-                <div id="camIdle" class="video-idle">
-                    <p id="tCameraIdle">دوربین در حالت غیرفعال است</p>
+        <section class="viewport-section">
+            <div class="glass-card">
+                <div class="screen-stage">
+                    <img id="camFeed" src="/video_feed" style="display:none;" alt="Live Surveillance Feed">
+                    <div id="camIdle" class="screen-idle">
+                        <div class="idle-radar">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                <circle cx="12" cy="13" r="4"/>
+                            </svg>
+                        </div>
+                        <p id="tCameraIdle" style="font-size:0.9rem; font-weight:500;">دوربین در حالت آماده‌باش قرار دارد</p>
+                    </div>
+                    <div class="hud-status-badge">
+                        <span id="dot" class="status-dot-pulse"></span>
+                        <span id="tStatus">آماده</span>
+                    </div>
                 </div>
-                <div class="live-tag">
-                    <span id="dot" class="dot"></span>
-                    <span id="tStatus">آماده</span>
+
+                <div class="control-bar">
+                    <div class="btn-stack">
+                        <button class="apple-btn apple-btn-primary" id="startBtn" onclick="startStream()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                            <span id="tStart">شروع پایش</span>
+                        </button>
+                        <button class="apple-btn apple-btn-stop" id="stopBtn" onclick="stopStream()" style="display:none;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="5" y="5" width="14" height="14" rx="2"/>
+                            </svg>
+                            <span id="tStop">توقف</span>
+                        </button>
+                        <button class="apple-btn apple-btn-secondary" onclick="takePhoto()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                <circle cx="12" cy="13" r="4"/>
+                            </svg>
+                            <span id="tSnap">عکس دستی</span>
+                        </button>
+                    </div>
+                    <div class="btn-stack">
+                        <button class="apple-btn apple-btn-secondary" onclick="calibrate()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                            </svg>
+                            <span id="tCalib">تنظیم پس‌زمینه</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div class="action-bar">
-                <div style="display:flex; gap:8px;">
-                    <button class="btn btn-primary" id="startBtn" onclick="startStream()">
-                        <span id="tStart">شروع پایش</span>
-                    </button>
-                    <button class="btn btn-stop" id="stopBtn" onclick="stopStream()" style="display:none;">
-                        <span id="tStop">توقف</span>
-                    </button>
-                    <button class="btn btn-dark" onclick="takePhoto()">
-                        <span id="tSnap">عکس دستی</span>
-                    </button>
+            <!-- Bento Stats -->
+            <div class="bento-grid">
+                <div class="bento-tile">
+                    <div class="bento-head">
+                        <span class="bento-label" id="tFps">نرخ فریم (FPS)</span>
+                        <svg class="bento-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <span class="bento-value" id="fpsVal">0.0</span>
                 </div>
-                <div>
-                    <button class="btn btn-dark" onclick="calibrate()">
-                        <span id="tCalib">کالیبره پس‌زمینه</span>
-                    </button>
+                <div class="bento-tile">
+                    <div class="bento-head">
+                        <span class="bento-label" id="tPersons">افراد در صحنه</span>
+                        <svg class="bento-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                    </div>
+                    <span class="bento-value" id="personVal">0</span>
+                </div>
+                <div class="bento-tile">
+                    <div class="bento-head">
+                        <span class="bento-label" id="tCaptures">ثبت رخدادها</span>
+                        <svg class="bento-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <polyline points="21 15 16 10 5 21"/>
+                        </svg>
+                    </div>
+                    <span class="bento-value" id="captureVal">0</span>
+                </div>
+                <div class="bento-tile">
+                    <div class="bento-head">
+                        <span class="bento-label" id="tTg">هشدارهای تلگرام</span>
+                        <svg class="bento-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13"/>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                        </svg>
+                    </div>
+                    <span class="bento-value" id="tgVal">0</span>
                 </div>
             </div>
 
-            <div class="stat-cards">
-                <div class="card">
-                    <span class="card-label" id="tFps">نرخ فریم</span>
-                    <span class="card-num" id="fpsVal">0.0</span>
+            <!-- Incident Log -->
+            <div class="glass-card table-section">
+                <div class="section-header">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <span id="tLogTitle">لاگ آخرین رویدادها</span>
                 </div>
-                <div class="card">
-                    <span class="card-label" id="tPersons">اشخاص حاضر</span>
-                    <span class="card-num" id="personVal">0</span>
-                </div>
-                <div class="card">
-                    <span class="card-label" id="tCaptures">تعداد ثبت</span>
-                    <span class="card-num" id="captureVal">0</span>
-                </div>
-                <div class="card">
-                    <span class="card-label" id="tTg">پیام‌های تلگرام</span>
-                    <span class="card-num" id="tgVal">0</span>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3 style="font-size:0.9rem; margin-bottom:8px;" id="tLogTitle">لاگ آخرین رویدادها</h3>
-                <div class="table-wrap">
-                    <table>
+                <div class="table-scroll">
+                    <table class="apple-table">
                         <thead>
                             <tr>
                                 <th id="thTime">زمان</th>
@@ -489,77 +936,123 @@
                             </tr>
                         </thead>
                         <tbody id="logRows">
-                            <tr><td colspan="5" style="text-align:center; color:var(--text-muted);" id="tEmptyLog">هنوز رویدادی ثبت نشده</td></tr>
+                            <tr><td colspan="5" style="text-align:center; color:var(--text-secondary); padding:20px;" id="tEmptyLog">هنوز رویدادی ثبت نشده است</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
         </section>
 
-        <aside class="sidebar-pane">
-            <div class="tabs">
-                <button class="tab-link active" id="tab1" onclick="showTab('faces')">
-                    <span id="tTabFaces">پروفایل‌های چهره</span>
+        <!-- Sidebar Section -->
+        <aside class="sidebar-section">
+            <div class="segmented-control">
+                <button class="segment-btn active" id="tab1" onclick="showTab('faces')">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    <span id="tTabFaces">پروفایل‌ها</span>
                 </button>
-                <button class="tab-link" id="tab2" onclick="showTab('settings')">
+                <button class="segment-btn" id="tab2" onclick="showTab('settings')">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
                     <span id="tTabSettings">تنظیمات</span>
                 </button>
             </div>
 
-            <div class="card" id="paneFaces">
-                <h3 style="font-size:0.85rem; margin-bottom:10px;" id="tRegTitle">ثبت پروفایل جدید</h3>
-                <div class="input-row">
-                    <label id="tNameLabel">نام شخص:</label>
-                    <input type="text" id="nameInput" class="input-ctrl" placeholder="مثال: میکائیل">
+            <!-- Tab 1: Faces -->
+            <div class="glass-card sidebar-card" id="paneFaces">
+                <div class="section-header">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="8.5" cy="7" r="4"/>
+                        <line x1="20" y1="8" x2="20" y2="14"/>
+                        <line x1="23" y1="11" x2="17" y2="11"/>
+                    </svg>
+                    <span id="tRegTitle">ثبت پروفایل جدید</span>
                 </div>
-                <button class="btn btn-dark" style="width:100%; margin-bottom:12px;" onclick="registerFace()">
+                <div class="form-field">
+                    <label id="tNameLabel">نام شخص:</label>
+                    <input type="text" id="nameInput" class="apple-input" placeholder="مثال: میکائیل">
+                </div>
+                <button class="apple-btn apple-btn-secondary" style="width:100%; justify-content:center;" onclick="registerFace()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
                     <span id="tBtnReg">ثبت از تصویر دوربین</span>
                 </button>
 
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-size:0.8rem; color:var(--text-muted);" id="tListTitle">لیست چهره‌های ذخیره‌شده</span>
-                    <button class="btn-subtle" style="padding:2px 8px; font-size:0.75rem;" onclick="clearFaces()" id="tBtnClear">حذف همه</button>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span style="font-size:0.78rem; font-weight:600; color:var(--text-secondary);" id="tListTitle">لیست چهره‌های ذخیره‌شده</span>
+                    <button class="pill-btn" style="padding:3px 10px; font-size:0.72rem;" onclick="clearFaces()" id="tBtnClear">حذف همه</button>
                 </div>
-                <div class="list-box" id="faceList"></div>
+                <div class="profile-list" id="faceList"></div>
             </div>
 
-            <div class="card" id="paneSettings" style="display:none;">
-                <h3 style="font-size:0.85rem; margin-bottom:10px;" id="tTgTitle">تنظیمات ربات تلگرام</h3>
-                <div class="input-row">
+            <!-- Tab 2: Settings -->
+            <div class="glass-card sidebar-card" id="paneSettings" style="display:none;">
+                <div class="section-header">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13"/>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                    <span id="tTgTitle">تنظیمات ربات تلگرام</span>
+                </div>
+                <div class="form-field">
                     <label>Bot Token:</label>
-                    <input type="password" id="tgToken" class="input-ctrl">
+                    <input type="password" id="tgToken" class="apple-input">
                 </div>
-                <div class="input-row">
+                <div class="form-field">
                     <label>Chat ID:</label>
-                    <input type="text" id="tgChat" class="input-ctrl">
+                    <input type="text" id="tgChat" class="apple-input">
                 </div>
-                <div class="input-row">
+                <div class="form-field">
                     <label id="tCaptionLabel">عنوان هشدار:</label>
-                    <input type="text" id="customCaption" class="input-ctrl" value="هشدار تردد">
+                    <input type="text" id="customCaption" class="apple-input" value="هشدار تردد">
                 </div>
-                <div class="input-row">
+                <div class="form-field">
                     <label id="tCooldownLabel">فاصله بین ثبت‌ها (ثانیه):</label>
-                    <input type="number" id="cooldown" class="input-ctrl" value="6" min="1" max="60">
+                    <input type="number" id="cooldown" class="apple-input" value="6" min="1" max="60">
                 </div>
 
-                <div class="toggle-row">
+                <div class="switch-row">
                     <span id="tAutoSend">ارسال خودکار:</span>
-                    <input type="checkbox" id="chkAuto" checked>
+                    <label class="apple-switch">
+                        <input type="checkbox" id="chkAuto" checked>
+                        <span class="slider"></span>
+                    </label>
                 </div>
-                <div class="toggle-row">
+                <div class="switch-row">
                     <span id="tOnlyNew">فقط فرد جدید:</span>
-                    <input type="checkbox" id="chkNew" checked>
+                    <label class="apple-switch">
+                        <input type="checkbox" id="chkNew" checked>
+                        <span class="slider"></span>
+                    </label>
                 </div>
-                <div class="toggle-row">
+                <div class="switch-row">
                     <span id="tRemote">دستورات راه دور:</span>
-                    <input type="checkbox" id="chkRemote">
+                    <label class="apple-switch">
+                        <input type="checkbox" id="chkRemote">
+                        <span class="slider"></span>
+                    </label>
                 </div>
 
-                <div style="display:flex; gap:8px; margin-top:12px;">
-                    <button class="btn btn-dark" style="flex:1;" onclick="saveConfig()">
+                <div style="display:flex; gap:10px; margin-top:8px;">
+                    <button class="apple-btn apple-btn-secondary" style="flex:1; justify-content:center;" onclick="saveConfig()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
                         <span id="tSave">ذخیره</span>
                     </button>
-                    <button class="btn btn-dark" onclick="testTg()">
+                    <button class="apple-btn apple-btn-secondary" style="justify-content:center;" onclick="testTg()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
                         <span id="tTest">تست</span>
                     </button>
                 </div>
@@ -573,25 +1066,25 @@
         const dict = {
             fa: {
                 lang: 'English',
-                idle: 'دوربین در حالت غیرفعال است',
+                idle: 'دوربین در حالت آماده‌باش قرار دارد',
                 standby: 'آماده',
                 active: 'پایش فعال',
                 start: 'شروع پایش',
                 stop: 'توقف',
                 snap: 'عکس دستی',
-                calib: 'کالیبره پس‌زمینه',
-                fps: 'نرخ فریم',
-                persons: 'اشخاص حاضر',
-                captures: 'تعداد ثبت',
-                tg: 'پیام‌های تلگرام',
+                calib: 'تنظیم پس‌زمینه',
+                fps: 'نرخ فریم (FPS)',
+                persons: 'افراد در صحنه',
+                captures: 'ثبت رخدادها',
+                tg: 'هشدارهای تلگرام',
                 logTitle: 'لاگ آخرین رویدادها',
                 thTime: 'زمان',
                 thCount: 'تعداد',
                 thConf: 'اطمینان',
                 thWho: 'هویت',
                 thTg: 'وضعیت ارسال',
-                emptyLog: 'هنوز رویدادی ثبت نشده',
-                tabFaces: 'پروفایل‌های چهره',
+                emptyLog: 'هنوز رویدادی ثبت نشده است',
+                tabFaces: 'پروفایل‌ها',
                 tabSettings: 'تنظیمات',
                 regTitle: 'ثبت پروفایل جدید',
                 nameLabel: 'نام شخص:',
@@ -610,14 +1103,14 @@
             },
             en: {
                 lang: 'فارسی',
-                idle: 'Camera is currently inactive',
+                idle: 'Camera is currently in standby',
                 standby: 'Standby',
-                active: 'Monitoring Active',
+                active: 'Active Monitoring',
                 start: 'Start Camera',
                 stop: 'Stop',
-                snap: 'Manual Snapshot',
-                calib: 'Calibrate Background',
-                fps: 'Frame Rate',
+                snap: 'Snapshot',
+                calib: 'Calibrate BG',
+                fps: 'Frame Rate (FPS)',
                 persons: 'Persons in View',
                 captures: 'Total Captures',
                 tg: 'Telegram Alerts',
@@ -628,11 +1121,11 @@
                 thWho: 'Identity',
                 thTg: 'Telegram Status',
                 emptyLog: 'No events logged yet',
-                tabFaces: 'Face Profiles',
+                tabFaces: 'Profiles',
                 tabSettings: 'Settings',
                 regTitle: 'Register New Profile',
-                nameLabel: 'Name:',
-                btnReg: 'Register from Current Frame',
+                nameLabel: 'Person Name:',
+                btnReg: 'Register from Feed',
                 listTitle: 'Saved Face Profiles',
                 btnClear: 'Clear All',
                 tgTitle: 'Telegram Bot Settings',
@@ -653,10 +1146,17 @@
         function notify(msg) {
             const wrap = document.getElementById('toasts');
             const item = document.createElement('div');
-            item.className = 'toast-item';
-            item.innerText = msg;
+            item.className = 'apple-toast';
+            item.innerHTML = `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--apple-blue)" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="16" x2="12" y2="12"/>
+                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                <span>${msg}</span>
+            `;
             wrap.appendChild(item);
-            setTimeout(() => item.remove(), 3500);
+            setTimeout(() => item.remove(), 4000);
         }
 
         function setLang(lang) {
@@ -665,7 +1165,7 @@
             document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
 
             const d = dict[lang];
-            document.getElementById('langBtn').innerText = d.lang;
+            document.getElementById('langBtn').querySelector('span').innerText = d.lang;
             document.getElementById('tCameraIdle').innerText = d.idle;
             document.getElementById('tStart').innerText = d.start;
             document.getElementById('tStop').innerText = d.stop;
@@ -708,12 +1208,28 @@
             const cur = document.documentElement.getAttribute('data-theme');
             const target = cur === 'light' ? 'dark' : 'light';
             document.documentElement.setAttribute('data-theme', target);
-            document.getElementById('themeBtn').innerText = target === 'light' ? '☀️' : '🌙';
+            document.getElementById('themeBtn').innerHTML = target === 'light' ? `
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="5"/>
+                    <line x1="12" y1="1" x2="12" y2="3"/>
+                    <line x1="12" y1="21" x2="12" y2="23"/>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                    <line x1="1" y1="12" x2="3" y2="12"/>
+                    <line x1="21" y1="12" x2="23" y2="12"/>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                </svg>
+            ` : `
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+            `;
         }
 
         function showTab(tab) {
-            document.getElementById('paneFaces').style.display = tab === 'faces' ? 'block' : 'none';
-            document.getElementById('paneSettings').style.display = tab === 'settings' ? 'block' : 'none';
+            document.getElementById('paneFaces').style.display = tab === 'faces' ? 'flex' : 'none';
+            document.getElementById('paneSettings').style.display = tab === 'settings' ? 'flex' : 'none';
             document.getElementById('tab1').classList.toggle('active', tab === 'faces');
             document.getElementById('tab2').classList.toggle('active', tab === 'settings');
         }
@@ -744,7 +1260,7 @@
                     document.getElementById('startBtn').style.display = 'none';
                     document.getElementById('stopBtn').style.display = 'inline-flex';
                     updateBadge();
-                    notify(currentLang === 'fa' ? 'پایش آغاز شد' : 'Surveillance started');
+                    notify(currentLang === 'fa' ? 'پایش فعال آغاز شد' : 'Surveillance started');
                 } else {
                     notify(data.error || 'Failed');
                 }
@@ -762,7 +1278,7 @@
                 document.getElementById('startBtn').style.display = 'inline-flex';
                 document.getElementById('stopBtn').style.display = 'none';
                 updateBadge();
-                notify(currentLang === 'fa' ? 'پایش متوقف شد' : 'Monitoring stopped');
+                notify(currentLang === 'fa' ? 'پایش متوقف شد' : 'Surveillance paused');
             } catch (e) {
                 notify(e.message);
             }
@@ -774,7 +1290,7 @@
                 const d = await res.json();
                 if (d.ok) {
                     const w = window.open('');
-                    w.document.write('<img src="' + d.image + '" style="max-width:100%;">');
+                    w.document.write('<img src="' + d.image + '" style="max-width:100%; border-radius:12px;">');
                 }
             } catch (e) {
                 notify(e.message);
@@ -784,7 +1300,7 @@
         async function calibrate() {
             try {
                 await fetch('/api/calibrate', { method: 'POST' });
-                notify(currentLang === 'fa' ? 'مدل پس‌زمینه کالیبره شد' : 'Background recalibrated');
+                notify(currentLang === 'fa' ? 'مدل پس‌زمینه با موفقیت تنظیم شد' : 'Background calibrated');
             } catch (e) {
                 notify(e.message);
             }
@@ -823,14 +1339,28 @@
                 const box = document.getElementById('faceList');
                 box.innerHTML = '';
                 if (!d.faces || !d.faces.length) {
-                    box.innerHTML = `<p style="font-size:0.75rem; color:var(--text-muted); text-align:center;">${currentLang === 'fa' ? 'پروفایلی ثبت نشده' : 'No profiles'}</p>`;
+                    box.innerHTML = `<p style="font-size:0.75rem; color:var(--text-secondary); text-align:center; padding:12px;">${currentLang === 'fa' ? 'پروفایلی ثبت نشده' : 'No profiles'}</p>`;
                     return;
                 }
                 d.faces.forEach(f => {
-                    const chip = document.createElement('div');
-                    chip.className = 'profile-chip';
-                    chip.innerHTML = `<span>👤 ${f.name}</span><button class="btn-trash" onclick="removeFace('${f.id}')">✕</button>`;
-                    box.appendChild(chip);
+                    const card = document.createElement('div');
+                    card.className = 'profile-card';
+                    card.innerHTML = `
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                            <span style="font-weight:600;">${f.name}</span>
+                        </div>
+                        <button class="btn-icon-danger" onclick="removeFace('${f.id}')" title="Delete">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    `;
+                    box.appendChild(card);
                 });
             } catch (e) {}
         }
@@ -883,7 +1413,7 @@
                     body: JSON.stringify(payload)
                 });
                 const d = await res.json();
-                if (d.ok) notify(currentLang === 'fa' ? 'تنظیمات ذخیره شد' : 'Settings saved');
+                if (d.ok) notify(currentLang === 'fa' ? 'تنظیمات با موفقیت ذخیره شد' : 'Settings saved');
             } catch (e) {
                 notify(e.message);
             }
@@ -893,7 +1423,7 @@
             try {
                 const res = await fetch('/api/test_telegram', { method: 'POST' });
                 const d = await res.json();
-                notify(d.ok ? 'ارتباط برقرار است' : (d.message || 'Error'));
+                notify(d.ok ? (currentLang === 'fa' ? 'ارتباط برقرار است' : 'Connected') : (d.message || 'Error'));
             } catch (e) {
                 notify(e.message);
             }
@@ -924,8 +1454,8 @@
                             <td>${item.time.split(' ')[1] || item.time}</td>
                             <td>${item.count}</td>
                             <td>${Math.round(item.conf * 100)}%</td>
-                            <td>${who}</td>
-                            <td>${item.sent ? 'Sent' : 'Pending'}</td>
+                            <td><strong>${who}</strong></td>
+                            <td><span class="pill-tag ${item.sent ? 'sent' : 'pending'}">${item.sent ? 'Sent' : 'Pending'}</span></td>
                         `;
                         tbody.appendChild(tr);
                     });
