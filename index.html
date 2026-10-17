@@ -1033,6 +1033,14 @@
                 </svg>
                 <span id="navFaces">بانک چهره‌ها</span>
             </button>
+            <button class="nav-dock-item" id="tabAnalytics" onclick="switchView('viewAnalytics')">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="20" x2="18" y2="10"/>
+                    <line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+                <span id="navAnalytics">آنالیز و آمار</span>
+            </button>
             <button class="nav-dock-item" id="tabSettings" onclick="switchView('viewSettings')">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="3"/>
@@ -1043,6 +1051,16 @@
         </nav>
 
         <div class="header-actions">
+            <!-- Mode A (Client-Edge) vs Mode B (Server Core) Switcher -->
+            <button class="pill-btn mode-pill" onclick="toggleVisionMode()" id="modeToggleBtn" title="تغییر حالت پردازش (Client-Edge vs Server-Core)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                    <line x1="6" y1="6" x2="6.01" y2="6"/>
+                    <line x1="6" y1="18" x2="6.01" y2="18"/>
+                </svg>
+                <span id="modeStatusLabel">سرور (Mode B)</span>
+            </button>
             <button class="pill-btn" onclick="toggleStealthMode()" id="stealthBtn" title="حالت استتار (Stealth Mode)">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
@@ -1072,6 +1090,7 @@
             <div class="glass-card">
                 <div class="screen-stage">
                     <video id="webcam" autoplay playsinline muted></video>
+                    <img id="serverFeed" class="server-feed-stream" style="display:none; width:100%; height:100%; object-fit:cover;" alt="Server MJPEG Stream" />
                     <canvas id="overlayCanvas"></canvas>
 
                     <!-- Interactive ROI Zone Editor Banner -->
@@ -1228,6 +1247,74 @@
             </div>
         </section>
 
+        <!-- ==================== SECTION 4: ANALYTICS & HOURLY METRICS ==================== -->
+        <section id="viewAnalytics" class="app-view">
+            <div class="glass-card">
+                <div class="glass-card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
+                    <div>
+                        <h2 style="margin:0; font-size:1.15rem; display:flex; align-items:center; gap:8px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--apple-blue)" stroke-width="2">
+                                <line x1="18" y1="20" x2="18" y2="10"/>
+                                <line x1="12" y1="20" x2="12" y2="4"/>
+                                <line x1="6" y1="20" x2="6" y2="14"/>
+                            </svg>
+                            <span id="tAnalyticsTitle">مرکز آمار و تحلیل تردد MikoVo RaRa 11</span>
+                        </h2>
+                        <p style="margin:4px 0 0 0; font-size:0.8rem; color:var(--text-secondary);" id="tAnalyticsSubtitle">تحلیل هوشمند ترافیک، الگوهای تردد ساعتی و سطح تهدیدات امنیتی</p>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="apple-btn" onclick="requestTelegramSummary()" style="font-size:0.8rem; padding:6px 12px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"/>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                            </svg>
+                            <span id="tDispatchSummary">ارسال خلاصه به تلگرام</span>
+                        </button>
+                        <button class="apple-btn apple-btn-primary" onclick="refreshAnalytics()" style="font-size:0.8rem; padding:6px 12px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10"/>
+                                <polyline points="1 20 1 14 7 14"/>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                            </svg>
+                            <span id="tRefreshAnalytics">بروزرسانی</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Bento KPI Cards -->
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap:14px; margin-bottom:20px;">
+                    <div class="glass-subcard" style="padding:16px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);">
+                        <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px;" id="tKpiTotal">کل رویدادهای ثبت‌شده</div>
+                        <div style="font-size:1.7rem; font-weight:700; color:var(--apple-blue); font-family:var(--font-mono);" id="kpiTotalCaptures">0</div>
+                    </div>
+                    <div class="glass-subcard" style="padding:16px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);">
+                        <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px;" id="tKpiInOut">ورود / خروج خطی</div>
+                        <div style="font-size:1.7rem; font-weight:700; color:var(--apple-green); font-family:var(--font-mono);" id="kpiInOut">0 / 0</div>
+                    </div>
+                    <div class="glass-subcard" style="padding:16px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);">
+                        <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px;" id="tKpiLoiter">هشدارهای پرسه زدن</div>
+                        <div style="font-size:1.7rem; font-weight:700; color:var(--apple-amber); font-family:var(--font-mono);" id="kpiLoitering">0</div>
+                    </div>
+                    <div class="glass-subcard" style="padding:16px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);">
+                        <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px;" id="tKpiPeak">ساعت اوج تردد</div>
+                        <div style="font-size:1.7rem; font-weight:700; color:var(--apple-purple); font-family:var(--font-mono);" id="kpiPeakHour">--:--</div>
+                    </div>
+                </div>
+
+                <!-- 24-Hour Distribution Chart Section -->
+                <div style="background:rgba(0,0,0,0.18); border-radius:14px; border:1px solid rgba(255,255,255,0.05); padding:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                        <span style="font-size:0.85rem; font-weight:600;" id="tChartTitle">نمودار توزیع ساعتی تردد (۲۴ ساعت شبانه‌روز)</span>
+                        <span style="font-size:0.75rem; color:var(--text-secondary);" id="chartMaxLegend">مقیاس: خودکار</span>
+                    </div>
+                    <div id="hourlyChart" class="hourly-chart" style="display:flex; align-items:flex-end; justify-content:space-between; height:180px; padding:10px 4px; gap:4px; overflow-x:auto;"></div>
+                    <div id="chartEmptyFallback" style="display:none; text-align:center; padding:35px 20px; color:var(--text-secondary); font-size:0.85rem;">
+                        هنوز داده‌ای در ۲۴ ساعت گذشته ثبت نشده است
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- ==================== SECTION 3: FACE PROFILES ==================== -->
         <section id="viewFaces" class="app-view">
             <div class="glass-card" style="padding:24px;">
@@ -1250,6 +1337,15 @@
                             <line x1="5" y1="12" x2="19" y2="12"/>
                         </svg>
                         <span id="tBtnReg">ثبت از دوربین</span>
+                    </button>
+                    <input type="file" id="faceFileInput" accept="image/*" style="display:none;" onchange="handleFaceFileUpload(event)" />
+                    <button class="apple-btn" onclick="document.getElementById('faceFileInput').click()" title="آپلود عکس از فایل">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <span>آپلود عکس</span>
                     </button>
                 </div>
             </div>
@@ -1757,6 +1853,11 @@
                 const t = document.getElementById('tabSettings');
                 if (t) t.classList.add('active');
             }
+            if (viewId === 'viewAnalytics') {
+                const t = document.getElementById('tabAnalytics');
+                if (t) t.classList.add('active');
+                refreshAnalytics();
+            }
         }
 
         // ==================== Toast Notifications ====================
@@ -1863,7 +1964,7 @@
             isMirrored = !!mirrored;
             video.style.transform = isMirrored ? 'scaleX(-1)' : 'none';
             const mText = document.getElementById('tMirrorStatus');
-            if (mText) if (mText) mText.innerText = isMirrored
+            if (mText) mText.innerText = isMirrored
                 ? (currentLang === 'fa' ? 'آینه: روشن' : 'Mirror: ON')
                 : (currentLang === 'fa' ? 'آینه: خاموش' : 'Mirror: OFF');
             const btnM = document.getElementById('btnMirrorAction');
@@ -2070,6 +2171,7 @@
             safeSetText('navLogs', d.navLogs);
             safeSetText('navFaces', d.navFaces);
             safeSetText('navSettings', d.navSettings);
+            safeSetText('navAnalytics', d.navAnalytics);
 
             updateBadge();
         }
@@ -3170,7 +3272,7 @@
         }
 
         // ==================== Auto-Incident Logging & Telegram Dispatch ====================
-        async         function addSilentLogEntry(who, count, statusTxt) {
+        function addSilentLogEntry(who, count, statusTxt) {
             const tbody = document.getElementById('logRows');
             const empty = document.getElementById('tEmptyLog');
             if (empty && empty.parentElement) empty.parentElement.remove();
@@ -3248,18 +3350,23 @@
             const token = document.getElementById('tgToken').value.trim();
             const chatId = document.getElementById('tgChat').value.trim();
 
-            if (autoSend && token && chatId) {
+            if (autoSend) {
                 const tagEl = document.getElementById(`tag_${now}`);
+                const captionText = `[MikoTim Sentinel Pro | MikoVo RaRa 11]\n${document.getElementById('customCaption').value.trim()}\nPersons: ${persons.length}\nIdentity: ${identifiedStr}\nTime: ${timeStr}`;
+
                 try {
-                    const blob = await (await fetch(imgUrl)).blob();
-                    const captionText = `[MikoTim Sentinel Pro | MikoVo RaRa 11]\n${document.getElementById('customCaption').value.trim()}\nPersons: ${persons.length}\nIdentity: ${identifiedStr}\nTime: ${timeStr}`;
-
-                    const fd = new FormData();
-                    fd.append('chat_id', chatId);
-                    fd.append('caption', captionText);
-                    fd.append('photo', blob, `Incident_${now}.jpg`);
-
-                    const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: fd });
+                    // Route securely through Python backend
+                    const res = await fetch('/api/telegram/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            photo: imgUrl,
+                            caption: captionText,
+                            count: persons.length,
+                            names: names,
+                            is_loitering: hasIntruder
+                        })
+                    });
                     const resData = await res.json();
                     if (resData.ok) {
                         telegramSentCount++;
@@ -3269,10 +3376,16 @@
                             tagEl.innerText = 'Sent';
                         }
                     } else {
-                        if (tagEl) tagEl.innerText = 'Error';
+                        if (tagEl) {
+                            tagEl.className = 'pill-tag local';
+                            tagEl.innerText = 'Local';
+                        }
                     }
                 } catch (e) {
-                    if (tagEl) tagEl.innerText = 'Failed';
+                    if (tagEl) {
+                        tagEl.className = 'pill-tag local';
+                        tagEl.innerText = 'Local';
+                    }
                 }
             } else {
                 const tagEl = document.getElementById(`tag_${now}`);
@@ -3305,58 +3418,192 @@
         async function testTelegramConnection() {
             const token = document.getElementById('tgToken').value.trim();
             const chatId = document.getElementById('tgChat').value.trim();
-            if (!token || !chatId) {
-                notify(currentLang === 'fa' ? 'لطفاً توکن و چت‌آیدی را وارد کنید' : 'Please enter token & chat ID');
-                return;
-            }
 
             try {
-                const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                const res = await fetch('/api/test_telegram', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chat_id: chatId,
-                        text: '[OK] MikoTim Sentinel Pro - ارتباط مستقیم و زنده برقرار است!'
-                    })
+                    body: JSON.stringify({ token: token, chat_id: chatId })
                 });
                 const d = await res.json();
                 if (d.ok) {
                     notify(currentLang === 'fa' ? 'اتصال با تلگرام با موفقیت برقرار شد' : 'Telegram connected successfully');
                 } else {
-                    notify(d.description || 'Telegram error');
+                    notify(d.message || d.error || (currentLang === 'fa' ? 'خطا در اتصال به تلگرام' : 'Telegram error'));
                 }
             } catch (e) {
-                notify(e.message);
+                notify(currentLang === 'fa' ? 'سرور متصل نیست' : 'Server offline');
             }
         }
 
         // ==================== Hourly Chart & Summary ====================
         function renderHourlyChart(traffic) {
             const container = document.getElementById('hourlyChart');
+            const emptyFallback = document.getElementById('chartEmptyFallback');
             if (!container) return;
             container.innerHTML = '';
-            const maxVal = Math.max(1, ...traffic);
+
+            const trafficArr = (Array.isArray(traffic) && traffic.length === 24) ? traffic : new Array(24).fill(0);
+            const totalActivity = trafficArr.reduce((a, b) => a + b, 0);
+
+            if (emptyFallback) {
+                emptyFallback.style.display = totalActivity === 0 ? 'block' : 'none';
+            }
+
+            const maxVal = Math.max(1, ...trafficArr);
+            const maxLegend = document.getElementById('chartMaxLegend');
+            if (maxLegend) {
+                maxLegend.innerText = `${currentLang === 'fa' ? 'حداکثر تردد' : 'Peak'}: ${maxVal} ${currentLang === 'fa' ? 'نفر/ساعت' : 'p/h'}`;
+            }
 
             for (let h = 0; h < 24; h++) {
-                const count = traffic[h] || 0;
-                const pct = Math.max(5, Math.min(100, (count / maxVal) * 100));
+                const count = trafficArr[h] || 0;
+                const pct = Math.max(6, Math.min(100, (count / maxVal) * 100));
 
                 const wrap = document.createElement('div');
                 wrap.className = 'chart-bar-wrap';
-                wrap.title = `ساعت ${h}:00 - ${count} تردد`;
+                wrap.style.cssText = 'flex:1; display:flex; flex-direction:column; align-items:center; height:100%; justify-content:flex-end; min-width:8px; cursor:pointer;';
+                wrap.title = `${currentLang === 'fa' ? 'ساعت' : 'Hour'} ${h}:00 — ${count} ${currentLang === 'fa' ? 'تردد' : 'events'}`;
 
                 const bar = document.createElement('div');
                 bar.className = 'chart-bar';
-                bar.style.height = pct + '%';
+                bar.style.cssText = `width:100%; max-width:18px; border-radius:4px 4px 0 0; background: ${count > 0 ? 'var(--apple-blue)' : 'rgba(255,255,255,0.08)'}; transition: height 0.3s ease; height: ${pct}%;`;
 
                 const lbl = document.createElement('span');
                 lbl.className = 'chart-label';
+                lbl.style.cssText = 'font-size:0.62rem; color:var(--text-tertiary); margin-top:4px; font-family:var(--font-mono);';
                 lbl.innerText = (h % 3 === 0) ? (h < 10 ? '0' + h : h) : '';
 
                 wrap.appendChild(bar);
                 wrap.appendChild(lbl);
                 container.appendChild(wrap);
             }
+        }
+
+        async function refreshAnalytics() {
+            try {
+                const res = await fetch('/api/analytics');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.hourly_traffic) {
+                        hourlyTraffic = data.hourly_traffic;
+                        renderHourlyChart(hourlyTraffic);
+                    }
+                    if (document.getElementById('kpiTotalCaptures')) {
+                        document.getElementById('kpiTotalCaptures').innerText = data.total_captures || 0;
+                    }
+                    if (document.getElementById('kpiInOut')) {
+                        document.getElementById('kpiInOut').innerText = `${data.in_count || 0} / ${data.out_count || 0}`;
+                    }
+                    if (document.getElementById('kpiLoitering')) {
+                        document.getElementById('kpiLoitering').innerText = data.loitering_count || 0;
+                    }
+                    if (document.getElementById('kpiPeakHour')) {
+                        const ph = data.peak_hour;
+                        document.getElementById('kpiPeakHour').innerText = (ph !== undefined && data.peak_count > 0) ? `${ph < 10 ? '0' + ph : ph}:00 (${data.peak_count})` : '--:--';
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // ==================== Vision Operating Mode Management ====================
+        let currentVisionMode = localStorage.getItem('mikotim_mode') || 'server_vision';
+
+        async function setVisionMode(mode) {
+            currentVisionMode = mode;
+            localStorage.setItem('mikotim_mode', mode);
+            updateVisionModeUI();
+            try {
+                await fetch('/api/mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: mode })
+                });
+            } catch(e) {}
+            notify(currentVisionMode === 'server_vision'
+                ? (currentLang === 'fa' ? 'حالت پردازش سرور (Mode B) فعال شد' : 'Server Vision Core (Mode B) Active')
+                : (currentLang === 'fa' ? 'حالت پردازش مرورگر (Mode A) فعال شد' : 'Client Edge Vision (Mode A) Active'));
+        }
+
+        function toggleVisionMode() {
+            setVisionMode(currentVisionMode === 'server_vision' ? 'client_edge' : 'server_vision');
+        }
+
+        function updateVisionModeUI() {
+            const lbl = document.getElementById('modeStatusLabel');
+            const sFeed = document.getElementById('serverFeed');
+            const wCam = document.getElementById('webcam');
+            if (lbl) {
+                lbl.innerText = currentVisionMode === 'server_vision'
+                    ? (currentLang === 'fa' ? 'سرور (Mode B)' : 'Server (Mode B)')
+                    : (currentLang === 'fa' ? 'مرورگر (Mode A)' : 'Edge (Mode A)');
+            }
+            if (currentVisionMode === 'server_vision') {
+                if (sFeed) {
+                    sFeed.style.display = isStreaming ? 'block' : 'none';
+                    if (isStreaming && (!sFeed.src || !sFeed.src.includes('/video_feed'))) {
+                        sFeed.src = '/video_feed?' + Date.now();
+                    }
+                }
+                if (wCam) {
+                    wCam.style.display = 'none';
+                    if (videoStream) {
+                        try { videoStream.getTracks().forEach(t => t.stop()); } catch(e) {}
+                        videoStream = null;
+                    }
+                }
+            } else {
+                if (sFeed) {
+                    sFeed.style.display = 'none';
+                    sFeed.src = '';
+                }
+                if (wCam) {
+                    wCam.style.display = isStreaming ? 'block' : 'none';
+                }
+            }
+        }
+
+        function handleFaceFileUpload(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            const nameInput = document.getElementById('nameInput');
+            const name = (nameInput && nameInput.value.trim()) || file.name.split('.')[0];
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const b64 = e.target.result;
+                try {
+                    const res = await fetch('/api/register', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: name, photo: b64 })
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        notify(currentLang === 'fa' ? `چهره ${name} با موفقیت در سرور ثبت شد` : `Profile ${name} registered on server`);
+                        registeredProfiles.push({
+                            id: data.message || ('face_' + Date.now()),
+                            name: name,
+                            thumb: b64,
+                            time: new Date().toLocaleTimeString()
+                        });
+                        saveProfiles();
+                        renderProfileList();
+                    } else {
+                        notify(data.message || data.error || 'Registration failed');
+                    }
+                } catch(err) {
+                    registeredProfiles.push({
+                        id: 'face_' + Date.now(),
+                        name: name,
+                        thumb: b64,
+                        time: new Date().toLocaleTimeString()
+                    });
+                    saveProfiles();
+                    renderProfileList();
+                    notify(currentLang === 'fa' ? `چهره ${name} ذخیره شد` : `Profile ${name} registered`);
+                }
+            };
+            reader.readAsDataURL(file);
         }
 
         async function requestTelegramSummary() {
@@ -3561,7 +3808,9 @@
             setLang('fa');
             loadConfig();
             loadProfiles();
+            updateVisionModeUI();
             renderHourlyChart(hourlyTraffic);
+            refreshAnalytics();
         });
     </script>
 </body>
