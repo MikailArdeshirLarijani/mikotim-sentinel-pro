@@ -3,8 +3,7 @@ __pycache__/
 *.pyo
 *.pyd
 *.pt
-settings.json
-faces/faces_db.json
+data/
 logs/
 .venv/
 env/
