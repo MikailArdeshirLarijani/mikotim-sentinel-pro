@@ -1891,6 +1891,11 @@
         function processLoop() {
             if (!isStreaming) return;
 
+            if (video.videoWidth && (overlayCanvas.width !== video.videoWidth || overlayCanvas.height !== video.videoHeight)) {
+                overlayCanvas.width = video.videoWidth;
+                overlayCanvas.height = video.videoHeight;
+            }
+
             const now = performance.now();
             fpsCounter++;
             if (now - lastFpsUpdate >= 1000) {
@@ -1900,8 +1905,8 @@
                 lastFpsUpdate = now;
             }
 
-            const w = overlayCanvas.width;
-            const h = overlayCanvas.height;
+            const w = overlayCanvas.width || 1280;
+            const h = overlayCanvas.height || 720;
             ctx.clearRect(0, 0, w, h);
 
             // 1. Draw ROI Security Polygon
@@ -1990,9 +1995,11 @@
             }
 
             let diffCount = 0;
-            let mMinX = procW, mMaxX = 0, mMinY = procH, mMaxY = 0;
             let skinCount = 0;
+            const histX = new Int32Array(procW);
+            const histY = new Int32Array(procH);
             let sMinX = procW, sMaxX = 0, sMinY = procH, sMaxY = 0;
+            let mMinX = procW, mMaxX = 0, mMinY = procH, mMaxY = 0;
 
             const scaleX = w / procW;
             const scaleY = h / procH;
@@ -2003,28 +2010,37 @@
                 const b = currData[i + 2];
                 const gray = 0.299 * r + 0.587 * g + 0.114 * b;
 
-                // Motion differential
-                const diff = Math.abs(gray - bgFrame[p]);
-                bgFrame[p] += (gray - bgFrame[p]) * 0.015;
-
                 const x = p % procW;
                 const y = Math.floor(p / procW);
 
-                if (diff > 14) {
+                // 1. Adaptive Motion Differential (Selective background update)
+                const diff = Math.abs(gray - bgFrame[p]);
+                if (diff < 15) {
+                    bgFrame[p] += (gray - bgFrame[p]) * 0.04;
+                } else {
+                    bgFrame[p] += (gray - bgFrame[p]) * 0.002;
                     diffCount++;
+                    histX[x] += 2;
+                    histY[y] += 2;
                     if (x < mMinX) mMinX = x;
                     if (x > mMaxX) mMaxX = x;
                     if (y < mMinY) mMinY = y;
                     if (y > mMaxY) mMaxY = y;
                 }
 
-                // Invariant human skin locus (Kovacs/Peer chrominance cluster)
-                const isSkin = (r > 60 && g > 35 && b > 20 &&
-                                r > g && r > b &&
-                                (r - g) >= 12 &&
-                                Math.abs(r - g) > 10);
-                if (isSkin) {
+                // 2. Broad-Spectrum Human Skin Tone (YCbCr + Normalized RGB)
+                const Y = 0.299 * r + 0.587 * g + 0.114 * b;
+                const Cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+                const Cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+
+                const isSkinYCbCr = (Cb >= 73 && Cb <= 135 && Cr >= 130 && Cr <= 180 && Y >= 25);
+                const isSkinNorm = ((r / (r + g + b + 0.1)) > 0.33 && (g / (r + g + b + 0.1)) > 0.24 && r >= g && (r - b) >= 4);
+                const isSkinRGB = (r > 48 && g > 28 && b > 18 && r >= g && (r - b) >= 4);
+
+                if (isSkinYCbCr || isSkinNorm || isSkinRGB) {
                     skinCount++;
+                    histX[x] += 3;
+                    histY[y] += 3;
                     if (x < sMinX) sMinX = x;
                     if (x > sMaxX) sMaxX = x;
                     if (y < sMinY) sMinY = y;
@@ -2034,7 +2050,7 @@
 
             const candidates = [];
 
-            // Cue A: Native hardware face detector
+            // Cue A: Hardware FaceDetector (if available in browser)
             if (cachedNativeFaces.length > 0) {
                 for (const face of cachedNativeFaces) {
                     const fb = face.boundingBox;
@@ -2045,46 +2061,92 @@
                     candidates.push({
                         bbox: [bx, by, bw, bh],
                         faceBbox: [fb.x, fb.y, fb.width, fb.height],
-                        score: 0.95
+                        score: 0.96
                     });
                 }
             }
 
-            // Cue B: Skin chrominance cluster (works even when completely still)
-            if (candidates.length === 0 && skinCount > 35 && (sMaxX - sMinX) > 8 && (sMaxY - sMinY) > 8) {
+            // Cue B: Spatial Projection Clustering (Skin & Motion Energy)
+            if (candidates.length === 0 && (skinCount > 15 || diffCount > 20)) {
+                let cMinX = procW, cMaxX = 0;
+                let cMinY = procH, cMaxY = 0;
+                const th = 2;
+
+                for (let x = 0; x < procW; x++) {
+                    if (histX[x] >= th) {
+                        if (x < cMinX) cMinX = x;
+                        if (x > cMaxX) cMaxX = x;
+                    }
+                }
+                for (let y = 0; y < procH; y++) {
+                    if (histY[y] >= th) {
+                        if (y < cMinY) cMinY = y;
+                        if (y > cMaxY) cMaxY = y;
+                    }
+                }
+
+                if (cMaxX > cMinX + 4 && cMaxY > cMinY + 4) {
+                    const spanW = (cMaxX - cMinX + 8) * scaleX;
+                    const spanH = (cMaxY - cMinY + 12) * scaleY;
+
+                    const bx = Math.max(0, (cMinX - 4) * scaleX);
+                    const by = Math.max(0, (cMinY - 4) * scaleY);
+                    const bw = Math.min(w - bx, Math.max(90, spanW));
+                    let bh = Math.min(h - by, Math.max(120, spanH));
+                    if (bh < bw * 1.25) bh = Math.min(h - by, bw * 1.35);
+
+                    candidates.push({
+                        bbox: [bx, by, bw, bh],
+                        faceBbox: [bx + bw * 0.2, by, bw * 0.6, bh * 0.45],
+                        score: 0.92
+                    });
+                }
+            }
+
+            // Cue C: Direct Skin Cluster Fallback
+            if (candidates.length === 0 && skinCount > 15 && sMaxX > sMinX + 4 && sMaxY > sMinY + 4) {
                 const headX = Math.max(0, (sMinX - 4) * scaleX);
                 const headY = Math.max(0, (sMinY - 4) * scaleY);
                 const headW = Math.min(w - headX, (sMaxX - sMinX + 8) * scaleX);
                 const headH = Math.min(h - headY, (sMaxY - sMinY + 8) * scaleY);
 
-                const bx = Math.max(0, headX - headW * 0.25);
-                const by = headY;
-                const bw = Math.min(w - bx, headW * 1.5);
-                const bh = Math.min(h - by, headH * 2.5);
+                const bx = Math.max(0, headX - headW * 0.35);
+                const by = Math.max(0, headY - headH * 0.15);
+                const bw = Math.min(w - bx, Math.max(90, headW * 1.7));
+                const bh = Math.min(h - by, Math.max(120, headH * 2.6));
 
-                if (bw > 50 && bh > 70) {
-                    candidates.push({
-                        bbox: [bx, by, bw, bh],
-                        faceBbox: [headX, headY, headW, headH],
-                        score: Math.min(0.92, 0.72 + (skinCount / (procW * procH)) * 5)
-                    });
-                }
+                candidates.push({
+                    bbox: [bx, by, bw, bh],
+                    faceBbox: [headX, headY, headW, headH],
+                    score: 0.88
+                });
             }
 
-            // Cue C: Motion cluster (sensitive indoor motion)
-            if (candidates.length === 0 && diffCount > 40 && (mMaxX - mMinX) > 10 && (mMaxY - mMinY) > 12) {
+            // Cue D: Motion Cluster Fallback
+            if (candidates.length === 0 && diffCount > 20 && mMaxX > mMinX + 6 && mMaxY > mMinY + 6) {
                 const bx = Math.max(0, (mMinX - 8) * scaleX);
                 const by = Math.max(0, (mMinY - 8) * scaleY);
-                const bw = Math.min(w - bx, (mMaxX - mMinX + 16) * scaleX);
-                const bh = Math.min(h - by, (mMaxY - mMinY + 16) * scaleY);
+                const bw = Math.min(w - bx, Math.max(90, (mMaxX - mMinX + 16) * scaleX));
+                const bh = Math.min(h - by, Math.max(120, (mMaxY - mMinY + 16) * scaleY));
 
-                if (bw > 60 && bh > 80) {
-                    candidates.push({
-                        bbox: [bx, by, bw, bh],
-                        faceBbox: [bx + bw * 0.2, by, bw * 0.6, bh * 0.45],
-                        score: Math.min(0.88, 0.66 + (diffCount / (procW * procH)) * 6)
-                    });
-                }
+                candidates.push({
+                    bbox: [bx, by, bw, bh],
+                    faceBbox: [bx + bw * 0.2, by, bw * 0.6, bh * 0.45],
+                    score: 0.85
+                });
+            }
+
+            // Cue E: Center Subject Attention Lock (When person is seated in front of webcam)
+            if (candidates.length === 0 && activeTracks.length === 0 && (skinCount > 8 || diffCount > 12)) {
+                const cw = w * 0.40;
+                const ch = h * 0.65;
+                const cx = (w - cw) / 2;
+                const cy = h * 0.18;
+                candidates.push({
+                    bbox: [cx, cy, cw, ch],
+                    faceBbox: [cx + cw * 0.2, cy, cw * 0.6, ch * 0.45],
+                    score: 0.82
+                });
             }
 
             // Multi-Frame Kalman / EMA Track Fusion & Persistence
@@ -2135,11 +2197,11 @@
                 }
             }
 
-            // Retain unmatched tracks for up to 25 frames (~0.8s persistence)
+            // Retain unmatched tracks for up to 75 frames (~2.5s persistence)
             for (const trk of activeTracks) {
                 if (!updatedTracks.includes(trk)) {
                     trk.missed = (trk.missed || 0) + 1;
-                    if (trk.missed < 25) {
+                    if (trk.missed < 75) {
                         updatedTracks.push(trk);
                     }
                 }
@@ -2163,7 +2225,7 @@
                     name: trk.name,
                     inRoi: inRoi,
                     inRoiAlert: isIntruder,
-                    opacity: Math.max(0.4, 1.0 - (trk.missed || 0) / 25)
+                    opacity: Math.max(0.4, 1.0 - (trk.missed || 0) / 75)
                 };
 
                 detectedPersons.push(detObj);
@@ -2207,10 +2269,21 @@
 
             ctx.save();
             ctx.globalAlpha = det.opacity !== undefined ? det.opacity : 1.0;
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 2.5;
 
-            const edge = Math.min(24, Math.max(10, bw / 5));
+            // 1. Tactical Full Bounding Box (Square / Rectangle)
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.6;
+            if (ctx.roundRect) {
+                ctx.beginPath();
+                ctx.roundRect(rx, y, bw, bh, 6);
+                ctx.stroke();
+            } else {
+                ctx.strokeRect(rx, y, bw, bh);
+            }
+
+            // 2. High-visibility corner accents (L-brackets)
+            ctx.lineWidth = 3.5;
+            const edge = Math.min(26, Math.max(12, bw / 5));
 
             ctx.beginPath();
             ctx.moveTo(rx, y + edge); ctx.lineTo(rx, y); ctx.lineTo(rx + edge, y);
@@ -2219,6 +2292,7 @@
             ctx.moveTo(rx + bw - edge, y + bh); ctx.lineTo(rx + bw, y + bh); ctx.lineTo(rx + bw, y + bh - edge);
             ctx.stroke();
 
+            // 3. Name & Identity Tag Badge
             const prefix = isIntruder ? (currentLang === 'fa' ? 'نفوذ: ' : 'INTRUSION: ') : '';
             const whoTxt = isKnown ? det.name : (currentLang === 'fa' ? 'ناشناس' : 'Unknown');
             const confPct = isKnown ? 95 : Math.round((det.score || 0.85) * 100);
@@ -2227,7 +2301,7 @@
             ctx.font = '700 13px -apple-system, Vazirmatn, sans-serif';
             const tw = ctx.measureText(label).width;
 
-            const tagY = y > 30 ? y - 10 : y + bh + 20;
+            const tagY = y > 30 ? y - 10 : y + bh + 24;
             ctx.fillStyle = 'rgba(18, 18, 20, 0.90)';
             ctx.strokeStyle = color;
             ctx.lineWidth = 1;
