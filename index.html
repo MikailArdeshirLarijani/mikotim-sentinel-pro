@@ -2811,112 +2811,185 @@
             animationFrameId = requestAnimationFrame(processLoop);
         }
 
-        function drawHud(det) {
-            // 1. Prefer shrink-wrapped anatomical body bbox
+        // ==================== MikoVo RaRa 11 Client-Side Tactical Body-Cam Mesh ====================
+        class ClientTacticalMeshStabilizer {
+            constructor() {
+                this.tracks = new Map();
+            }
+            update(trackId, vertices) {
+                const prev = this.tracks.get(trackId);
+                if (!prev || prev.length !== vertices.length) {
+                    this.tracks.set(trackId, vertices.map(p => [...p]));
+                    return vertices;
+                }
+                const smoothed = vertices.map((p, i) => {
+                    const pp = prev[i];
+                    const dist = Math.hypot(p[0] - pp[0], p[1] - pp[1]);
+                    const alpha = dist > 8 ? 0.85 : 0.40;
+                    const sx = alpha * p[0] + (1 - alpha) * pp[0];
+                    const sy = alpha * p[1] + (1 - alpha) * pp[1];
+                    return [sx, sy];
+                });
+                this.tracks.set(trackId, smoothed);
+                return smoothed;
+            }
+            reset(trackId) {
+                this.tracks.delete(trackId);
+            }
+        }
+        const clientMeshStabilizer = new ClientTacticalMeshStabilizer();
+
+        function generateBodycamContourVertices(det, canvasWidth, isMirrored) {
             const [x, y, bw, bh] = det.bodyBbox || det.bbox;
-            const headBox = det.headBbox;
+            const pts = [
+                [x + bw * 0.50, y],                           // 0. Head crown apex
+                [x + bw * 0.62, y + bh * 0.05],               // 1. Head right upper
+                [x + bw * 0.60, y + bh * 0.12],               // 2. Head right cheek/ear
+                [x + bw * 0.54, y + bh * 0.16],               // 3. Neck right
+                [x + bw * 0.78, y + bh * 0.20],               // 4. Shoulder right
+                [x + bw * 0.85, y + bh * 0.36],               // 5. Elbow right outer
+                [x + bw * 0.76, y + bh * 0.50],               // 6. Wrist right
+                [x + bw * 0.68, y + bh * 0.56],               // 7. Hip right outer
+                [x + bw * 0.70, y + bh * 0.76],               // 8. Knee right outer
+                [x + bw * 0.68, y + bh * 0.98],               // 9. Ankle right
+                [x + bw * 0.50, y + bh * 0.60],               // 10. Groin center notch
+                [x + bw * 0.32, y + bh * 0.98],               // 11. Ankle left
+                [x + bw * 0.30, y + bh * 0.76],               // 12. Knee left outer
+                [x + bw * 0.32, y + bh * 0.56],               // 13. Hip left outer
+                [x + bw * 0.24, y + bh * 0.50],               // 14. Wrist left
+                [x + bw * 0.15, y + bh * 0.36],               // 15. Elbow left outer
+                [x + bw * 0.22, y + bh * 0.20],               // 16. Shoulder left
+                [x + bw * 0.46, y + bh * 0.16],               // 17. Neck left
+                [x + bw * 0.40, y + bh * 0.12],               // 18. Head left cheek/ear
+                [x + bw * 0.38, y + bh * 0.05]                // 19. Head left upper
+            ];
+
+            return pts.map(([px, py]) => {
+                const rx = isMirrored ? (canvasWidth - px) : px;
+                return [rx, py];
+            });
+        }
+
+        function drawHud(det) {
+            const [x, y, bw, bh] = det.bodyBbox || det.bbox;
             const isKnown = !!det.name;
             const isIntruder = !!det.inRoiAlert;
 
-            // Tactical Neon Color: Emerald Green for known, Neon Red for intruder, Vivid Cyber Cyan for detected person
+            // Tactical Neon Colors
             let color = '#00E5FF';
-            if (isKnown) color = '#10B981';
-            if (isIntruder) color = '#FF3B30';
-
-            // Calculate display X coordinate (handles mirror flip without reversing text)
-            const rx = isMirrored ? (overlayCanvas.width - (x + bw)) : x;
+            let colorDim = 'rgba(0, 229, 255, 0.28)';
+            let colorMid = 'rgba(0, 229, 255, 0.58)';
+            if (isKnown) {
+                color = '#10B981';
+                colorDim = 'rgba(16, 185, 129, 0.28)';
+                colorMid = 'rgba(16, 185, 129, 0.58)';
+            }
+            if (isIntruder) {
+                color = '#FF3B30';
+                colorDim = 'rgba(255, 59, 48, 0.28)';
+                colorMid = 'rgba(255, 59, 48, 0.58)';
+            }
 
             ctx.save();
             ctx.globalAlpha = det.opacity !== undefined ? det.opacity : 1.0;
 
-            // 1. Tactical Shrink-Wrapped Anatomical Body Box with subtle glow
-            ctx.shadowColor = color;
-            ctx.shadowBlur = 10;
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 2.0;
-            if (ctx.roundRect) {
+            // 1. Generate & Stabilize Anatomical Body-Cam Contour Vertices
+            const rawVertices = generateBodycamContourVertices(det, overlayCanvas.width, isMirrored);
+            const vertices = clientMeshStabilizer.update(det.id, rawVertices);
+
+            // 2. Draw Connected Tactical Polyline (Glowing Neon Mesh Wireframe)
+            if (vertices.length >= 3) {
+                // Dim outer glow polyline
                 ctx.beginPath();
-                ctx.roundRect(rx, y, bw, bh, 6);
+                ctx.moveTo(vertices[0][0], vertices[0][1]);
+                for (let i = 1; i < vertices.length; i++) {
+                    ctx.lineTo(vertices[i][0], vertices[i][1]);
+                }
+                ctx.closePath();
+                ctx.strokeStyle = colorDim;
+                ctx.lineWidth = 4.0;
+                ctx.lineJoin = 'round';
                 ctx.stroke();
-            } else {
-                ctx.strokeRect(rx, y, bw, bh);
-            }
-            ctx.shadowBlur = 0;
 
-            // 2. High-visibility Biometric Corner Brackets (L-Brackets)
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 4.0;
-            ctx.lineCap = 'round';
-            const edge = Math.min(28, Math.max(14, Math.min(bw, bh) * 0.22));
-
-            // Top-Left
-            ctx.beginPath();
-            ctx.moveTo(rx, y + edge); ctx.lineTo(rx, y); ctx.lineTo(rx + edge, y);
-            ctx.stroke();
-
-            // Top-Right
-            ctx.beginPath();
-            ctx.moveTo(rx + bw - edge, y); ctx.lineTo(rx + bw, y); ctx.lineTo(rx + bw, y + edge);
-            ctx.stroke();
-
-            // Bottom-Left
-            ctx.beginPath();
-            ctx.moveTo(rx, y + bh - edge); ctx.lineTo(rx, y + bh); ctx.lineTo(rx + edge, y + bh);
-            ctx.stroke();
-
-            // Bottom-Right
-            ctx.beginPath();
-            ctx.moveTo(rx + bw - edge, y + bh); ctx.lineTo(rx + bw, y + bh); ctx.lineTo(rx + bw, y + bh - edge);
-            ctx.stroke();
-
-            // 3. Biometric Facial Lock Bracket (Crown-to-chin, ear-to-ear head box)
-            if (headBox && headBox[2] > 10 && headBox[3] > 10) {
-                const [hx, hy, hw, hh] = headBox;
-                const rhx = isMirrored ? (overlayCanvas.width - (hx + hw)) : hx;
-                const hedge = Math.min(14, Math.max(6, Math.min(hw, hh) * 0.25));
-
-                ctx.save();
+                // Crisp inner neon polyline
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 1.5;
-                if (ctx.roundRect) {
+                ctx.stroke();
+
+                // 3. Draw Layered Glowing Nodes at each vertex
+                const nodeRadius = 3;
+                for (const [px, py] of vertices) {
+                    ctx.fillStyle = colorDim;
                     ctx.beginPath();
-                    ctx.roundRect(rhx, hy, hw, hh, 4);
-                    ctx.stroke();
-                } else {
-                    ctx.strokeRect(rhx, hy, hw, hh);
+                    ctx.arc(px, py, nodeRadius + 3, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = colorMid;
+                    ctx.beginPath();
+                    ctx.arc(px, py, nodeRadius + 1, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.arc(px, py, nodeRadius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.beginPath();
+                    ctx.arc(px, py, 1.0, 0, Math.PI * 2);
+                    ctx.fill();
                 }
-
-                ctx.lineWidth = 2.5;
-                // Top-Left head
-                ctx.beginPath();
-                ctx.moveTo(rhx, hy + hedge); ctx.lineTo(rhx, hy); ctx.lineTo(rhx + hedge, hy);
-                ctx.stroke();
-                // Top-Right head
-                ctx.beginPath();
-                ctx.moveTo(rhx + hw - hedge, hy); ctx.lineTo(rhx + hw, hy); ctx.lineTo(rhx + hw, hy + hedge);
-                ctx.stroke();
-                // Bottom-Left head
-                ctx.beginPath();
-                ctx.moveTo(rhx, hy + hh - hedge); ctx.lineTo(rhx, hy + hh); ctx.lineTo(rhx + hedge, hy + hh);
-                ctx.stroke();
-                // Bottom-Right head
-                ctx.beginPath();
-                ctx.moveTo(rhx + hw - hedge, hy + hh); ctx.lineTo(rhx + hw, hy + hh); ctx.lineTo(rhx + hw, hy + hh - hedge);
-                ctx.stroke();
-                ctx.restore();
             }
 
-            // 4. Optional minimal text only for recognized identities or security zone intrusions (NO black background)
-            if (isKnown || isIntruder) {
-                const prefix = isIntruder ? (currentLang === 'fa' ? 'هشدار نفوذ: ' : 'INTRUSION: ') : '';
-                const label = prefix + (isKnown ? det.name : '');
-                ctx.font = '700 14px -apple-system, Vazirmatn, sans-serif';
-                ctx.fillStyle = color;
-                ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-                ctx.shadowBlur = 4;
-                const tagY = y > 22 ? (y - 8) : (y + bh + 20);
-                ctx.fillText(label, rx + 4, tagY);
+            // 4. Sleek Tactical Glassmorphic Telemetry HUD Label Badge at Top Apex
+            let apexX = x + bw * 0.5;
+            let apexY = y;
+            if (vertices.length > 0) {
+                let minY = Infinity;
+                for (const [vx, vy] of vertices) {
+                    if (vy < minY) { minY = vy; apexX = vx; }
+                }
+                apexY = minY;
             }
+
+            const prefix = isIntruder ? (currentLang === 'fa' ? 'هشدار نفوذ: ' : 'INTRUSION: ') : '';
+            const idText = isKnown ? det.name : (currentLang === 'fa' ? 'فرد ناشناس' : 'Unknown');
+            const scorePct = Math.round((det.score || 0.95) * 100);
+            const label = `MikoVo RaRa 11 #${det.id} | ${prefix}${idText} (${scorePct}%)`;
+
+            ctx.font = '700 13px -apple-system, Vazirmatn, sans-serif';
+            const textMetrics = ctx.measureText(label);
+            const tw = textMetrics.width;
+            const th = 14;
+            const padX = 8, padY = 5;
+
+            const badgeW = tw + padX * 2;
+            const badgeH = th + padY * 2;
+            let badgeX = Math.max(10, Math.min(overlayCanvas.width - badgeW - 10, apexX - badgeW / 2));
+            let badgeY = Math.max(badgeH + 8, apexY - 14);
+
+            // Translucent glass card background
+            ctx.fillStyle = 'rgba(14, 19, 22, 0.85)';
+            if (ctx.roundRect) {
+                ctx.beginPath();
+                ctx.roundRect(badgeX, badgeY - badgeH, badgeW, badgeH, 4);
+                ctx.fill();
+            } else {
+                ctx.fillRect(badgeX, badgeY - badgeH, badgeW, badgeH);
+            }
+
+            // Top neon accent line
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.0;
+            ctx.beginPath();
+            ctx.moveTo(badgeX, badgeY - badgeH);
+            ctx.lineTo(badgeX + badgeW, badgeY - badgeH);
+            ctx.stroke();
+
+            // Crisp white text
+            ctx.fillStyle = '#F5F5FA';
+            ctx.shadowBlur = 0;
+            ctx.fillText(label, badgeX + padX, badgeY - padY - 2);
 
             ctx.restore();
         }
