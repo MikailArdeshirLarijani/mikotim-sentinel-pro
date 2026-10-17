@@ -1,77 +1,73 @@
 # MikoTim Sentinel Pro
 
-سامانه متن‌باز پایش و نظارت تصویری هوشمند با پایتون، YOLO و تلگرام  
-**Open-source intelligent surveillance & identity monitor using Python, YOLO, and Telegram**
+سامانه متن‌باز نظارت تصویری هوشمند با موتور هوش مصنوعی **MikiVo** (توسعه‌یافته بر پایه معماری YOLO)  
+**Open-source intelligent vision surveillance powered by the MikiVo AI Engine (Derived from YOLO)**
 
 ---
 
-## معرفی پروژه | Overview
+## موتور هوش مصنوعی MikiVo | MikiVo AI Vision Engine
 
-### فارسی
-**MikoTim Sentinel Pro** یک ابزار مدرن، محلی و متن‌باز برای نظارت تصویری هوشمند است. این سیستم قابلیت کارکرد به دو روش را دارد:
-1. **حالت مستقل در مرورگر (Standalone Web):** بدون نیاز به هیچ پیش‌نیاز یا اجرای پایتون، صرفاً با باز کردن `index.html`، وب‌کم فعال شده و با تشخیص حرکت هشدارها را مستقیماً به ربات تلگرام ارسال می‌کند.
-2. **حالت پردازش هوش مصنوعی با پایتون (AI Server):** اجرای `server.py` که پایپ‌لاین تشخیص اشخاص **YOLOv8** و تطبیق مشخصه‌های چهره را با استریم باکیفیت و کنترل کامل فعال می‌سازد.
+> [!NOTE]  
+> **درباره MikiVo:** این نسخه از هوش مصنوعی پروژه با نام **MikiVo** نام‌گذاری شده و هسته پردازش پایه‌ای آن **برگرفته و توسعه‌یافته از معماری شبکه عصبی YOLO (نسخه YOLOv8)** است که با الگوریتم‌های اختصاصی بینایی ماشین تقویت شده تا دقت و کارایی آن به حداکثر برسد.  
+> **About MikiVo:** The project's neural vision core, named **MikiVo**, is **derived and evolved directly from the YOLO architecture (YOLOv8)**, enhanced with custom computer vision pipelines for superior local facial identity and motion tracking.
 
-- بدون ارسال اطلاعات به سرورهای خارجی (۱۰۰٪ امن و محلی).
-- مجهز به رابط کاربری شیشه‌ای فوق‌مدرن (Apple-grade Glassmorphism) و دوزبانه (فارسی / انگلیسی).
-- کنترل از راه دور از طریق تلگرام با دستورات متنی.
-
-### English
-**MikoTim Sentinel Pro** is a modern, lightweight, privacy-first surveillance system designed for instant deployment:
-1. **Direct In-Browser Standalone:** Simply double-click `index.html`. It runs directly via WebRTC camera APIs and client-side motion tracking with direct Telegram dispatch—no server setup required.
-2. **Deep Learning AI Server:** Launch `server.py` for full **YOLOv8** pose/human detection, normalized facial feature embeddings, and MJPEG real-time streaming.
-
-- 100% offline and local execution; zero external cloud tracking.
-- Sleek Apple-inspired glassmorphism design with dual language support (Persian / English).
-- Remote Telegram management and snapshot alerts.
+### ارتقاهای فنی اعمال‌شده در MikiVo نسبت به نسخه‌های استاندارد:
+1. **پایپ‌لاین استخراج ویژگی‌های ۲۵۶ بعدی (256-D Multi-Scale Descriptor):** ترکیب تحلیل چندمقیاسی آماری بافت، گرادیان‌های جهت‌دار Sobel و ویژگی‌های هندسی صورت در قالب بردار ویژگی نرمال‌شده ۲۵۶ بعدی.
+2. **هم‌ترازی و چرخش هندسی چهره (Pose-Guided Affine Alignment):** محاسبه زاویه تمایل چشم‌ها و چرخش افاین تصویر چهره برای قرارگیری در حالت کاملاً افقی و استاندارد؛ مقاوم در برابر زاویه و کج شدن سر.
+3. **متعادل‌کننده نوری تطبیقی در فضای رنگی LAB (CLAHE):** نرمال‌سازی سایه‌ها و نور شدید در پس‌زمینه (نور ضد آفتاب یا نور نامتقارن) جهت بازیابی مشخصات صورت در شرایط نوری ضعیف.
+4. **ردیاب زمانی با صاف‌کننده EMA و رأی‌گیری هویت (MikiVo Temporal Tracker):** تثبیت شناسه پیگیری افراد در فریم‌های متوالی، حذف لرزش و پرش کادرهای دور سوژه و جلوگیری از تغییر وضعیت لحظه‌ای به ناشناس در اثر تاری حرکت.
 
 ---
 
-## ساختار ساده و یکپارچه | Project Structure
+## حالت‌های کارکرد سامانه | Operation Modes
 
-پروژه به صورت کاملاً ساختاریافته در ۵ فایل اصلی سازمان‌دهی شده است:
+1. **حالت مستقل در مرورگر (Standalone Browser Mode):**  
+   بدون نیاز به نصب یا اجرای پایتون؛ صرفاً با باز کردن فایل `index.html` در مرورگر، دوربین مستقیماً با استاندارد WebRTC فعال شده و با ردیابی حرکت، تصاویر هشدار را مستقیم به بات تلگرام می‌فرستد.
+2. **سرور هوش مصنوعی پایتون (Python MikiVo Server):**  
+   با اجرای `server.py`، موتور هوش مصنوعی MikiVo بر پایه مدل یادگیری عمیق YOLO اجرا شده و استریم زنده تصویر به همراه دیتابیس محلی چهره‌ها و کنترل از راه دور تلگرام فعال می‌شود.
+
+---
+
+## ساختار فایل‌های پروژه | Project Structure
+
+پروژه به صورت کاملاً ساختاریافته در ۵ فایل اصلی و تمیز سامان‌دهی شده است:
 
 ```text
 mikotim-sentinel-pro/
-├── index.html          # رابط کاربری مستقل و مدرن، پایش وب‌کم و سیستم اعلان تلگرام
-├── server.py           # سرور یکپارچه پایتون (هوش مصنوعی YOLOv8، بانک چهره، تلگرام و وب)
-├── requirements.txt    # پیش‌نیازها و وابستگی‌های پایتون
+├── index.html          # فرانت‌اند مدرن Apple Glassmorphism، دوربین مستقیم مرورگر و کلاینت تلگرام
+├── server.py           # سرور پایتون و موتور هوش مصنوعی MikiVo (برگرفته از YOLOv8)
+├── requirements.txt    # لیست وابستگی‌ها و کتابخانه‌های پایتون
 ├── README.md           # مستندات و راهنمای جامع فارسی و انگلیسی
 └── LICENSE             # پروانه انتشار متن‌باز MIT
 ```
 
 ---
 
-## نحوه اجرا | Getting Started
+## نحوه راه‌اندازی و اجرا | Getting Started
 
-### روش اول: اجرای مستقیم بدون نیاز به پایتون (Direct In-Browser)
-فقط کافیست فایل `index.html` را در هر مرورگری (Chrome, Edge, Firefox) باز کنید. سیستم دوربین شما را باز کرده و بلافاصله آماده پایش و ارسال هشدار به تلگرام خواهد بود.
+### ۱. اجرای مستقیم بدون پایتون
+تنها با دابل کلیک روی فایل `index.html` در مرورگر (گوگل کروم، فایرفاکس، مایکروسافت اج).
 
-### روش دوم: اجرای سرور هوش مصنوعی پایتون (Python YOLOv8 Server)
-در صورتی که می‌خواهید از پردازش عمیق YOLOv8 و دیتابیس برداری چهره استفاده کنید:
-
+### ۲. اجرای سرور پردازش هوش مصنوعی MikiVo
 ```bash
-# ۱. نصب پیش‌نیازها
+# نصب پیش‌نیازها
 pip install -r requirements.txt
 
-# ۲. اجرای سرور
+# اجرای سرور پایتون
 python server.py
 ```
-
-سپس مرورگر خود را باز کرده و وارد آدرس زیر شوید:  
+سپس در مرورگر خود آدرس زیر را باز کنید:  
 👉 **http://127.0.0.1:5000**
 
 ---
 
-## قابلیت‌های کلیدی | Key Features
-
-- **طراحی سبک و تک‌فایلی بخش‌ها:** کاهش تمام پراکندگی‌های کدهای قدیمی به یک فایل کلاینت و یک فایل سرور سازمان‌یافته.
-- **شبکه عصبی YOLOv8:** پایش مقاوم در برابر خطای نوری و تشخیص آنی ساختار بدن انسان.
-- **بانک چهره و احراز هویت محلی:** ذخیره و تطبیق بردارهای هندسی چهره با الگوریتم شباهت کسینوسی.
-- **دستوردهی از راه دور تلگرام:** پشتیبانی از دستوراتی مانند `/photo`, `/status`, `/pause`, `/resume`.
-- **تنظیمات داینامیک:** تعیین زمان بازدارنده بین آلارم‌ها (Cooldown)، فیلتر جلوگیری از ثبت مجدد و تنظیمات دلخواه پیام.
+## دستورات کنترل از راه دور در تلگرام | Telegram Commands
+هنگام فعال بودن قابلیت کنترل از راه دور، می‌توانید دستورات زیر را به ربات تلگرام خود ارسال کنید:
+- `/photo` یا `عکس`: ارسال آنی فریم زنده به چت.
+- `/pause` یا `توقف`: توقف موقت آلارم‌های خودکار.
+- `/resume` یا `ادامه`: ادامه پایش هوشمند.
 
 ---
 
-## لایسنس | License
+## پروانه انتشار | License
 این پروژه به صورت متن‌باز تحت پروانه [MIT](LICENSE) منتشر شده است.
