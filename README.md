@@ -52,10 +52,11 @@
 ```text
 mikotim-sentinel-pro/
 ├── index.html          # فرانت‌اند مدرن Apple Glassmorphism، دوربین مستقیم، رسم محدوده و آژیر محلی
-├── server.py           # سرور پایتون و موتور هوش مصنوعی MikoVo RaRa 11 (برگرفته از YOLOv8، تبدیل اومیاما، کالمن و ویدیو MP4)
+├── server.py           # سرور پایتون و موتور هوش مصنوعی MikoVo RaRa 11 (تبدیل اومیاما، کالمن و ویدیو MP4)
 ├── requirements.txt    # لیست وابستگی‌ها و کتابخانه‌های پایتون
 ├── README.md           # مستندات و راهنمای جامع فارسی و انگلیسی
-└── LICENSE             # پروانه انتشار متن‌باز MIT
+├── LICENSE             # پروانه انتشار متن‌باز MIT
+└── mikovo_rara11.pt    # وزن‌ها و مدل شبکه عصبی MikoVo RaRa 11
 ```
 
 ---
