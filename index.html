@@ -812,14 +812,7 @@
             </div>
             <div class="brand-title">
                 <span>MikoTim Sentinel Pro</span>
-                <span class="brand-tag">MikoVo RaRa 11 Neural 512-D</span>
-                <div class="hud-badge" id="schedulePill" style="display:inline-flex; align-items:center; gap:6px;">
-                    <span style="color:var(--apple-blue);">⏰</span>
-                    <span id="tScheduleStatus" style="font-size:0.78rem;">۲۴ ساعته (فعال)</span>
-                </div>
-                <button class="hud-badge" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;" onclick="toggleMirror()" id="mirrorPill" title="تغییر جهت آینه‌ای دوربین">
-                    <span id="tMirrorStatus" style="font-size:0.78rem;">🪞 آینه: خاموش</span>
-                </button>
+                <span class="brand-tag">MikoVo RaRa 11</span>
             </div>
         </div>
 
@@ -868,6 +861,10 @@
         </nav>
 
         <div class="header-actions">
+            <div class="pill-btn" id="schedulePill" style="cursor:default; background:var(--bg-pill); border:1px solid var(--border-hairline); padding:6px 12px;">
+                <span style="color:var(--apple-blue); font-size:0.9rem;">⏰</span>
+                <span id="tScheduleStatus" style="font-size:0.8rem; font-weight:600;">۲۴ ساعته (فعال)</span>
+            </div>
             <button class="pill-btn" onclick="toggleStealthMode()" id="stealthBtn" title="حالت استتار (Stealth Mode)">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
@@ -1570,7 +1567,7 @@
             isMirrored = !!mirrored;
             video.style.transform = isMirrored ? 'scaleX(-1)' : 'none';
             const mText = document.getElementById('tMirrorStatus');
-            if (mText) mText.innerText = isMirrored
+            if (mText) if (mText) mText.innerText = isMirrored
                 ? (currentLang === 'fa' ? '🪞 آینه: روشن' : '🪞 Mirror: ON')
                 : (currentLang === 'fa' ? '🪞 آینه: خاموش' : '🪞 Mirror: OFF');
             const btnM = document.getElementById('btnMirrorAction');
