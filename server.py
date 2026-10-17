@@ -929,7 +929,7 @@ class MikoVoRaRa11VisionEngine:
                     else:
                         kp_pts, kp_conf = None, None
 
-                    # MikoVo RaRa 11 512-D Neural Core Alignment + Descriptor Extraction
+                    # MikoVo RaRa 11 Neural Core Alignment + Descriptor Extraction
                     aligned_face, emb, align_res = mikovo_rara11_extract_face_descriptor(
                         frame, (x1, y1, bw, bh), kp_pts, kp_conf
                     )
@@ -969,7 +969,7 @@ class MikoVoRaRa11VisionEngine:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 215, 255), 1, cv2.LINE_AA)
 
         # MikoVo RaRa 11 Neural Watermark
-        cv2.putText(frame, "MikoVo RaRa 11 Neural Core (512-D SVD Kalman)", (18, 28),
+        cv2.putText(frame, "MikoVo RaRa 11", (18, 28),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 1, cv2.LINE_AA)
 
         for det in detections:
