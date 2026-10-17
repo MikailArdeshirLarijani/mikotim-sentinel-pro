@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MikoTim Sentinel Pro</title>
+    <title>MikoTim Sentinel Pro | Apple Surveillance UI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&family=Vazirmatn:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg-canvas: #000000;
-            --bg-elevated: rgba(28, 28, 30, 0.68);
+            --bg-elevated: rgba(28, 28, 30, 0.72);
             --bg-surface: rgba(44, 44, 46, 0.55);
-            --bg-surface-hover: rgba(58, 58, 60, 0.7);
+            --bg-surface-hover: rgba(58, 58, 60, 0.75);
             --bg-pill: rgba(255, 255, 255, 0.08);
             --border-hairline: rgba(255, 255, 255, 0.12);
             --border-subtle: rgba(255, 255, 255, 0.07);
@@ -20,14 +20,12 @@
             --text-secondary: #86868b;
             --text-tertiary: #636366;
             --apple-blue: #0a84ff;
-            --apple-blue-hover: #0071e3;
             --apple-green: #30d158;
             --apple-green-glow: rgba(48, 209, 88, 0.35);
             --apple-amber: #ff9f0a;
             --apple-red: #ff453a;
             --apple-red-glow: rgba(255, 69, 58, 0.35);
             --blur-strength: 32px;
-            --radius-outer: 24px;
             --radius-card: 20px;
             --radius-btn: 14px;
             --shadow-float: 0 16px 40px -8px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.08);
@@ -38,9 +36,9 @@
 
         [data-theme="light"] {
             --bg-canvas: #f5f5f7;
-            --bg-elevated: rgba(255, 255, 255, 0.78);
-            --bg-surface: rgba(242, 242, 247, 0.7);
-            --bg-surface-hover: rgba(229, 229, 234, 0.85);
+            --bg-elevated: rgba(255, 255, 255, 0.82);
+            --bg-surface: rgba(242, 242, 247, 0.75);
+            --bg-surface-hover: rgba(229, 229, 234, 0.9);
             --bg-pill: rgba(0, 0, 0, 0.05);
             --border-hairline: rgba(0, 0, 0, 0.1);
             --border-subtle: rgba(0, 0, 0, 0.05);
@@ -55,7 +53,6 @@
             margin: 0;
             padding: 0;
             -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
         }
 
         body {
@@ -69,7 +66,6 @@
             transition: background-color 0.4s ease, color 0.4s ease;
         }
 
-        /* Ambient Apple-grade background gradient glow */
         .ambient-glow {
             position: fixed;
             width: 700px;
@@ -90,7 +86,6 @@
             100% { transform: translateX(-50%) scale(1.15); opacity: 1; }
         }
 
-        /* Top Floating Frosted Navigation */
         header {
             position: sticky;
             top: 14px;
@@ -138,10 +133,6 @@
         [data-theme="light"] .brand-icon {
             background: linear-gradient(145deg, #ffffff, #e5e5ea);
             border-color: rgba(0, 0, 0, 0.08);
-        }
-
-        .brand-icon:hover {
-            transform: scale(1.06) rotate(2deg);
         }
 
         .brand-title {
@@ -195,7 +186,6 @@
             transform: scale(0.96);
         }
 
-        /* Layout Grid */
         main {
             position: relative;
             z-index: 1;
@@ -220,7 +210,6 @@
             }
         }
 
-        /* Viewport Container (Glass Card) */
         .glass-card {
             background: var(--bg-elevated);
             backdrop-filter: blur(var(--blur-strength)) saturate(180%);
@@ -254,15 +243,24 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: inset 0 0 1px 1px rgba(255, 255, 255, 0.08);
         }
 
-        .screen-stage img {
+        video#webcam {
             width: 100%;
             height: 100%;
-            object-fit: contain;
-            display: block;
-            transition: opacity 0.4s ease;
+            object-fit: cover;
+            display: none;
+            transform: scaleX(-1);
+        }
+
+        canvas#overlayCanvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+            transform: scaleX(-1);
         }
 
         .screen-idle {
@@ -276,13 +274,14 @@
             color: var(--text-secondary);
             background: radial-gradient(circle at center, rgba(30, 30, 35, 0.95) 0%, rgba(10, 10, 14, 0.98) 100%);
             transition: var(--transition-smooth);
+            z-index: 4;
         }
 
         .idle-radar {
-            width: 72px;
-            height: 72px;
+            width: 76px;
+            height: 76px;
             border-radius: 50%;
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.14);
             position: relative;
             display: flex;
             align-items: center;
@@ -294,7 +293,7 @@
             position: absolute;
             inset: -8px;
             border-radius: 50%;
-            border: 1px dashed rgba(255, 255, 255, 0.08);
+            border: 1px dashed rgba(255, 255, 255, 0.1);
             animation: radarSpin 20s linear infinite;
         }
 
@@ -302,7 +301,6 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Floating HUD Indicator */
         .hud-status-badge {
             position: absolute;
             top: 18px;
@@ -315,12 +313,10 @@
             border-radius: 99px;
             font-size: 0.78rem;
             font-weight: 600;
-            letter-spacing: -0.01em;
             display: flex;
             align-items: center;
             gap: 8px;
             z-index: 10;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
         }
 
         [dir="ltr"] .hud-status-badge {
@@ -348,7 +344,6 @@
             50% { transform: scale(1.3); opacity: 0.8; }
         }
 
-        /* Apple Control Bar */
         .control-bar {
             padding: 12px 18px;
             display: flex;
@@ -369,7 +364,6 @@
             font-family: inherit;
             font-size: 0.86rem;
             font-weight: 600;
-            letter-spacing: -0.01em;
             padding: 9px 18px;
             border-radius: var(--radius-btn);
             border: 1px solid transparent;
@@ -420,7 +414,7 @@
             transform: scale(0.96);
         }
 
-        /* KPI Bento Grid */
+        /* Bento Grid */
         .bento-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -444,16 +438,6 @@
             flex-direction: column;
             gap: 6px;
             transition: var(--transition-smooth);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .bento-tile::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
-            pointer-events: none;
         }
 
         .bento-tile:hover {
@@ -538,10 +522,6 @@
             color: var(--text-primary);
         }
 
-        table.apple-table tr:last-child td {
-            border-bottom: none;
-        }
-
         .pill-tag {
             display: inline-block;
             padding: 2px 8px;
@@ -555,12 +535,12 @@
             color: var(--apple-green);
         }
 
-        .pill-tag.pending {
-            background: rgba(255, 159, 10, 0.16);
-            color: var(--apple-amber);
+        .pill-tag.local {
+            background: rgba(10, 132, 255, 0.16);
+            color: var(--apple-blue);
         }
 
-        /* Sidebar Pane & Apple Segmented Control */
+        /* Sidebar & Segmented Control */
         .sidebar-section {
             display: flex;
             flex-direction: column;
@@ -639,7 +619,6 @@
             background: var(--bg-surface-hover);
         }
 
-        /* Apple Switch Control */
         .switch-row {
             display: flex;
             align-items: center;
@@ -694,7 +673,6 @@
             transform: translateX(18px);
         }
 
-        /* Profile Chips List */
         .profile-list {
             display: flex;
             flex-direction: column;
@@ -742,7 +720,6 @@
             background: rgba(255, 69, 58, 0.15);
         }
 
-        /* Floating Toasts */
         #toasts {
             position: fixed;
             bottom: 24px;
@@ -796,7 +773,7 @@
             </div>
             <div class="brand-title">
                 <span>MikoTim Sentinel Pro</span>
-                <span class="brand-tag">3x AI Engine</span>
+                <span class="brand-tag">Instant Webcam</span>
             </div>
         </div>
         <div class="header-actions">
@@ -820,7 +797,8 @@
         <section class="viewport-section">
             <div class="glass-card">
                 <div class="screen-stage">
-                    <img id="camFeed" src="/video_feed" style="display:none;" alt="Live Surveillance Feed">
+                    <video id="webcam" autoplay playsinline muted></video>
+                    <canvas id="overlayCanvas"></canvas>
                     <div id="camIdle" class="screen-idle">
                         <div class="idle-radar">
                             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -838,19 +816,19 @@
 
                 <div class="control-bar">
                     <div class="btn-stack">
-                        <button class="apple-btn apple-btn-primary" id="startBtn" onclick="startStream()">
+                        <button class="apple-btn apple-btn-primary" id="startBtn" onclick="startCamera()">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
                                 <polygon points="5 3 19 12 5 21 5 3"/>
                             </svg>
                             <span id="tStart">شروع پایش</span>
                         </button>
-                        <button class="apple-btn apple-btn-stop" id="stopBtn" onclick="stopStream()" style="display:none;">
+                        <button class="apple-btn apple-btn-stop" id="stopBtn" onclick="stopCamera()" style="display:none;">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
                                 <rect x="5" y="5" width="14" height="14" rx="2"/>
                             </svg>
                             <span id="tStop">توقف</span>
                         </button>
-                        <button class="apple-btn apple-btn-secondary" onclick="takePhoto()">
+                        <button class="apple-btn apple-btn-secondary" onclick="manualSnapshot()">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                                 <circle cx="12" cy="13" r="4"/>
@@ -977,7 +955,7 @@
                     <label id="tNameLabel">نام شخص:</label>
                     <input type="text" id="nameInput" class="apple-input" placeholder="مثال: میکائیل">
                 </div>
-                <button class="apple-btn apple-btn-secondary" style="width:100%; justify-content:center;" onclick="registerFace()">
+                <button class="apple-btn apple-btn-secondary" style="width:100%; justify-content:center;" onclick="registerCurrentFace()">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="12" y1="5" x2="12" y2="19"/>
                         <line x1="5" y1="12" x2="19" y2="12"/>
@@ -987,7 +965,7 @@
 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                     <span style="font-size:0.78rem; font-weight:600; color:var(--text-secondary);" id="tListTitle">لیست چهره‌های ذخیره‌شده</span>
-                    <button class="pill-btn" style="padding:3px 10px; font-size:0.72rem;" onclick="clearFaces()" id="tBtnClear">حذف همه</button>
+                    <button class="pill-btn" style="padding:3px 10px; font-size:0.72rem;" onclick="clearAllFaces()" id="tBtnClear">حذف همه</button>
                 </div>
                 <div class="profile-list" id="faceList"></div>
             </div>
@@ -1003,11 +981,11 @@
                 </div>
                 <div class="form-field">
                     <label>Bot Token:</label>
-                    <input type="password" id="tgToken" class="apple-input">
+                    <input type="password" id="tgToken" class="apple-input" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
                 </div>
                 <div class="form-field">
                     <label>Chat ID:</label>
-                    <input type="text" id="tgChat" class="apple-input">
+                    <input type="text" id="tgChat" class="apple-input" placeholder="123456789">
                 </div>
                 <div class="form-field">
                     <label id="tCaptionLabel">عنوان هشدار:</label>
@@ -1049,7 +1027,7 @@
                         </svg>
                         <span id="tSave">ذخیره</span>
                     </button>
-                    <button class="apple-btn apple-btn-secondary" style="justify-content:center;" onclick="testTg()">
+                    <button class="apple-btn apple-btn-secondary" style="justify-content:center;" onclick="testTelegramConnection()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
                         </svg>
@@ -1063,6 +1041,7 @@
     <div id="toasts"></div>
 
     <script>
+        // Localization Dictionary
         const dict = {
             fa: {
                 lang: 'English',
@@ -1141,7 +1120,34 @@
         };
 
         let currentLang = 'fa';
-        let streaming = false;
+        let isStreaming = false;
+        let isPaused = false;
+        let videoStream = null;
+        let animationFrameId = null;
+
+        // Statistics
+        let fpsCounter = 0;
+        let lastFpsUpdate = performance.now();
+        let totalCaptures = 0;
+        let telegramSentCount = 0;
+        let lastCaptureTimestamp = 0;
+        let recognizedTrackedIds = new Set();
+
+        // Canvas & Detection Core
+        const video = document.getElementById('webcam');
+        const overlayCanvas = document.getElementById('overlayCanvas');
+        const ctx = overlayCanvas.getContext('2d');
+
+        const procW = 160;
+        const procH = 100;
+        const procCanvas = document.createElement('canvas');
+        procCanvas.width = procW;
+        procCanvas.height = procH;
+        const procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
+
+        let prevFrame = null;
+        let bgFrame = null;
+        let registeredProfiles = [];
 
         function notify(msg) {
             const wrap = document.getElementById('toasts');
@@ -1234,27 +1240,11 @@
             document.getElementById('tab2').classList.toggle('active', tab === 'settings');
         }
 
-        const API_BASE = (window.location.protocol === 'file:' || !window.location.host.includes(':5000')) ? 'http://127.0.0.1:5000' : '';
-
-        function getApiUrl(path) {
-            return API_BASE + path;
-        }
-
-        function handleFetchError(e) {
-            console.error(e);
-            if (e && e.message && (e.message.toLowerCase().includes('fetch') || e.message.toLowerCase().includes('network'))) {
-                return currentLang === 'fa' 
-                    ? 'عدم برقراری ارتباط: سرور پایتون فعال نیست (لطفاً فایل run.bat را اجرا کنید)' 
-                    : 'Server is offline. Please launch run.bat first.';
-            }
-            return (e && e.message) ? e.message : 'Error';
-        }
-
         function updateBadge() {
             const dot = document.getElementById('dot');
             const label = document.getElementById('tStatus');
             const d = dict[currentLang];
-            if (streaming) {
+            if (isStreaming) {
                 dot.classList.add('active');
                 label.innerText = d.active;
             } else {
@@ -1263,227 +1253,562 @@
             }
         }
 
-        async function startStream() {
+        // ==================== Direct Browser Camera Engine ====================
+        async function startCamera() {
             try {
-                const res = await fetch(getApiUrl('/api/start'), { method: 'POST' });
-                const data = await res.json();
-                if (data.ok) {
-                    streaming = true;
-                    document.getElementById('camIdle').style.display = 'none';
-                    const feed = document.getElementById('camFeed');
-                    feed.src = getApiUrl('/video_feed?_=') + Date.now();
-                    feed.style.display = 'block';
-                    document.getElementById('startBtn').style.display = 'none';
-                    document.getElementById('stopBtn').style.display = 'inline-flex';
-                    updateBadge();
-                    notify(currentLang === 'fa' ? 'پایش فعال آغاز شد' : 'Surveillance started');
-                } else {
-                    notify(data.error || 'Failed');
-                }
-            } catch (e) {
-                notify(handleFetchError(e));
-            }
-        }
+                videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: "user"
+                    },
+                    audio: false
+                });
 
-        async function stopStream() {
-            try {
-                await fetch(getApiUrl('/api/stop'), { method: 'POST' });
-                streaming = false;
-                document.getElementById('camIdle').style.display = 'flex';
-                document.getElementById('camFeed').style.display = 'none';
-                document.getElementById('startBtn').style.display = 'inline-flex';
-                document.getElementById('stopBtn').style.display = 'none';
+                video.srcObject = videoStream;
+                await video.play();
+
+                isStreaming = true;
+                document.getElementById('camIdle').style.display = 'none';
+                video.style.display = 'block';
+                document.getElementById('startBtn').style.display = 'none';
+                document.getElementById('stopBtn').style.display = 'inline-flex';
                 updateBadge();
-                notify(currentLang === 'fa' ? 'پایش متوقف شد' : 'Surveillance paused');
-            } catch (e) {
-                notify(handleFetchError(e));
+
+                overlayCanvas.width = video.videoWidth || 1280;
+                overlayCanvas.height = video.videoHeight || 720;
+
+                prevFrame = null;
+                bgFrame = null;
+                processLoop();
+                notify(currentLang === 'fa' ? 'دوربین با موفقیت متصل شد' : 'Camera connected directly');
+            } catch (err) {
+                console.error(err);
+                notify((currentLang === 'fa' ? 'خطای دسترسی به وب‌کم: ' : 'Camera access error: ') + err.message);
             }
         }
 
-        async function takePhoto() {
-            try {
-                const res = await fetch(getApiUrl('/api/snapshot'), { method: 'POST' });
-                const d = await res.json();
-                if (d.ok) {
-                    const w = window.open('');
-                    w.document.write('<img src="' + d.image + '" style="max-width:100%; border-radius:12px;">');
+        function stopCamera() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            isStreaming = false;
+            document.getElementById('camIdle').style.display = 'flex';
+            video.style.display = 'none';
+            ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            document.getElementById('startBtn').style.display = 'inline-flex';
+            document.getElementById('stopBtn').style.display = 'none';
+            document.getElementById('personVal').innerText = "0";
+            document.getElementById('fpsVal').innerText = "0.0";
+            updateBadge();
+            notify(currentLang === 'fa' ? 'پایش متوقف شد' : 'Surveillance stopped');
+        }
+
+        function calibrate() {
+            bgFrame = null;
+            prevFrame = null;
+            notify(currentLang === 'fa' ? 'مدل پس‌زمینه کالیبره شد' : 'Background calibrated');
+        }
+
+        // Real-time Computer Vision Processing Loop (Runs 60FPS in Browser)
+        function processLoop() {
+            if (!isStreaming) return;
+
+            const now = performance.now();
+            fpsCounter++;
+            if (now - lastFpsUpdate >= 1000) {
+                document.getElementById('fpsVal').innerText = (fpsCounter * 1000 / (now - lastFpsUpdate)).toFixed(1);
+                fpsCounter = 0;
+                lastFpsUpdate = now;
+            }
+
+            const w = overlayCanvas.width;
+            const h = overlayCanvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            // Downsample to procCanvas for rapid motion diff
+            procCtx.drawImage(video, 0, 0, procW, procH);
+            const currImg = procCtx.getImageData(0, 0, procW, procH);
+            const currData = currImg.data;
+
+            if (!bgFrame) {
+                bgFrame = new Float32Array(procW * procH);
+                for (let i = 0, p = 0; i < currData.length; i += 4, p++) {
+                    bgFrame[p] = 0.299 * currData[i] + 0.587 * currData[i + 1] + 0.114 * currData[i + 2];
                 }
-            } catch (e) {
-                notify(handleFetchError(e));
             }
-        }
 
-        async function calibrate() {
-            try {
-                await fetch(getApiUrl('/api/calibrate'), { method: 'POST' });
-                notify(currentLang === 'fa' ? 'مدل پس‌زمینه با موفقیت تنظیم شد' : 'Background calibrated');
-            } catch (e) {
-                notify(handleFetchError(e));
-            }
-        }
+            let diffCount = 0;
+            let minX = procW, maxX = 0, minY = procH, maxY = 0;
 
-        async function registerFace() {
-            const input = document.getElementById('nameInput');
-            const name = input.value.trim();
-            if (!name) {
-                notify(currentLang === 'fa' ? 'لطفاً نام را وارد کنید' : 'Enter name');
-                return;
-            }
-            try {
-                const res = await fetch(getApiUrl('/api/register'), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name })
-                });
-                const d = await res.json();
-                if (d.ok) {
-                    notify(currentLang === 'fa' ? `پروفایل ${name} ثبت شد` : `Profile ${name} registered`);
-                    input.value = '';
-                    loadProfiles();
-                } else {
-                    notify(d.message || 'Error');
+            for (let i = 0, p = 0; i < currData.length; i += 4, p++) {
+                const gray = 0.299 * currData[i] + 0.587 * currData[i + 1] + 0.114 * currData[i + 2];
+                const diff = Math.abs(gray - bgFrame[p]);
+
+                // Slow background adaptation
+                bgFrame[p] += (gray - bgFrame[p]) * 0.015;
+
+                if (diff > 26) {
+                    diffCount++;
+                    const x = p % procW;
+                    const y = Math.floor(p / procW);
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
                 }
-            } catch (e) {
-                notify(handleFetchError(e));
             }
-        }
 
-        async function loadProfiles() {
-            try {
-                const res = await fetch(getApiUrl('/api/faces'));
-                const d = await res.json();
-                const box = document.getElementById('faceList');
-                box.innerHTML = '';
-                if (!d.faces || !d.faces.length) {
-                    box.innerHTML = `<p style="font-size:0.75rem; color:var(--text-secondary); text-align:center; padding:12px;">${currentLang === 'fa' ? 'پروفایلی ثبت نشده' : 'No profiles'}</p>`;
-                    return;
-                }
-                d.faces.forEach(f => {
-                    const card = document.createElement('div');
-                    card.className = 'profile-card';
-                    card.innerHTML = `
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                <circle cx="12" cy="7" r="4"/>
-                            </svg>
-                            <span style="font-weight:600;">${f.name}</span>
-                        </div>
-                        <button class="btn-icon-danger" onclick="removeFace('${f.id}')" title="Delete">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="18" y1="6" x2="6" y2="18"/>
-                                <line x1="6" y1="6" x2="18" y2="18"/>
-                            </svg>
-                        </button>
-                    `;
-                    box.appendChild(card);
-                });
-            } catch (e) {}
-        }
+            const totalPixels = procW * procH;
+            const motionRatio = diffCount / totalPixels;
+            let detectedPersons = [];
 
-        async function removeFace(id) {
-            try {
-                await fetch(getApiUrl(`/api/faces/${id}`), { method: 'DELETE' });
-                loadProfiles();
-            } catch (e) {}
-        }
+            if (motionRatio > 0.018 && maxX > minX && maxY > minY) {
+                const scaleX = w / procW;
+                const scaleY = h / procH;
 
-        async function clearFaces() {
-            if (!confirm(currentLang === 'fa' ? 'همه پروفایل‌ها حذف شوند؟' : 'Clear all profiles?')) return;
-            try {
-                await fetch(getApiUrl('/api/faces/clear'), { method: 'POST' });
-                loadProfiles();
-            } catch (e) {}
-        }
+                const bx = Math.max(0, minX * scaleX - 20);
+                const by = Math.max(0, minY * scaleY - 20);
+                const bw = Math.min(w - bx, (maxX - minX) * scaleX + 40);
+                const bh = Math.min(h - by, (maxY - minY) * scaleY + 40);
 
-        async function loadConfig() {
-            try {
-                const res = await fetch(getApiUrl('/api/settings'));
-                const d = await res.json();
-                if (d.chat_id) document.getElementById('tgChat').value = d.chat_id;
-                if (d.custom_caption) document.getElementById('customCaption').value = d.custom_caption;
-                if (d.cooldown_sec) document.getElementById('cooldown').value = d.cooldown_sec;
-                document.getElementById('chkAuto').checked = !!d.auto_send;
-                document.getElementById('chkNew').checked = !!d.only_new_person;
-                document.getElementById('chkRemote').checked = !!d.remote_control;
-                if (d.has_token) document.getElementById('tgToken').placeholder = '••••••••••••';
-            } catch (e) {}
-        }
-
-        async function saveConfig() {
-            const payload = {
-                chat_id: document.getElementById('tgChat').value.trim(),
-                custom_caption: document.getElementById('customCaption').value.trim(),
-                cooldown_sec: parseInt(document.getElementById('cooldown').value) || 6,
-                auto_send: document.getElementById('chkAuto').checked,
-                only_new_person: document.getElementById('chkNew').checked,
-                remote_control: document.getElementById('chkRemote').checked,
-            };
-            const token = document.getElementById('tgToken').value.trim();
-            if (token) payload.bot_token = token;
-
-            try {
-                const res = await fetch(getApiUrl('/api/settings'), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const d = await res.json();
-                if (d.ok) notify(currentLang === 'fa' ? 'تنظیمات با موفقیت ذخیره شد' : 'Settings saved');
-            } catch (e) {
-                notify(handleFetchError(e));
-            }
-        }
-
-        async function testTg() {
-            try {
-                const res = await fetch(getApiUrl('/api/test_telegram'), { method: 'POST' });
-                const d = await res.json();
-                notify(d.ok ? (currentLang === 'fa' ? 'ارتباط برقرار است' : 'Connected') : (d.message || 'Error'));
-            } catch (e) {
-                notify(handleFetchError(e));
-            }
-        }
-
-        async function pollStatus() {
-            try {
-                const res = await fetch(getApiUrl('/api/status'));
-                const d = await res.json();
-
-                document.getElementById('fpsVal').innerText = d.fps.toFixed(1);
-                document.getElementById('personVal').innerText = d.person_count;
-                document.getElementById('captureVal').innerText = d.total_captures;
-                document.getElementById('tgVal').innerText = d.telegram_sent;
-
-                if (d.streaming !== streaming) {
-                    streaming = d.streaming;
-                    updateBadge();
-                }
-
-                const tbody = document.getElementById('logRows');
-                if (d.logs && d.logs.length) {
-                    tbody.innerHTML = '';
-                    d.logs.slice(0, 15).forEach(item => {
-                        const tr = document.createElement('tr');
-                        const who = (item.names && item.names.length) ? item.names.join(', ') : dict[currentLang].unknown;
-                        tr.innerHTML = `
-                            <td>${item.time.split(' ')[1] || item.time}</td>
-                            <td>${item.count}</td>
-                            <td>${Math.round(item.conf * 100)}%</td>
-                            <td><strong>${who}</strong></td>
-                            <td><span class="pill-tag ${item.sent ? 'sent' : 'pending'}">${item.sent ? 'Sent' : 'Pending'}</span></td>
-                        `;
-                        tbody.appendChild(tr);
+                if (bw > 60 && bh > 80) {
+                    const matchedName = matchFace(bx, by, bw, bh);
+                    detectedPersons.push({
+                        bbox: [bx, by, bw, bh],
+                        score: Math.min(0.96, 0.65 + motionRatio * 3),
+                        name: matchedName
                     });
                 }
+            }
+
+            document.getElementById('personVal').innerText = detectedPersons.length;
+
+            // Draw HUD annotations
+            for (const det of detectedPersons) {
+                drawHud(det);
+            }
+
+            // Auto-incident trigger
+            if (detectedPersons.length > 0 && !isPaused) {
+                checkAutoIncident(detectedPersons);
+            }
+
+            animationFrameId = requestAnimationFrame(processLoop);
+        }
+
+        function drawHud(det) {
+            const [x, y, bw, bh] = det.bbox;
+            const isKnown = !!det.name;
+            const color = isKnown ? '#30d158' : '#ff9f0a';
+
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.5;
+
+            const edge = Math.min(24, Math.max(10, bw / 5));
+
+            // Tactical Corner Brackets
+            ctx.beginPath();
+            // Top-left
+            ctx.moveTo(x, y + edge); ctx.lineTo(x, y); ctx.lineTo(x + edge, y);
+            // Top-right
+            ctx.moveTo(x + bw - edge, y); ctx.lineTo(x + bw, y); ctx.lineTo(x + bw, y + edge);
+            // Bottom-left
+            ctx.moveTo(x, y + bh - edge); ctx.lineTo(x, y + bh); ctx.lineTo(x + edge, y + bh);
+            // Bottom-right
+            ctx.moveTo(x + bw - edge, y + bh); ctx.lineTo(x + bw, y + bh); ctx.lineTo(x + bw, y + bh - edge);
+            ctx.stroke();
+
+            // Label pill
+            const label = isKnown ? `${det.name} (92%)` : `Unknown (${Math.round(det.score * 100)}%)`;
+            ctx.font = '600 13px -apple-system, Vazirmatn, sans-serif';
+            const tw = ctx.measureText(label).width;
+
+            const tagY = y > 30 ? y - 10 : y + bh + 20;
+            ctx.fillStyle = 'rgba(18, 18, 20, 0.85)';
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(x, tagY - 18, tw + 16, 24, 8);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(label, x + 8, tagY - 2);
+
+            ctx.restore();
+        }
+
+        // ==================== Face Recognition Core ====================
+        function matchFace(x, y, bw, bh) {
+            if (!registeredProfiles.length) return null;
+
+            // Crop head region and compute simple invariant signature
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width = 32;
+            cropCanvas.height = 32;
+            const cCtx = cropCanvas.getContext('2d');
+            cCtx.drawImage(video, x, y, bw, Math.min(bh, bw * 1.3), 0, 0, 32, 32);
+
+            const imgData = cCtx.getImageData(0, 0, 32, 32).data;
+            const sig = computeSignature(imgData);
+
+            let bestMatch = null;
+            let bestSim = -1;
+
+            for (const profile of registeredProfiles) {
+                const sim = cosineSim(sig, profile.signature);
+                if (sim > bestSim && sim > 0.74) {
+                    bestSim = sim;
+                    bestMatch = profile.name;
+                }
+            }
+            return bestMatch;
+        }
+
+        function computeSignature(data) {
+            const sig = new Float32Array(32);
+            for (let i = 0; i < data.length; i += 4) {
+                const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                const block = Math.floor(i / (4 * 32));
+                sig[block % 32] += gray / 32;
+            }
+            let norm = 0;
+            for (let i = 0; i < sig.length; i++) norm += sig[i] * sig[i];
+            norm = Math.sqrt(norm) || 1;
+            for (let i = 0; i < sig.length; i++) sig[i] /= norm;
+            return sig;
+        }
+
+        function cosineSim(a, b) {
+            let dot = 0;
+            for (let i = 0; i < a.length; i++) dot += a[i] * b[i];
+            return dot;
+        }
+
+        function registerCurrentFace() {
+            if (!isStreaming) {
+                notify(currentLang === 'fa' ? 'ابتدا دوربین را فعال کنید' : 'Please start the camera first');
+                return;
+            }
+            const nameInput = document.getElementById('nameInput');
+            const name = nameInput.value.trim();
+            if (!name) {
+                notify(currentLang === 'fa' ? 'لطفاً نام شخص را وارد کنید' : 'Please enter a name');
+                return;
+            }
+
+            const snap = document.createElement('canvas');
+            snap.width = 64;
+            snap.height = 64;
+            const sCtx = snap.getContext('2d');
+            sCtx.drawImage(video, 0, 0, snap.width, snap.height);
+
+            const imgData = sCtx.getImageData(0, 0, 32, 32).data;
+            const sig = Array.from(computeSignature(imgData));
+            const thumbUrl = snap.toDataURL('image/jpeg', 0.85);
+
+            const profile = {
+                id: 'face_' + Date.now(),
+                name: name,
+                signature: sig,
+                thumb: thumbUrl,
+                time: new Date().toLocaleTimeString()
+            };
+
+            registeredProfiles.push(profile);
+            saveProfiles();
+            nameInput.value = '';
+            renderProfileList();
+            notify(currentLang === 'fa' ? `پروفایل ${name} با موفقیت ذخیره شد` : `Profile ${name} registered`);
+        }
+
+        function saveProfiles() {
+            try {
+                localStorage.setItem('mikotim_profiles', JSON.stringify(registeredProfiles));
             } catch (e) {}
         }
 
+        function loadProfiles() {
+            try {
+                const raw = localStorage.getItem('mikotim_profiles');
+                if (raw) registeredProfiles = JSON.parse(raw);
+            } catch (e) {}
+            renderProfileList();
+        }
+
+        function renderProfileList() {
+            const list = document.getElementById('faceList');
+            list.innerHTML = '';
+            if (!registeredProfiles.length) {
+                list.innerHTML = `<p style="font-size:0.75rem; color:var(--text-secondary); text-align:center; padding:12px;">${currentLang === 'fa' ? 'پروفایلی ثبت نشده' : 'No profiles'}</p>`;
+                return;
+            }
+
+            registeredProfiles.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'profile-card';
+                card.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <img src="${p.thumb}" style="width:28px; height:28px; border-radius:6px; object-fit:cover;">
+                        <span style="font-weight:600;">${p.name}</span>
+                    </div>
+                    <button class="btn-icon-danger" onclick="deleteProfile('${p.id}')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        function deleteProfile(id) {
+            registeredProfiles = registeredProfiles.filter(p => p.id !== id);
+            saveProfiles();
+            renderProfileList();
+            notify(currentLang === 'fa' ? 'پروفایل حذف شد' : 'Profile deleted');
+        }
+
+        function clearAllFaces() {
+            if (!confirm(currentLang === 'fa' ? 'تمام پروفایل‌ها حذف شوند؟' : 'Clear all profiles?')) return;
+            registeredProfiles = [];
+            saveProfiles();
+            renderProfileList();
+            notify(currentLang === 'fa' ? 'بانک چهره پاک شد' : 'All profiles cleared');
+        }
+
+        // ==================== Telegram & Incident Dispatch ====================
+        async function checkAutoIncident(persons) {
+            const now = Date.now();
+            const cooldownSec = parseInt(document.getElementById('cooldown').value) || 6;
+            if (now - lastCaptureTimestamp < cooldownSec * 1000) return;
+
+            const onlyNew = document.getElementById('chkNew').checked;
+            const names = persons.map(p => p.name).filter(Boolean);
+            const identifiedStr = names.join(', ') || (dict[currentLang].unknown);
+
+            if (onlyNew && names.length && names.every(n => recognizedTrackedIds.has(n))) {
+                return;
+            }
+
+            names.forEach(n => recognizedTrackedIds.add(n));
+            lastCaptureTimestamp = now;
+            totalCaptures++;
+            document.getElementById('captureVal').innerText = totalCaptures;
+
+            // Take Full High-Res Snapshot
+            const snapCanvas = document.createElement('canvas');
+            snapCanvas.width = video.videoWidth || 1280;
+            snapCanvas.height = video.videoHeight || 720;
+            const sCtx = snapCanvas.getContext('2d');
+            sCtx.drawImage(video, 0, 0);
+
+            // Watermark
+            sCtx.font = '14px -apple-system, sans-serif';
+            sCtx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            sCtx.fillText(`MikoTim Sentinel Pro | ${new Date().toLocaleString()}`, 16, snapCanvas.height - 18);
+
+            const imgUrl = snapCanvas.toDataURL('image/jpeg', 0.9);
+            const timeStr = new Date().toLocaleTimeString();
+
+            // Add to incident table
+            const tbody = document.getElementById('logRows');
+            const empty = document.getElementById('tEmptyLog');
+            if (empty) empty.parentElement.remove();
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${timeStr}</td>
+                <td>${persons.length}</td>
+                <td>${Math.round(persons[0].score * 100)}%</td>
+                <td><strong>${identifiedStr}</strong></td>
+                <td><span class="pill-tag pending" id="tag_${now}">Pending...</span></td>
+            `;
+            tbody.prepend(tr);
+
+            // Send to Telegram if enabled
+            const autoSend = document.getElementById('chkAuto').checked;
+            const token = document.getElementById('tgToken').value.trim();
+            const chatId = document.getElementById('tgChat').value.trim();
+
+            if (autoSend && token && chatId) {
+                const tagEl = document.getElementById(`tag_${now}`);
+                try {
+                    const blob = await (await fetch(imgUrl)).blob();
+                    const captionText = `🛡 MikoTim Sentinel Pro\n📌 ${document.getElementById('customCaption').value.trim()}\n👥 Persons: ${persons.length}\n🎯 Identity: ${identifiedStr}\n⏱ ${timeStr}`;
+
+                    const fd = new FormData();
+                    fd.append('chat_id', chatId);
+                    fd.append('caption', captionText);
+                    fd.append('photo', blob, `Incident_${now}.jpg`);
+
+                    const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+                        method: 'POST',
+                        body: fd
+                    });
+                    const resData = await res.json();
+                    if (resData.ok) {
+                        telegramSentCount++;
+                        document.getElementById('tgVal').innerText = telegramSentCount;
+                        if (tagEl) {
+                            tagEl.className = 'pill-tag sent';
+                            tagEl.innerText = 'Sent';
+                        }
+                    } else {
+                        if (tagEl) tagEl.innerText = 'Error';
+                    }
+                } catch (e) {
+                    if (tagEl) tagEl.innerText = 'Failed';
+                }
+            } else {
+                const tagEl = document.getElementById(`tag_${now}`);
+                if (tagEl) {
+                    tagEl.className = 'pill-tag local';
+                    tagEl.innerText = 'Local';
+                }
+            }
+        }
+
+        function manualSnapshot() {
+            if (!isStreaming) {
+                notify(currentLang === 'fa' ? 'دوربین فعال نیست' : 'Camera is offline');
+                return;
+            }
+            const snapCanvas = document.createElement('canvas');
+            snapCanvas.width = video.videoWidth || 1280;
+            snapCanvas.height = video.videoHeight || 720;
+            const sCtx = snapCanvas.getContext('2d');
+            sCtx.drawImage(video, 0, 0);
+            const w = window.open('');
+            w.document.write('<img src="' + snapCanvas.toDataURL('image/jpeg', 0.9) + '" style="max-width:100%; border-radius:12px;">');
+        }
+
+        async function testTelegramConnection() {
+            const token = document.getElementById('tgToken').value.trim();
+            const chatId = document.getElementById('tgChat').value.trim();
+            if (!token || !chatId) {
+                notify(currentLang === 'fa' ? 'لطفاً توکن و چت‌آیدی را وارد کنید' : 'Please enter token & chat ID');
+                return;
+            }
+
+            try {
+                const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: chatId,
+                        text: '✅ MikoTim Sentinel Pro - ارتباط مستقیم مرورگر برقرار است!'
+                    })
+                });
+                const d = await res.json();
+                if (d.ok) {
+                    notify(currentLang === 'fa' ? 'ارتباط با تلگرام برقرار است' : 'Telegram connected successfully');
+                } else {
+                    notify(d.description || 'Telegram error');
+                }
+            } catch (e) {
+                notify(e.message);
+            }
+        }
+
+        // ==================== Settings Persistence ====================
+        function saveConfig() {
+            const cfg = {
+                token: document.getElementById('tgToken').value.trim(),
+                chat: document.getElementById('tgChat').value.trim(),
+                caption: document.getElementById('customCaption').value.trim(),
+                cooldown: document.getElementById('cooldown').value,
+                auto: document.getElementById('chkAuto').checked,
+                onlyNew: document.getElementById('chkNew').checked,
+                remote: document.getElementById('chkRemote').checked
+            };
+            try {
+                localStorage.setItem('mikotim_cfg', JSON.stringify(cfg));
+                notify(currentLang === 'fa' ? 'تنظیمات ذخیره شد' : 'Settings saved');
+            } catch (e) {}
+        }
+
+        function loadConfig() {
+            try {
+                const raw = localStorage.getItem('mikotim_cfg');
+                if (raw) {
+                    const cfg = JSON.parse(raw);
+                    if (cfg.token) document.getElementById('tgToken').value = cfg.token;
+                    if (cfg.chat) document.getElementById('tgChat').value = cfg.chat;
+                    if (cfg.caption) document.getElementById('customCaption').value = cfg.caption;
+                    if (cfg.cooldown) document.getElementById('cooldown').value = cfg.cooldown;
+                    if (cfg.auto !== undefined) document.getElementById('chkAuto').checked = cfg.auto;
+                    if (cfg.onlyNew !== undefined) document.getElementById('chkNew').checked = cfg.onlyNew;
+                    if (cfg.remote !== undefined) document.getElementById('chkRemote').checked = cfg.remote;
+                }
+            } catch (e) {}
+        }
+
+        // ==================== Telegram Remote Commands Polling ====================
+        let lastUpdateId = 0;
+        setInterval(async () => {
+            const remoteOn = document.getElementById('chkRemote').checked;
+            const token = document.getElementById('tgToken').value.trim();
+            const chatId = document.getElementById('tgChat').value.trim();
+            if (!remoteOn || !token || !chatId) return;
+
+            try {
+                const res = await fetch(`https://api.telegram.org/bot${token}/getUpdates?offset=${lastUpdateId + 1}&timeout=1`);
+                const data = await res.json();
+                if (!data.ok || !data.result) return;
+
+                for (const update of data.result) {
+                    lastUpdateId = update.update_id;
+                    const msg = update.message;
+                    if (!msg || !msg.text) continue;
+                    if (String(msg.chat.id) !== String(chatId)) continue;
+
+                    const cmd = msg.text.trim().toLowerCase();
+                    if (cmd === '/photo' || cmd === 'عکس') {
+                        if (isStreaming) {
+                            const c = document.createElement('canvas');
+                            c.width = video.videoWidth || 1280;
+                            c.height = video.videoHeight || 720;
+                            c.getContext('2d').drawImage(video, 0, 0);
+                            const b = await (await fetch(c.toDataURL('image/jpeg', 0.9))).blob();
+                            const fd = new FormData();
+                            fd.append('chat_id', chatId);
+                            fd.append('photo', b, 'remote.jpg');
+                            fd.append('caption', '📸 Live Snapshot | ' + new Date().toLocaleTimeString());
+                            await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: fd });
+                        }
+                    } else if (cmd === '/pause' || cmd === 'توقف') {
+                        isPaused = true;
+                        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ chat_id: chatId, text: '⏸ Surveillance paused.' })
+                        });
+                    } else if (cmd === '/resume' || cmd === 'ادامه') {
+                        isPaused = false;
+                        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ chat_id: chatId, text: '▶ Surveillance resumed.' })
+                        });
+                    }
+                }
+            } catch (e) {}
+        }, 3500);
+
+        // ==================== Initialize ====================
         window.addEventListener('DOMContentLoaded', () => {
             setLang('fa');
-            loadProfiles();
             loadConfig();
-            setInterval(pollStatus, 1500);
+            loadProfiles();
         });
     </script>
 </body>

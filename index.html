@@ -3,3030 +3,1813 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MikoTim Sentinel Pro | سیستم کنترل تردد هوشمند</title>
-    
-    <!-- فونت وزیرمتن -->
-    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
-
+    <title>MikoTim Sentinel Pro | Apple Surveillance UI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        :root[data-theme="dark"] {
-            --bg-base: #060911;
-            --bg-surface: #0B1220;
-            --bg-elevated: #111B2F;
-            --bg-sunken: #070C16;
-            --border-subtle: rgba(148, 163, 184, 0.12);
-            --border-medium: rgba(148, 163, 184, 0.22);
-            --border-focus: #0EA5E9;
-            
-            --brand-primary: #0EA5E9;
-            --brand-glow: rgba(14, 165, 233, 0.35);
-            --brand-gradient: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);
-            
-            --status-success: #10B981;
-            --status-success-bg: rgba(16, 185, 129, 0.12);
-            --status-danger: #F43F5E;
-            --status-danger-bg: rgba(244, 63, 94, 0.14);
-            --status-warning: #F59E0B;
-            --status-warning-bg: rgba(245, 158, 11, 0.12);
-            
-            --text-primary: #F8FAFC;
-            --text-secondary: #94A3B8;
-            --text-tertiary: #64748B;
-            
-            --shadow-card: 0 14px 34px -8px rgba(0, 0, 0, 0.65), 0 0 1px 1px rgba(255, 255, 255, 0.04);
-            --shadow-glow: 0 0 20px -3px rgba(14, 165, 233, 0.25);
+        :root {
+            --bg-canvas: #000000;
+            --bg-elevated: rgba(28, 28, 30, 0.72);
+            --bg-surface: rgba(44, 44, 46, 0.55);
+            --bg-surface-hover: rgba(58, 58, 60, 0.75);
+            --bg-pill: rgba(255, 255, 255, 0.08);
+            --border-hairline: rgba(255, 255, 255, 0.12);
+            --border-subtle: rgba(255, 255, 255, 0.07);
+            --text-primary: #f5f5f7;
+            --text-secondary: #86868b;
+            --text-tertiary: #636366;
+            --apple-blue: #0a84ff;
+            --apple-green: #30d158;
+            --apple-green-glow: rgba(48, 209, 88, 0.35);
+            --apple-amber: #ff9f0a;
+            --apple-red: #ff453a;
+            --apple-red-glow: rgba(255, 69, 58, 0.35);
+            --blur-strength: 32px;
+            --radius-card: 20px;
+            --radius-btn: 14px;
+            --shadow-float: 0 16px 40px -8px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.08);
+            --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Vazirmatn", sans-serif;
+            --font-mono: "SF Mono", "JetBrains Mono", monospace;
+            --transition-smooth: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        :root[data-theme="light"] {
-            --bg-base: #F8FAFC;
-            --bg-surface: #FFFFFF;
-            --bg-elevated: #F1F5F9;
-            --bg-sunken: #E2E8F0;
-            --border-subtle: rgba(148, 163, 184, 0.22);
-            --border-medium: rgba(148, 163, 184, 0.38);
-            --border-focus: #0284C7;
-            
-            --brand-primary: #0284C7;
-            --brand-glow: rgba(2, 132, 199, 0.2);
-            --brand-gradient: linear-gradient(135deg, #0284C7 0%, #0369A1 100%);
-            
-            --status-success: #059669;
-            --status-success-bg: rgba(5, 150, 105, 0.1);
-            --status-danger: #E11D48;
-            --status-danger-bg: rgba(225, 29, 72, 0.1);
-            --status-warning: #D97706;
-            --status-warning-bg: rgba(217, 119, 6, 0.1);
-            
-            --text-primary: #0F172A;
-            --text-secondary: #475569;
-            --text-tertiary: #94A3B8;
-            
-            --shadow-card: 0 10px 25px -5px rgba(15, 23, 42, 0.06), 0 0 1px 1px rgba(15, 23, 42, 0.05);
-            --shadow-glow: 0 0 20px -3px rgba(2, 132, 199, 0.15);
+        [data-theme="light"] {
+            --bg-canvas: #f5f5f7;
+            --bg-elevated: rgba(255, 255, 255, 0.82);
+            --bg-surface: rgba(242, 242, 247, 0.75);
+            --bg-surface-hover: rgba(229, 229, 234, 0.9);
+            --bg-pill: rgba(0, 0, 0, 0.05);
+            --border-hairline: rgba(0, 0, 0, 0.1);
+            --border-subtle: rgba(0, 0, 0, 0.05);
+            --text-primary: #1d1d1f;
+            --text-secondary: #6e6e73;
+            --text-tertiary: #86868b;
+            --shadow-float: 0 16px 36px -8px rgba(0, 0, 0, 0.08), 0 0 1px 1px rgba(0, 0, 0, 0.04);
         }
 
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease, box-shadow 0.2s ease;
-        }
-
-        body {
-            background-color: var(--bg-base);
-            background-image: 
-                radial-gradient(circle at 100% 0%, rgba(14, 165, 233, 0.07) 0%, transparent 40%),
-                radial-gradient(circle at 0% 100%, rgba(16, 185, 129, 0.04) 0%, transparent 40%);
-            color: var(--text-primary);
-            min-height: 100vh;
-            padding: 16px 20px 36px;
-            overflow-x: hidden;
             -webkit-font-smoothing: antialiased;
         }
 
-        .container {
-            max-width: 1440px;
+        body {
+            font-family: var(--font-display);
+            background-color: var(--bg-canvas);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+
+        .ambient-glow {
+            position: fixed;
+            width: 700px;
+            height: 700px;
+            border-radius: 50%;
+            top: -200px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: radial-gradient(circle, rgba(10, 132, 255, 0.12) 0%, rgba(48, 209, 88, 0.06) 40%, transparent 70%);
+            filter: blur(80px);
+            pointer-events: none;
+            z-index: 0;
+            animation: breathe 10s ease-in-out infinite alternate;
+        }
+
+        @keyframes breathe {
+            0% { transform: translateX(-50%) scale(0.9); opacity: 0.6; }
+            100% { transform: translateX(-50%) scale(1.15); opacity: 1; }
+        }
+
+        header {
+            position: sticky;
+            top: 14px;
             margin: 0 auto;
-        }
-
-        .svg-icon {
-            width: 18px;
-            height: 18px;
-            stroke-width: 2;
-            stroke: currentColor;
-            fill: none;
-            stroke-linecap: round;
-            stroke-linejoin: round;
-            flex-shrink: 0;
-            display: inline-block;
-            vertical-align: middle;
-        }
-
-        .svg-icon-lg { width: 22px; height: 22px; }
-        .svg-icon-sm { width: 15px; height: 15px; }
-
-        /* ==================== هدر و بخش‌بندی زبانه‌ها ==================== */
-        header.app-header {
+            width: calc(100% - 32px);
+            max-width: 1560px;
+            z-index: 50;
+            background: var(--bg-elevated);
+            backdrop-filter: blur(var(--blur-strength)) saturate(190%);
+            -webkit-backdrop-filter: blur(var(--blur-strength)) saturate(190%);
+            border: 1px solid var(--border-hairline);
+            border-radius: 22px;
+            padding: 10px 22px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: var(--bg-surface);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--border-medium);
-            border-radius: 16px;
-            padding: 12px 20px;
-            box-shadow: var(--shadow-card);
-            margin-bottom: 18px;
-            flex-wrap: wrap;
-            gap: 14px;
+            box-shadow: var(--shadow-float);
+            animation: slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
-        .brand-section {
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .brand-badge {
             display: flex;
             align-items: center;
             gap: 12px;
         }
 
         .brand-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, rgba(14, 165, 233, 0.16), rgba(16, 185, 129, 0.1));
-            border: 1px solid var(--border-medium);
+            width: 38px;
+            height: 38px;
+            border-radius: 11px;
+            background: linear-gradient(145deg, #2c2c2e, #1c1c1e);
+            border: 1px solid rgba(255, 255, 255, 0.16);
             display: flex;
             align-items: center;
             justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: var(--transition-smooth);
         }
 
-        .brand-icon svg { width: 26px; height: 26px; }
+        [data-theme="light"] .brand-icon {
+            background: linear-gradient(145deg, #ffffff, #e5e5ea);
+            border-color: rgba(0, 0, 0, 0.08);
+        }
 
-        .brand-name {
-            font-size: 1.35rem;
-            font-weight: 900;
-            color: var(--text-primary);
+        .brand-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
             display: flex;
             align-items: center;
             gap: 8px;
-            letter-spacing: -0.5px;
         }
 
-        .brand-name span.accent { color: var(--brand-primary); }
-
-        .badge-chip {
-            font-size: 0.7rem;
-            font-weight: 800;
-            padding: 2px 7px;
-            border-radius: 6px;
-            background: rgba(14, 165, 233, 0.14);
-            color: var(--brand-primary);
-            border: 1px solid rgba(14, 165, 233, 0.3);
-            direction: ltr;
+        .brand-tag {
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 99px;
+            background: var(--bg-pill);
+            color: var(--apple-blue);
+            border: 1px solid var(--border-hairline);
+            font-family: var(--font-mono);
         }
 
-        /* نوار ناوبری بخش‌ها (Tabs Bar) */
-        .tabs-nav {
+        .header-actions {
             display: flex;
             align-items: center;
-            gap: 6px;
-            background: var(--bg-sunken);
-            padding: 5px;
-            border-radius: 12px;
-            border: 1px solid var(--border-medium);
+            gap: 8px;
         }
 
-        .tab-btn {
-            background: transparent;
-            color: var(--text-secondary);
-            border: 1px solid transparent;
-            border-radius: 9px;
-            padding: 8px 16px;
-            font-size: 0.85rem;
-            font-weight: 800;
+        .pill-btn {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-hairline);
+            color: var(--text-primary);
+            padding: 7px 14px;
+            border-radius: 99px;
+            font-family: inherit;
+            font-size: 0.82rem;
+            font-weight: 500;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            white-space: nowrap;
+            gap: 6px;
+            transition: var(--transition-smooth);
         }
 
-        .tab-btn:hover {
-            color: var(--text-primary);
-            background: var(--bg-elevated);
+        .pill-btn:hover {
+            background: var(--bg-surface-hover);
+            transform: translateY(-1px);
         }
 
-        .tab-btn.active {
-            background: var(--brand-gradient);
-            color: #FFFFFF;
-            border-color: rgba(255, 255, 255, 0.2);
-            box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);
+        .pill-btn:active {
+            transform: scale(0.96);
         }
 
-        .header-status {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+        main {
+            position: relative;
+            z-index: 1;
+            flex: 1;
+            width: calc(100% - 32px);
+            max-width: 1560px;
+            margin: 22px auto 36px;
+            display: grid;
+            grid-template-columns: 1fr 390px;
+            gap: 22px;
+            animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
-        .status-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            padding: 6px 12px;
-            border-radius: 8px;
-            background: var(--bg-elevated);
-            border: 1px solid var(--border-subtle);
-            font-size: 0.78rem;
-            font-weight: 700;
-            color: var(--text-secondary);
-        }
-
-        .status-pill.active {
-            color: var(--status-success);
-            background: var(--status-success-bg);
-            border-color: rgba(16, 185, 129, 0.28);
-        }
-
-        .status-pill.standby {
-            color: var(--status-warning);
-            background: var(--status-warning-bg);
-            border-color: rgba(245, 158, 11, 0.28);
-        }
-
-        .dot-indicator {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: currentColor;
-            display: inline-block;
-        }
-
-        .status-pill.active .dot-indicator {
-            box-shadow: 0 0 8px var(--status-success);
-            animation: pulseGlow 1.8s infinite cubic-bezier(0.4, 0, 0.6, 1);
-        }
-
-        @keyframes pulseGlow {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.4; transform: scale(1.3); }
-        }
-
-        /* ==================== محتوای بخش‌ها (Tab Panes) ==================== */
-        .tab-content-pane {
-            display: none;
-            animation: fadeInTab 0.2s ease;
-        }
-
-        .tab-content-pane.active {
-            display: block;
-        }
-
-        @keyframes fadeInTab {
-            from { opacity: 0; transform: translateY(4px); }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(16px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* ==================== استایل کارت‌ها و پنل‌ها ==================== */
-        .card-panel {
-            background: var(--bg-surface);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid var(--border-medium);
-            border-radius: 16px;
-            padding: 20px;
-            box-shadow: var(--shadow-card);
-            margin-bottom: 20px;
-        }
-
-        .card-header-bar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 16px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid var(--border-subtle);
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .card-header-title {
-            display: flex;
-            align-items: center;
-            gap: 9px;
-            font-size: 1rem;
-            font-weight: 800;
-            color: var(--text-primary);
-        }
-
-        .badge-status-ready {
-            font-size: 0.76rem;
-            font-weight: 800;
-            padding: 4px 10px;
-            border-radius: 6px;
-            background: var(--bg-elevated);
-            border: 1px solid var(--border-subtle);
-            color: var(--brand-primary);
-        }
-
-        /* ردیف شاخص‌های آماری */
-        .metrics-row {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-
-        @media (max-width: 680px) {
-            .metrics-row {
-                grid-template-columns: repeat(2, 1fr);
+        @media (max-width: 1120px) {
+            main {
+                grid-template-columns: 1fr;
             }
         }
 
-        .metric-tile {
+        .glass-card {
             background: var(--bg-elevated);
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 12px 14px;
+            backdrop-filter: blur(var(--blur-strength)) saturate(180%);
+            -webkit-backdrop-filter: blur(var(--blur-strength)) saturate(180%);
+            border: 1px solid var(--border-hairline);
+            border-radius: var(--radius-card);
+            box-shadow: var(--shadow-float);
+            position: relative;
+            overflow: hidden;
+            transition: var(--transition-smooth);
         }
 
-        .metric-tile-title {
-            font-size: 0.76rem;
-            font-weight: 600;
-            color: var(--text-secondary);
-            margin-bottom: 4px;
+        .glass-card:hover {
+            border-color: rgba(255, 255, 255, 0.18);
+        }
+
+        .viewport-section {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
+            flex-direction: column;
+            gap: 20px;
         }
 
-        .metric-tile-number {
-            font-size: 1.7rem;
-            font-weight: 900;
-            color: var(--text-primary);
-            line-height: 1.1;
-            font-family: 'Segoe UI', Tahoma, sans-serif;
-        }
-
-        .metric-tile.highlight .metric-tile-number {
-            color: var(--brand-primary);
-            text-shadow: 0 0 14px var(--brand-glow);
-        }
-
-
-        /* کادر ویدیو */
-        .camera-viewport {
+        /* Apple Screen Stage */
+        .screen-stage {
             position: relative;
             width: 100%;
-            aspect-ratio: 16 / 10;
-            background: #03060B;
-            border-radius: 14px;
+            aspect-ratio: 16 / 9;
+            background: #000;
+            border-radius: calc(var(--radius-card) - 4px);
             overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
-            border: 2px solid var(--border-medium);
-            box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8);
-            user-select: none;
-        }
-
-        .camera-viewport.alert-active {
-            border-color: var(--status-danger);
-            box-shadow: 0 0 30px rgba(244, 63, 94, 0.4), inset 0 0 30px rgba(244, 63, 94, 0.2);
         }
 
         video#webcam {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            display: block;
-        }
-
-        video#webcam.mirrored {
+            display: none;
             transform: scaleX(-1);
         }
 
         canvas#overlayCanvas {
             position: absolute;
-            top: 0;
-            left: 0;
+            inset: 0;
             width: 100%;
             height: 100%;
-            cursor: crosshair;
-        }
-
-        .viewport-hud {
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            display: flex;
-            gap: 7px;
-            z-index: 6;
             pointer-events: none;
+            z-index: 5;
+            transform: scaleX(-1);
         }
 
-        .hud-tag {
-            background: rgba(6, 10, 18, 0.84);
-            backdrop-filter: blur(8px);
-            color: #E2E8F0;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            padding: 3px 9px;
-            border-radius: 6px;
-            font-size: 0.72rem;
-            font-weight: 700;
-            font-family: 'Segoe UI', Tahoma, sans-serif;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .viewport-placeholder {
+        .screen-idle {
             position: absolute;
             inset: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            gap: 16px;
             color: var(--text-secondary);
-            background: rgba(5, 9, 16, 0.94);
-            z-index: 5;
-            gap: 12px;
-            text-align: center;
-            padding: 20px;
+            background: radial-gradient(circle at center, rgba(30, 30, 35, 0.95) 0%, rgba(10, 10, 14, 0.98) 100%);
+            transition: var(--transition-smooth);
+            z-index: 4;
         }
 
-        .placeholder-icon {
-            width: 58px;
-            height: 58px;
-            border-radius: 14px;
-            background: rgba(14, 165, 233, 0.1);
-            border: 1px solid rgba(14, 165, 233, 0.2);
+        .idle-radar {
+            width: 76px;
+            height: 76px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--brand-primary);
         }
 
-        .flash-overlay {
+        .idle-radar::before {
+            content: "";
             position: absolute;
-            inset: 0;
-            background: #ffffff;
-            opacity: 0;
-            pointer-events: none;
-            z-index: 10;
-            transition: opacity 0.1s ease;
+            inset: -8px;
+            border-radius: 50%;
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+            animation: radarSpin 20s linear infinite;
         }
 
-        .flash-overlay.active { opacity: 0.75; }
-
-        /* دکمه‌های کنترل مانیتورینگ */
-        .controls-row-primary {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 14px;
+        @keyframes radarSpin {
+            to { transform: rotate(360deg); }
         }
 
-        .controls-row-secondary {
+        .hud-status-badge {
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            background: rgba(18, 18, 20, 0.75);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-hairline);
+            padding: 6px 14px;
+            border-radius: 99px;
+            font-size: 0.78rem;
+            font-weight: 600;
             display: flex;
-            flex-wrap: wrap;
+            align-items: center;
             gap: 8px;
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px dashed var(--border-subtle);
+            z-index: 10;
         }
 
-        .btn-ui {
+        [dir="ltr"] .hud-status-badge {
+            right: auto;
+            left: 18px;
+        }
+
+        .status-dot-pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--apple-red);
+            box-shadow: 0 0 10px var(--apple-red-glow);
+            transition: var(--transition-smooth);
+        }
+
+        .status-dot-pulse.active {
+            background: var(--apple-green);
+            box-shadow: 0 0 12px var(--apple-green-glow);
+            animation: pulseGlow 2s infinite;
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.8; }
+        }
+
+        .control-bar {
+            padding: 12px 18px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .btn-stack {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .apple-btn {
+            font-family: inherit;
+            font-size: 0.86rem;
+            font-weight: 600;
+            padding: 9px 18px;
+            border-radius: var(--radius-btn);
+            border: 1px solid transparent;
+            cursor: pointer;
             display: inline-flex;
             align-items: center;
-            justify-content: center;
-            gap: 7px;
-            padding: 10px 16px;
-            border-radius: 10px;
-            font-size: 0.85rem;
+            gap: 8px;
+            transition: var(--transition-smooth);
+            user-select: none;
+        }
+
+        .apple-btn-primary {
+            background: var(--apple-green);
+            color: #000;
             font-weight: 700;
-            cursor: pointer;
-            border: 1px solid transparent;
-            flex: 1;
-            min-width: 130px;
+            box-shadow: 0 4px 18px var(--apple-green-glow);
         }
 
-        .btn-ui:disabled {
-            opacity: 0.38;
-            cursor: not-allowed;
+        .apple-btn-primary:hover {
+            transform: translateY(-1.5px);
+            filter: brightness(1.08);
+            box-shadow: 0 6px 24px var(--apple-green-glow);
         }
 
-        .btn-ui-brand {
-            background: var(--brand-gradient);
-            color: #FFFFFF;
-            box-shadow: var(--shadow-glow);
+        .apple-btn-stop {
+            background: var(--apple-red);
+            color: #fff;
+            box-shadow: 0 4px 18px var(--apple-red-glow);
         }
 
-        .btn-ui-brand:hover:not(:disabled) {
-            filter: brightness(1.1);
+        .apple-btn-stop:hover {
+            transform: translateY(-1.5px);
+            filter: brightness(1.08);
+        }
+
+        .apple-btn-secondary {
+            background: var(--bg-surface);
+            border-color: var(--border-hairline);
+            color: var(--text-primary);
+        }
+
+        .apple-btn-secondary:hover {
+            background: var(--bg-surface-hover);
             transform: translateY(-1px);
         }
 
-        .btn-ui-outline {
-            background: var(--bg-elevated);
-            color: var(--text-primary);
-            border-color: var(--border-medium);
+        .apple-btn:active {
+            transform: scale(0.96);
         }
 
-        .btn-ui-outline:hover:not(:disabled) {
-            border-color: var(--brand-primary);
-            background: var(--bg-sunken);
-        }
-
-        .btn-ui-outline.active-tool {
-            background: rgba(14, 165, 233, 0.16);
-            border-color: var(--brand-primary);
-            color: var(--brand-primary);
-        }
-
-        .btn-ui-danger {
-            background: var(--status-danger-bg);
-            color: #FB7185;
-            border-color: rgba(244, 63, 94, 0.3);
-        }
-
-        .btn-ui-danger:hover:not(:disabled) {
-            background: rgba(244, 63, 94, 0.22);
-        }
-
-        .btn-ui-sm {
-            padding: 7px 13px;
-            font-size: 0.8rem;
-            border-radius: 8px;
-            flex: 0 1 auto;
-            min-width: auto;
-        }
-
-        /* ==================== شبکه فرم‌های تنظیمات ==================== */
-        .settings-grid {
+        /* Bento Grid */
+        .bento-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
         }
 
-        @media (max-width: 860px) {
-            .settings-grid {
-                grid-template-columns: 1fr;
+        @media (max-width: 768px) {
+            .bento-grid {
+                grid-template-columns: repeat(2, 1fr);
             }
         }
 
-        .option-group {
-            margin-bottom: 14px;
+        .bento-tile {
+            background: var(--bg-elevated);
+            backdrop-filter: blur(var(--blur-strength));
+            -webkit-backdrop-filter: blur(var(--blur-strength));
+            border: 1px solid var(--border-hairline);
+            border-radius: 18px;
+            padding: 16px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            transition: var(--transition-smooth);
         }
 
-        .option-label {
+        .bento-tile:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .bento-head {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            font-size: 0.82rem;
+        }
+
+        .bento-label {
+            font-size: 0.76rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .bento-icon {
+            opacity: 0.6;
+        }
+
+        .bento-value {
+            font-family: var(--font-mono);
+            font-size: 1.7rem;
             font-weight: 700;
+            letter-spacing: -0.03em;
             color: var(--text-primary);
-            margin-bottom: 6px;
+            margin-top: 2px;
         }
 
-        .option-badge {
-            font-size: 0.72rem;
-            color: var(--brand-primary);
-            font-family: 'Segoe UI', Tahoma, sans-serif;
-            font-weight: 800;
-            background: var(--bg-sunken);
-            padding: 2px 7px;
-            border-radius: 5px;
+        /* Incident Table Section */
+        .table-section {
+            padding: 18px 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .section-header {
+            font-size: 0.95rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .table-scroll {
+            max-height: 250px;
+            overflow-y: auto;
             border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            background: rgba(0, 0, 0, 0.2);
         }
 
-        .option-input, .custom-select {
+        table.apple-table {
             width: 100%;
-            padding: 10px 13px;
-            border-radius: 10px;
-            border: 1px solid var(--border-medium);
-            background: var(--bg-elevated);
-            font-size: 0.84rem;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            text-align: right;
+        }
+
+        [dir="ltr"] table.apple-table {
+            text-align: left;
+        }
+
+        table.apple-table th {
+            background: var(--bg-surface);
+            padding: 10px 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            border-bottom: 1px solid var(--border-hairline);
+        }
+
+        table.apple-table td {
+            padding: 9px 14px;
+            border-bottom: 1px solid var(--border-subtle);
             color: var(--text-primary);
         }
 
-        .option-input.ltr-code {
-            direction: ltr;
-            text-align: left;
-            font-family: 'Segoe UI', Consolas, monospace;
+        .pill-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-size: 0.72rem;
+            font-weight: 600;
         }
 
-        .option-input:focus, .custom-select:focus {
-            outline: none;
-            border-color: var(--border-focus);
-            box-shadow: 0 0 0 3px var(--brand-glow);
+        .pill-tag.sent {
+            background: rgba(48, 209, 88, 0.16);
+            color: var(--apple-green);
         }
 
-        .option-slider {
-            width: 100%;
-            height: 6px;
-            accent-color: var(--brand-primary);
+        .pill-tag.local {
+            background: rgba(10, 132, 255, 0.16);
+            color: var(--apple-blue);
+        }
+
+        /* Sidebar & Segmented Control */
+        .sidebar-section {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .segmented-control {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-hairline);
+            padding: 4px;
+            border-radius: 16px;
+            display: flex;
+            gap: 4px;
+        }
+
+        .segment-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 0.82rem;
+            font-weight: 600;
             cursor: pointer;
-            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: var(--transition-smooth);
         }
 
-        .option-switch-card {
+        .segment-btn.active {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-hairline);
+        }
+
+        .sidebar-card {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .form-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-field label {
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .apple-input {
+            width: 100%;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-hairline);
+            color: var(--text-primary);
+            padding: 9px 14px;
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 0.86rem;
+            outline: none;
+            transition: var(--transition-smooth);
+        }
+
+        .apple-input:focus {
+            border-color: var(--apple-blue);
+            box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+            background: var(--bg-surface-hover);
+        }
+
+        .switch-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 10px 14px;
-            background: var(--bg-elevated);
-            border-radius: 10px;
-            border: 1px solid var(--border-subtle);
-            margin-bottom: 9px;
-            font-size: 0.83rem;
-            font-weight: 600;
-            color: var(--text-primary);
+            padding: 6px 0;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
         }
 
-        .switch-toggle {
-            width: 40px;
-            height: 22px;
-            appearance: none;
-            -webkit-appearance: none;
-            background: #475569;
-            border-radius: 50px;
+        .apple-switch {
             position: relative;
-            cursor: pointer;
-            transition: background 0.25s;
-            flex-shrink: 0;
+            display: inline-block;
+            width: 44px;
+            height: 26px;
         }
 
-        .switch-toggle::after {
-            content: '';
-            width: 16px;
-            height: 16px;
-            background: #FFFFFF;
-            border-radius: 50%;
+        .apple-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
             position: absolute;
-            top: 3px;
-            left: 3px;
-            transition: transform 0.25s;
+            cursor: pointer;
+            inset: 0;
+            background-color: var(--bg-surface-hover);
+            border: 1px solid var(--border-hairline);
+            border-radius: 34px;
+            transition: 0.3s;
         }
 
-        .switch-toggle:checked {
-            background: var(--brand-primary);
+        .slider::before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            border-radius: 50%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        .switch-toggle:checked::after {
+        input:checked + .slider {
+            background-color: var(--apple-green);
+            border-color: transparent;
+        }
+
+        input:checked + .slider::before {
             transform: translateX(18px);
         }
 
-        .schedule-inputs {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            background: var(--bg-sunken);
-            padding: 10px;
-            border-radius: 9px;
-            border: 1px solid var(--border-subtle);
-            margin-bottom: 10px;
-        }
-
-        /* ==================== لاگ وقایع تردد ==================== */
-        .incident-list {
+        .profile-list {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            max-height: 520px;
+            gap: 8px;
+            max-height: 210px;
             overflow-y: auto;
-            padding-left: 3px;
-        }
-
-        .incident-item {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            background: var(--bg-elevated);
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 10px 14px;
-        }
-
-        .incident-item:hover { border-color: var(--brand-primary); }
-
-        .incident-img {
-            width: 84px;
-            height: 58px;
-            border-radius: 8px;
-            object-fit: cover;
-            border: 1px solid var(--border-medium);
-            cursor: pointer;
-            flex-shrink: 0;
-            background: #000;
-        }
-
-        .incident-details { flex: 1; min-width: 0; }
-        .incident-title { font-size: 0.85rem; font-weight: 800; color: var(--text-primary); }
-        .incident-time { font-size: 0.74rem; color: var(--text-secondary); margin-top: 3px; }
-
-        .tag-status {
-            font-size: 0.72rem;
-            padding: 4px 9px;
-            border-radius: 6px;
-            font-weight: 800;
-            white-space: nowrap;
-        }
-
-        .tag-status.sent { background: var(--status-success-bg); color: var(--status-success); }
-        .tag-status.local { background: var(--bg-sunken); color: var(--text-tertiary); }
-        .tag-status.error { background: var(--status-danger-bg); color: var(--status-danger); }
-
-        .empty-feed {
-            text-align: center;
-            padding: 38px 16px;
-            color: var(--text-tertiary);
-            font-size: 0.86rem;
-        }
-
-        /* مودال تصویر */
-        .modal-view {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(3, 7, 18, 0.92);
-            backdrop-filter: blur(10px);
-            z-index: 200;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
-        .modal-view.open { display: flex; }
-
-        .modal-body {
-            background: var(--bg-surface);
-            border: 1px solid var(--border-medium);
-            padding: 18px;
-            border-radius: 16px;
-            max-width: 800px;
-            width: 100%;
-        }
-
-        .modal-body img {
-            width: 100%;
-            border-radius: 10px;
-            margin-bottom: 14px;
-        }
-
-        .toast-msg {
-            display: none;
-            font-size: 0.82rem;
-            margin-top: 10px;
-            padding: 8px 14px;
-            border-radius: 8px;
-            font-weight: 700;
-        }
-
-        /* ==================== پایگاه افراد و چهره‌ها (Persons Database) ==================== */
-        .persons-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 14px;
-            max-height: 480px;
-            overflow-y: auto;
-        }
-
-        .person-card {
-            background: var(--bg-elevated);
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 14px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            position: relative;
-            transition: border-color 0.2s;
-        }
-
-        .person-card:hover {
-            border-color: var(--brand-primary);
-        }
-
-        .person-thumb {
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 2px solid var(--border-medium);
-            flex-shrink: 0;
-            background: #000;
-        }
-
-        .person-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .person-name {
-            font-size: 0.88rem;
-            font-weight: 800;
-            color: var(--text-primary);
-            margin-bottom: 3px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .person-meta {
-            font-size: 0.72rem;
-            color: var(--text-tertiary);
-            line-height: 1.4;
-        }
-
-        .person-delete-btn {
-            position: absolute;
-            top: 8px;
-            left: 8px;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: var(--status-danger-bg);
-            border: 1px solid rgba(244, 63, 94, 0.3);
-            color: var(--status-danger);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-
-        .person-card:hover .person-delete-btn {
-            opacity: 1;
-        }
-
-        [dir="ltr"] .person-delete-btn {
-            left: auto;
-            right: 8px;
-        }
-
-        /* ناحیه پیش‌نمایش چهره */
-        .face-preview-area {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
-            padding: 20px;
-            background: var(--bg-sunken);
-            border-radius: 12px;
-            border: 1px solid var(--border-subtle);
-            margin-bottom: 14px;
-        }
-
-        #facePreviewCanvas {
-            width: 160px;
-            height: 160px;
-            border-radius: 50%;
-            border: 3px solid var(--border-medium);
-            background: #000;
-            object-fit: cover;
-            transition: border-color 0.25s, box-shadow 0.25s;
-        }
-
-        #facePreviewCanvas.quality-good {
-            border-color: var(--status-success);
-            box-shadow: 0 0 16px rgba(16, 185, 129, 0.3);
-        }
-
-        .face-preview-label {
-            font-size: 0.82rem;
-            color: var(--text-secondary);
-            font-weight: 600;
-            text-align: center;
-        }
-
-        /* نشان وضعیت شناسایی */
-        .recognition-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 0.7rem;
-            font-weight: 800;
-            padding: 2px 8px;
-            border-radius: 5px;
-            background: var(--status-success-bg);
-            color: var(--status-success);
             margin-top: 4px;
         }
 
-        /* چیدمان فرم ثبت نام */
-        .register-form-row {
-            display: grid;
-            grid-template-columns: 1fr auto;
+        .profile-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-hairline);
+            border-radius: 12px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.83rem;
+            transition: var(--transition-smooth);
+        }
+
+        .profile-card:hover {
+            background: var(--bg-surface-hover);
+            transform: translateX(-2px);
+        }
+
+        [dir="ltr"] .profile-card:hover {
+            transform: translateX(2px);
+        }
+
+        .btn-icon-danger {
+            background: transparent;
+            border: none;
+            color: var(--apple-red);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition-smooth);
+        }
+
+        .btn-icon-danger:hover {
+            background: rgba(255, 69, 58, 0.15);
+        }
+
+        #toasts {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            display: flex;
+            flex-direction: column;
             gap: 10px;
-            align-items: end;
+            z-index: 1000;
         }
 
-        @media (max-width: 580px) {
-            .register-form-row {
-                grid-template-columns: 1fr;
-            }
-            .persons-grid {
-                grid-template-columns: 1fr;
-            }
+        [dir="rtl"] #toasts {
+            left: auto;
+            right: 24px;
         }
 
-        .empty-persons-feed {
-            text-align: center;
-            padding: 38px 16px;
-            color: var(--text-tertiary);
-            font-size: 0.86rem;
-            grid-column: 1 / -1;
+        .apple-toast {
+            background: var(--bg-elevated);
+            backdrop-filter: blur(28px) saturate(190%);
+            -webkit-backdrop-filter: blur(28px) saturate(190%);
+            border: 1px solid var(--border-hairline);
+            color: var(--text-primary);
+            padding: 12px 18px;
+            border-radius: 16px;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+            font-size: 0.84rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 260px;
+            animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(16px) scale(0.96); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <!-- هدر با ناوبری زبانه‌ای مدرن -->
-    <header class="app-header">
-        <div class="brand-section">
+    <div class="ambient-glow"></div>
+
+    <header>
+        <div class="brand-badge">
             <div class="brand-icon">
-                <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="4" y="4" width="32" height="32" rx="9" stroke="#0EA5E9" stroke-width="2.2" stroke-opacity="0.5"/>
-                    <circle cx="20" cy="20" r="10" stroke="#0EA5E9" stroke-width="2"/>
-                    <circle cx="20" cy="20" r="4.5" fill="#10B981"/>
-                    <path d="M20 6V9M20 31V34M6 20H9M31 20H34" stroke="#0EA5E9" stroke-width="2" stroke-linecap="round"/>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <circle cx="12" cy="11" r="3"/>
                 </svg>
             </div>
-            <div class="brand-name">
-                <div>Mik<span class="accent">o</span>T<span class="accent">i</span>m Sentinel</div>
-                <span class="badge-chip">PRO v4.0</span>
+            <div class="brand-title">
+                <span>MikoTim Sentinel Pro</span>
+                <span class="brand-tag">Instant Webcam</span>
             </div>
         </div>
-
-        <!-- زبانه‌های بخش‌بندی اصلی سامانه -->
-        <nav class="tabs-nav">
-            <button type="button" class="tab-btn active" data-tab="tab-live">
-                <svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                <span data-i18n="tab_live">پایش زنده</span>
+        <div class="header-actions">
+            <button class="pill-btn" onclick="toggleLang()" id="langBtn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="2" y1="12" x2="22" y2="12"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+                <span>English</span>
             </button>
-            <button type="button" class="tab-btn" data-tab="tab-logs">
-                <svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-                <span data-i18n="tab_logs">گزارش‌ها و وقایع</span>
+            <button class="pill-btn" onclick="toggleTheme()" id="themeBtn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
             </button>
-            <button type="button" class="tab-btn" data-tab="tab-persons">
-                <svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
-                <span data-i18n="tab_persons">پایگاه افراد</span>
-            </button>
-            <button type="button" class="tab-btn" data-tab="tab-settings">
-                <svg class="svg-icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                <span data-i18n="tab_settings">تنظیمات</span>
-            </button>
-        </nav>
-
-        <div class="header-status">
-            <div id="aiBadge" class="status-pill active">
-                <span class="dot-indicator"></span>
-                <span id="aiStatusText" data-i18n="ai_active">هوش مصنوعی آفلاین</span>
-            </div>
-            <div id="camBadge" class="status-pill standby">
-                <span class="dot-indicator"></span>
-                <span id="camStatusText" data-i18n="cam_off">دوربین خاموش</span>
-            </div>
         </div>
     </header>
 
-    <!-- ==================== بخش ۱: پایش زنده دوربین ==================== -->
-    <div id="tab-live" class="tab-content-pane active">
-        <div class="card-panel">
-            <div class="card-header-bar">
-                <div class="card-header-title">
-                    <svg class="svg-icon" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                    <span data-i18n="live_feed_title">مانیتورینگ تصویری زنده</span>
+    <main>
+        <section class="viewport-section">
+            <div class="glass-card">
+                <div class="screen-stage">
+                    <video id="webcam" autoplay playsinline muted></video>
+                    <canvas id="overlayCanvas"></canvas>
+                    <div id="camIdle" class="screen-idle">
+                        <div class="idle-radar">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                <circle cx="12" cy="13" r="4"/>
+                            </svg>
+                        </div>
+                        <p id="tCameraIdle" style="font-size:0.9rem; font-weight:500;">دوربین در حالت آماده‌باش قرار دارد</p>
+                    </div>
+                    <div class="hud-status-badge">
+                        <span id="dot" class="status-dot-pulse"></span>
+                        <span id="tStatus">آماده</span>
+                    </div>
                 </div>
-                <div id="cooldownTimerText" class="badge-status-ready" data-i18n="ready_state">آماده ثبت</div>
+
+                <div class="control-bar">
+                    <div class="btn-stack">
+                        <button class="apple-btn apple-btn-primary" id="startBtn" onclick="startCamera()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                            <span id="tStart">شروع پایش</span>
+                        </button>
+                        <button class="apple-btn apple-btn-stop" id="stopBtn" onclick="stopCamera()" style="display:none;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="5" y="5" width="14" height="14" rx="2"/>
+                            </svg>
+                            <span id="tStop">توقف</span>
+                        </button>
+                        <button class="apple-btn apple-btn-secondary" onclick="manualSnapshot()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                <circle cx="12" cy="13" r="4"/>
+                            </svg>
+                            <span id="tSnap">عکس دستی</span>
+                        </button>
+                    </div>
+                    <div class="btn-stack">
+                        <button class="apple-btn apple-btn-secondary" onclick="calibrate()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                            </svg>
+                            <span id="tCalib">تنظیم پس‌زمینه</span>
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            <!-- شاخص‌های عددی -->
-            <div class="metrics-row">
-                <div class="metric-tile highlight">
-                    <div class="metric-tile-title">
-                        <span data-i18n="stat_people">افراد در کادر</span>
-                        <svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+            <!-- Bento Stats -->
+            <div class="bento-grid">
+                <div class="bento-tile">
+                    <div class="bento-head">
+                        <span class="bento-label" id="tFps">نرخ فریم (FPS)</span>
+                        <svg class="bento-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
                     </div>
-                    <div class="metric-tile-number" id="currentPeopleCount">0</div>
+                    <span class="bento-value" id="fpsVal">0.0</span>
                 </div>
-                <div class="metric-tile">
-                    <div class="metric-tile-title">
-                        <span data-i18n="stat_motion">شدت تحرک</span>
-                        <svg class="svg-icon-sm" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                <div class="bento-tile">
+                    <div class="bento-head">
+                        <span class="bento-label" id="tPersons">افراد در صحنه</span>
+                        <svg class="bento-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
                     </div>
-                    <div class="metric-tile-number" id="motionLevelText">0%</div>
+                    <span class="bento-value" id="personVal">0</span>
                 </div>
-                <div class="metric-tile">
-                    <div class="metric-tile-title">
-                        <span data-i18n="stat_captures">کل رویدادها</span>
-                        <svg class="svg-icon-sm" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line></svg>
+                <div class="bento-tile">
+                    <div class="bento-head">
+                        <span class="bento-label" id="tCaptures">ثبت رخدادها</span>
+                        <svg class="bento-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <polyline points="21 15 16 10 5 21"/>
+                        </svg>
                     </div>
-                    <div class="metric-tile-number" id="totalCapturesCount">0</div>
+                    <span class="bento-value" id="captureVal">0</span>
                 </div>
-                <div class="metric-tile">
-                    <div class="metric-tile-title">
-                        <span data-i18n="stat_telegram">ارسال تلگرام</span>
-                        <svg class="svg-icon-sm" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                <div class="bento-tile">
+                    <div class="bento-head">
+                        <span class="bento-label" id="tTg">هشدارهای تلگرام</span>
+                        <svg class="bento-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13"/>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                        </svg>
                     </div>
-                    <div class="metric-tile-number" id="telegramSentCount">0</div>
+                    <span class="bento-value" id="tgVal">0</span>
                 </div>
             </div>
 
-
-
-            <!-- کادر ویدیو -->
-            <div id="cameraWrapper" class="camera-viewport">
-                <div id="flashEffect" class="flash-overlay"></div>
-                
-                <div class="viewport-hud">
-                    <span id="fpsPill" class="hud-tag">
-                        <span class="dot-indicator" style="color: #34D399;"></span>
-                        <span>FPS: --</span>
-                    </span>
-                    <span id="zoneStatusPill" class="hud-tag">
-                        <svg class="svg-icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>
-                        <span data-i18n="full_frame">تمام کادر</span>
-                    </span>
+            <!-- Incident Log -->
+            <div class="glass-card table-section">
+                <div class="section-header">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <span id="tLogTitle">لاگ آخرین رویدادها</span>
                 </div>
-
-                <div id="cameraPlaceholder" class="viewport-placeholder">
-                    <div class="placeholder-icon">
-                        <svg class="svg-icon-lg" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                    </div>
-                    <div class="placeholder-text" data-i18n="camera_is_off">دوربین خاموش است</div>
+                <div class="table-scroll">
+                    <table class="apple-table">
+                        <thead>
+                            <tr>
+                                <th id="thTime">زمان</th>
+                                <th id="thCount">تعداد</th>
+                                <th id="thConf">اطمینان</th>
+                                <th id="thWho">هویت</th>
+                                <th id="thTg">وضعیت ارسال</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logRows">
+                            <tr><td colspan="5" style="text-align:center; color:var(--text-secondary); padding:20px;" id="tEmptyLog">هنوز رویدادی ثبت نشده است</td></tr>
+                        </tbody>
+                    </table>
                 </div>
+            </div>
+        </section>
 
-                <video id="webcam" playsinline muted autoplay></video>
-                <canvas id="overlayCanvas"></canvas>
+        <!-- Sidebar Section -->
+        <aside class="sidebar-section">
+            <div class="segmented-control">
+                <button class="segment-btn active" id="tab1" onclick="showTab('faces')">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    <span id="tTabFaces">پروفایل‌ها</span>
+                </button>
+                <button class="segment-btn" id="tab2" onclick="showTab('settings')">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                    <span id="tTabSettings">تنظیمات</span>
+                </button>
             </div>
 
-            <div id="cameraErrorBox" style="display:none; color: #FB7185; background: var(--status-danger-bg); padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 0.82rem;"></div>
-
-            <!-- دکمه‌های کنترل پایش -->
-            <div class="controls-row-primary">
-                <button id="startBtn" class="btn-ui btn-ui-brand">
-                    <svg class="svg-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                    <span data-i18n="btn_start">شروع پایش</span>
-                </button>
-                <button id="stopBtn" class="btn-ui btn-ui-danger" disabled>
-                    <svg class="svg-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
-                    <span data-i18n="btn_stop">توقف</span>
-                </button>
-                <button id="manualSnapBtn" class="btn-ui btn-ui-outline" disabled>
-                    <svg class="svg-icon" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                    <span data-i18n="btn_snap">ثبت فوری</span>
-                </button>
-            </div>
-
-            <!-- ابزارهای تکمیلی -->
-            <div class="controls-row-secondary">
-                <button id="drawZoneBtn" class="btn-ui btn-ui-outline btn-ui-sm" disabled>
-                    <svg class="svg-icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>
-                    <span data-i18n="tool_zone">رسم زون حساس</span>
-                </button>
-                <button id="clearZoneBtn" class="btn-ui btn-ui-outline btn-ui-sm" style="display:none;">
-                    <svg class="svg-icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                    <span data-i18n="tool_clear_zone">حذف زون</span>
-                </button>
-                <button id="mirrorBtn" class="btn-ui btn-ui-outline btn-ui-sm">
-                    <svg class="svg-icon-sm" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
-                    <span data-i18n="tool_mirror">آینه (Mirror)</span>
-                </button>
-                <button id="calibrateBgBtn" class="btn-ui btn-ui-outline btn-ui-sm" disabled>
-                    <svg class="svg-icon-sm" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"></polyline><polyline points="23 20 23 14 17 14"></polyline><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path></svg>
-                    <span data-i18n="tool_calibrate">کالیبره نور</span>
-                </button>
-                <button id="fullscreenBtn" class="btn-ui btn-ui-outline btn-ui-sm">
-                    <svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
-                    <span data-i18n="tool_fullscreen">تمام‌صفحه</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- ==================== بخش ۲: گزارش‌ها و لاگ‌ها ==================== -->
-    <div id="tab-logs" class="tab-content-pane">
-        <div class="card-panel">
-            <div class="card-header-bar">
-                <div class="card-header-title">
-                    <svg class="svg-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-                    <span data-i18n="logs_title">گزارش وقایع و ترددها</span>
+            <!-- Tab 1: Faces -->
+            <div class="glass-card sidebar-card" id="paneFaces">
+                <div class="section-header">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="8.5" cy="7" r="4"/>
+                        <line x1="20" y1="8" x2="20" y2="14"/>
+                        <line x1="23" y1="11" x2="17" y2="11"/>
+                    </svg>
+                    <span id="tRegTitle">ثبت پروفایل جدید</span>
                 </div>
-                <div style="display: flex; gap: 8px;">
-                    <button id="exportCsvBtn" class="btn-ui btn-ui-outline btn-ui-sm">
-                        <svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                        <span data-i18n="btn_export">اکسل (CSV)</span>
+                <div class="form-field">
+                    <label id="tNameLabel">نام شخص:</label>
+                    <input type="text" id="nameInput" class="apple-input" placeholder="مثال: میکائیل">
+                </div>
+                <button class="apple-btn apple-btn-secondary" style="width:100%; justify-content:center;" onclick="registerCurrentFace()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    <span id="tBtnReg">ثبت از تصویر دوربین</span>
+                </button>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <span style="font-size:0.78rem; font-weight:600; color:var(--text-secondary);" id="tListTitle">لیست چهره‌های ذخیره‌شده</span>
+                    <button class="pill-btn" style="padding:3px 10px; font-size:0.72rem;" onclick="clearAllFaces()" id="tBtnClear">حذف همه</button>
+                </div>
+                <div class="profile-list" id="faceList"></div>
+            </div>
+
+            <!-- Tab 2: Settings -->
+            <div class="glass-card sidebar-card" id="paneSettings" style="display:none;">
+                <div class="section-header">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13"/>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                    <span id="tTgTitle">تنظیمات ربات تلگرام</span>
+                </div>
+                <div class="form-field">
+                    <label>Bot Token:</label>
+                    <input type="password" id="tgToken" class="apple-input" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
+                </div>
+                <div class="form-field">
+                    <label>Chat ID:</label>
+                    <input type="text" id="tgChat" class="apple-input" placeholder="123456789">
+                </div>
+                <div class="form-field">
+                    <label id="tCaptionLabel">عنوان هشدار:</label>
+                    <input type="text" id="customCaption" class="apple-input" value="هشدار تردد">
+                </div>
+                <div class="form-field">
+                    <label id="tCooldownLabel">فاصله بین ثبت‌ها (ثانیه):</label>
+                    <input type="number" id="cooldown" class="apple-input" value="6" min="1" max="60">
+                </div>
+
+                <div class="switch-row">
+                    <span id="tAutoSend">ارسال خودکار:</span>
+                    <label class="apple-switch">
+                        <input type="checkbox" id="chkAuto" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="switch-row">
+                    <span id="tOnlyNew">فقط فرد جدید:</span>
+                    <label class="apple-switch">
+                        <input type="checkbox" id="chkNew" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="switch-row">
+                    <span id="tRemote">دستورات راه دور:</span>
+                    <label class="apple-switch">
+                        <input type="checkbox" id="chkRemote">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div style="display:flex; gap:10px; margin-top:8px;">
+                    <button class="apple-btn apple-btn-secondary" style="flex:1; justify-content:center;" onclick="saveConfig()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        <span id="tSave">ذخیره</span>
                     </button>
-                    <button id="clearLogsBtn" class="btn-ui btn-ui-danger btn-ui-sm">
-                        <svg class="svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                        <span data-i18n="btn_clear_logs">پاکسازی</span>
-                    </button>
-                </div>
-            </div>
-
-            <div id="logsContainer" class="incident-list">
-                <div class="empty-feed" data-i18n="no_records">هیچ رکوردی ثبت نشده است.</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ==================== بخش ۳: پایگاه افراد و ثبت چهره ==================== -->
-    <div id="tab-persons" class="tab-content-pane">
-        <!-- ثبت چهره جدید -->
-        <div class="card-panel">
-            <div class="card-header-bar">
-                <div class="card-header-title">
-                    <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
-                    <span data-i18n="register_face_title">ثبت چهره جدید</span>
-                </div>
-            </div>
-
-            <!-- منطقه پیش‌نمایش چهره -->
-            <div class="face-preview-area">
-                <canvas id="facePreviewCanvas" width="200" height="200"></canvas>
-                <div id="facePreviewLabel" class="face-preview-label" data-i18n="register_face_instruction">دوربین را روشن کرده و فرد مورد نظر را مقابل دوربین قرار دهید</div>
-            </div>
-
-            <!-- فرم ثبت نام فرد -->
-            <div class="register-form-row">
-                <div class="option-group" style="margin-bottom: 0;">
-                    <label class="option-label" for="personNameInput">
-                        <span data-i18n="person_name_label">نام فرد:</span>
-                    </label>
-                    <input type="text" id="personNameInput" class="option-input" placeholder="مثلاً: محمد رضایی" data-i18n-placeholder="person_name_placeholder">
-                </div>
-                <button id="registerFaceBtn" type="button" class="btn-ui btn-ui-brand" style="flex: 0 0 auto;">
-                    <svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
-                    <span data-i18n="btn_register_face">ثبت و ذخیره چهره</span>
-                </button>
-            </div>
-            <div id="personNotice" class="toast-msg"></div>
-        </div>
-
-        <!-- گالری افراد ثبت‌شده -->
-        <div class="card-panel">
-            <div class="card-header-bar">
-                <div class="card-header-title">
-                    <svg class="svg-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-                    <span id="registeredPersonsTitle" data-i18n="registered_persons_title">افراد ثبت‌شده (۰)</span>
-                </div>
-                <div>
-                    <button id="clearAllFacesBtn" type="button" class="btn-ui btn-ui-danger btn-ui-sm">
-                        <svg class="svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                        <span data-i18n="btn_clear_all_faces">حذف همه</span>
-                    </button>
-                </div>
-            </div>
-
-            <div id="personsGrid" class="persons-grid">
-                <div class="empty-persons-feed" data-i18n="no_persons">هیچ فردی ثبت نشده است.</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ==================== بخش ۳: تنظیمات (تصویر، تلگرام و زبان) ==================== -->
-    <div id="tab-settings" class="tab-content-pane">
-        <div class="settings-grid">
-            <!-- ستون ۱: تنظیمات دوربین، سنسور و زبان -->
-            <div class="card-panel">
-                <div class="card-header-bar">
-                    <div class="card-header-title">
-                        <svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                        <span data-i18n="vision_settings_title">تنظیمات تصویر و هوش مصنوعی</span>
-                    </div>
-                </div>
-
-                <!-- انتخاب زبان -->
-                <div class="option-group">
-                    <label class="option-label">
-                        <span data-i18n="language_label">زبان سامانه (Language):</span>
-                    </label>
-                    <select id="languageSelect" class="custom-select">
-                        <option value="fa">فارسی (Persian)</option>
-                        <option value="en">English (انگلیسی)</option>
-                    </select>
-                </div>
-
-                <!-- انتخاب سنسور دوربین -->
-                <div class="option-group">
-                    <label class="option-label">
-                        <span data-i18n="select_camera_label">انتخاب وب‌کم / سنسور:</span>
-                    </label>
-                    <select id="cameraSelect" class="custom-select">
-                        <option value="">دوربین پیش‌فرض سیستم</option>
-                    </select>
-                </div>
-
-                <div class="option-group">
-                    <label class="option-label">
-                        <span data-i18n="sensitivity_label">حساسیت سنسور به تحرک و حضور:</span>
-                        <span id="confidenceValLabel" class="option-badge">70%</span>
-                    </label>
-                    <input type="range" id="confidenceSlider" class="option-slider" min="20" max="95" value="70">
-                </div>
-
-                <div class="option-group">
-                    <label class="option-label">
-                        <span data-i18n="min_size_label">حداقل ابعاد سوژه:</span>
-                        <span id="minSizeValLabel" class="option-badge">3% کادر</span>
-                    </label>
-                    <input type="range" id="minSizeSlider" class="option-slider" min="1" max="15" value="3">
-                </div>
-
-                <div class="option-group">
-                    <label class="option-label">
-                        <span data-i18n="cooldown_label">فاصله تنفس بین ثبت رویدادها:</span>
-                        <span id="cooldownValLabel" class="option-badge">6 ثانیه</span>
-                    </label>
-                    <input type="range" id="cooldownSlider" class="option-slider" min="2" max="60" value="6">
-                </div>
-
-                <!-- سوییچ دیفالت: فقط هنگام ورود فرد جدید عکس بگیر (روشن پیش‌فرض طبق درخواست) -->
-                <div class="option-switch-card">
-                    <span data-i18n="new_person_only">فقط هنگام ورود فرد جدید به کادر عکس بگیر</span>
-                    <input type="checkbox" id="onlyNewPersonToggle" class="switch-toggle" checked>
-                </div>
-
-                <div class="option-switch-card">
-                    <span data-i18n="sound_alert">آلارم صوتی بیومتریک</span>
-                    <input type="checkbox" id="soundAlertToggle" class="switch-toggle" checked>
-                </div>
-
-                <div class="option-switch-card">
-                    <span data-i18n="draw_box_photo">درج کادر هدف و زمان روی عکس ارسالی</span>
-                    <input type="checkbox" id="drawBoxOnPhotoToggle" class="switch-toggle" checked>
-                </div>
-
-                <div class="option-switch-card">
-                    <span data-i18n="schedule_shift">فعال‌سازی شیفت زمانی</span>
-                    <input type="checkbox" id="scheduleToggle" class="switch-toggle">
-                </div>
-                <div id="scheduleBox" class="schedule-inputs" style="display: none;">
-                    <div>
-                        <label class="option-label"><span data-i18n="shift_start">شروع:</span></label>
-                        <input type="time" id="startTimeInput" class="option-input ltr-code" value="23:00">
-                    </div>
-                    <div>
-                        <label class="option-label"><span data-i18n="shift_end">پایان:</span></label>
-                        <input type="time" id="endTimeInput" class="option-input ltr-code" value="07:00">
-                    </div>
-                </div>
-
-                <!-- تم دیداری -->
-                <div class="option-switch-card">
-                    <span data-i18n="theme_label">حالت نمایش تیره (Dark Mode)</span>
-                    <input type="checkbox" id="themeSwitchToggle" class="switch-toggle" checked>
-                </div>
-            </div>
-
-            <!-- ستون ۲: تنظیمات درگاه تلگرام -->
-            <div class="card-panel">
-                <div class="card-header-bar">
-                    <div class="card-header-title">
-                        <svg class="svg-icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                        <span data-i18n="telegram_settings_title">تنظیمات درگاه تلگرام</span>
-                    </div>
-                </div>
-
-                <div class="option-group">
-                    <label class="option-label">
-                        <span data-i18n="bot_token_label">توکن ربات (Bot API Token):</span>
-                    </label>
-                    <input type="password" id="botTokenInput" class="option-input ltr-code" placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ">
-                </div>
-
-                <div class="option-group">
-                    <label class="option-label">
-                        <span data-i18n="chat_id_label">شناسه عددی چت مقصد (Chat ID):</span>
-                    </label>
-                    <input type="text" id="chatIdInput" class="option-input ltr-code" placeholder="987654321">
-                </div>
-
-                <div class="option-group">
-                    <label class="option-label">
-                        <span data-i18n="caption_label">کپشن پیام ارسالی:</span>
-                    </label>
-                    <input type="text" id="customCaptionInput" class="option-input" value="هشدار تردد: ورود فرد جدید تایید شد.">
-                </div>
-
-                <div class="option-switch-card">
-                    <span data-i18n="auto_send_telegram">ارسال خودکار تصویر به تلگرام</span>
-                    <input type="checkbox" id="autoTelegramToggle" class="switch-toggle" checked>
-                </div>
-
-                <div class="option-switch-card">
-                    <span data-i18n="remote_control_label">کنترل از راه دور از داخل تلگرام</span>
-                    <input type="checkbox" id="remoteControlToggle" class="switch-toggle">
-                </div>
-
-                <div style="display: flex; gap: 10px; margin-top: 18px;">
-                    <button id="saveSettingsBtn" class="btn-ui btn-ui-brand">
-                        <svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-                        <span data-i18n="btn_save">ذخیره تنظیمات</span>
-                    </button>
-                    <button id="testTelegramBtn" class="btn-ui btn-ui-outline">
-                        <svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                        <span data-i18n="btn_test_tg">تست اتصال</span>
+                    <button class="apple-btn apple-btn-secondary" style="justify-content:center;" onclick="testTelegramConnection()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                        <span id="tTest">تست</span>
                     </button>
                 </div>
-                <div id="tgTestResult" class="toast-msg"></div>
             </div>
-        </div>
-    </div>
-</div>
+        </aside>
+    </main>
 
-<!-- مودال تصویر -->
-<div id="imageModal" class="modal-view" onclick="this.classList.remove('open')">
-    <div class="modal-body" onclick="event.stopPropagation()">
-        <img id="modalImg" src="" alt="Capture">
-        <div style="display: flex; gap: 10px; justify-content: flex-end;">
-            <a id="downloadImgBtn" href="#" download="Capture.jpg" class="btn-ui btn-ui-brand" style="text-decoration:none; flex:0 1 auto;">
-                <svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                <span data-i18n="btn_download">دانلود تصویر</span>
-            </a>
-            <button class="btn-ui btn-ui-outline" style="flex:0 1 auto;" onclick="document.getElementById('imageModal').classList.remove('open')">
-                <span data-i18n="btn_close">بستن</span>
-            </button>
-        </div>
-    </div>
-</div>
+    <div id="toasts"></div>
 
-<script>
-    // ==================== دیکشنری چندزبانه (فارسی و انگلیسی) ====================
-    const i18n = {
-        fa: {
-            tab_live: 'پایش زنده',
-            tab_logs: 'گزارش‌ها و وقایع',
-            tab_persons: 'پایگاه افراد',
-            tab_settings: 'تنظیمات',
-            register_face_title: 'ثبت چهره جدید',
-            register_face_instruction: 'دوربین را روشن کرده و فرد مورد نظر را مقابل دوربین قرار دهید',
-            person_name_label: 'نام فرد:',
-            person_name_placeholder: 'مثلاً: محمد رضایی',
-            btn_register_face: 'ثبت و ذخیره چهره',
-            registered_persons_title: 'افراد ثبت‌شده',
-            no_persons: 'هیچ فردی ثبت نشده است.',
-            btn_clear_all_faces: 'حذف همه',
-            registered_at: 'تاریخ ثبت:',
-            last_seen: 'آخرین مشاهده:',
-            never_seen: 'مشاهده نشده',
-            face_registered_ok: 'چهره با موفقیت ثبت شد.',
-            err_no_camera: 'ابتدا دوربین را روشن کنید.',
-            err_no_person: 'فردی در کادر دوربین شناسایی نشد.',
-            err_no_name: 'لطفاً نام فرد را وارد کنید.',
-            recognized: 'شناسایی‌شده',
-            unknown_person: 'ناشناس',
-            confirm_clear_faces: 'آیا از حذف همه افراد ثبت‌شده اطمینان دارید؟',
-            ai_active: 'هوش مصنوعی آفلاین',
-            cam_off: 'دوربین خاموش',
-            cam_on: 'دوربین فعال',
-            live_feed_title: 'مانیتورینگ تصویری زنده',
-            ready_state: 'آماده ثبت',
-            stat_people: 'افراد در کادر',
-            stat_motion: 'شدت تحرک',
-            stat_captures: 'کل رویدادها',
-            stat_telegram: 'ارسال تلگرام',
-            full_frame: 'تمام کادر',
-            zone_active: 'زون فعال',
-            camera_is_off: 'دوربین خاموش است',
-            btn_start: 'شروع پایش',
-            btn_stop: 'توقف',
-            btn_snap: 'ثبت فوری',
-            tool_zone: 'رسم زون حساس',
-            tool_clear_zone: 'حذف زون',
-            tool_mirror: 'آینه (Mirror)',
-            tool_calibrate: 'کالیبره نور',
-            tool_fullscreen: 'تمام‌صفحه',
-            logs_title: 'گزارش وقایع و ترددها',
-            btn_export: 'اکسل (CSV)',
-            btn_clear_logs: 'پاکسازی',
-            no_records: 'هیچ رکوردی ثبت نشده است.',
-            vision_settings_title: 'تنظیمات تصویر و هوش مصنوعی',
-            language_label: 'زبان سامانه (Language):',
-            select_camera_label: 'انتخاب وب‌کم / سنسور:',
-            sensitivity_label: 'حساسیت سنسور به تحرک و حضور:',
-            min_size_label: 'حداقل ابعاد سوژه:',
-            cooldown_label: 'فاصله تنفس بین ثبت رویدادها:',
-            new_person_only: 'فقط هنگام ورود فرد جدید به کادر عکس بگیر',
-            sound_alert: 'آلارم صوتی بیومتریک',
-            draw_box_photo: 'درج کادر هدف و زمان روی عکس ارسالی',
-            schedule_shift: 'فعال‌سازی شیفت زمانی',
-            shift_start: 'شروع:',
-            shift_end: 'پایان:',
-            theme_label: 'حالت نمایش تیره (Dark Mode)',
-            telegram_settings_title: 'تنظیمات درگاه تلگرام',
-            bot_token_label: 'توکن ربات (Bot API Token):',
-            chat_id_label: 'شناسه عددی چت مقصد (Chat ID):',
-            caption_label: 'کپشن پیام ارسالی:',
-            auto_send_telegram: 'ارسال خودکار تصویر به تلگرام',
-            remote_control_label: 'کنترل از راه دور از داخل تلگرام',
-            btn_save: 'ذخیره تنظیمات',
-            btn_test_tg: 'تست اتصال',
-            btn_download: 'دانلود تصویر',
-            btn_close: 'بستن',
-            status_sent: 'ارسال شد',
-            status_local: 'محلی',
-            status_error: 'خطای اتصال',
-            unit_sec: 'ثانیه',
-            unit_frame: 'کادر'
-        },
-        en: {
-            tab_live: 'Live Monitor',
-            tab_logs: 'Incident Logs',
-            tab_persons: 'Persons DB',
-            tab_settings: 'Settings',
-            register_face_title: 'Register New Face',
-            register_face_instruction: 'Start the camera and position the person in front of it',
-            person_name_label: 'Person Name:',
-            person_name_placeholder: 'e.g.: John Smith',
-            btn_register_face: 'Capture & Register',
-            registered_persons_title: 'Registered Persons',
-            no_persons: 'No persons registered yet.',
-            btn_clear_all_faces: 'Clear All',
-            registered_at: 'Registered:',
-            last_seen: 'Last Seen:',
-            never_seen: 'Never',
-            face_registered_ok: 'Face registered successfully.',
-            err_no_camera: 'Start the camera first.',
-            err_no_person: 'No person detected in frame.',
-            err_no_name: 'Please enter a name.',
-            recognized: 'Recognized',
-            unknown_person: 'Unknown',
-            confirm_clear_faces: 'Are you sure you want to delete all registered persons?',
-            ai_active: 'Offline AI Vision',
-            cam_off: 'Camera Off',
-            cam_on: 'Camera Active',
-            live_feed_title: 'Real-time Optical Monitoring',
-            ready_state: 'Ready',
-            stat_people: 'Subjects in Frame',
-            stat_motion: 'Motion Level',
-            stat_captures: 'Total Incidents',
-            stat_telegram: 'Telegram Sent',
-            full_frame: 'Full Frame',
-            zone_active: 'Active Zone',
-            camera_is_off: 'Camera sensor is offline',
-            btn_start: 'Start Monitoring',
-            btn_stop: 'Stop Sensor',
-            btn_snap: 'Capture Frame',
-            tool_zone: 'Draw ROI Zone',
-            tool_clear_zone: 'Clear Zone',
-            tool_mirror: 'Mirror Stream',
-            tool_calibrate: 'Calibrate Light',
-            tool_fullscreen: 'Fullscreen',
-            logs_title: 'Incident Audit & Records',
-            btn_export: 'Export CSV',
-            btn_clear_logs: 'Clear Logs',
-            no_records: 'No incidents recorded yet.',
-            vision_settings_title: 'Vision & AI Sensor Settings',
-            language_label: 'System Language:',
-            select_camera_label: 'Optical Sensor / Webcam:',
-            sensitivity_label: 'Sensor Motion Sensitivity:',
-            min_size_label: 'Minimum Subject Area:',
-            cooldown_label: 'Event Trigger Cooldown:',
-            new_person_only: 'Capture only when a new person enters',
-            sound_alert: 'Biometric Sonar Chime',
-            draw_box_photo: 'Overlay reticle & timestamp on capture',
-            schedule_shift: 'Enable Security Shift Scheduling',
-            shift_start: 'Start:',
-            shift_end: 'End:',
-            theme_label: 'Dark Mode UI',
-            telegram_settings_title: 'Telegram Gateway Settings',
-            bot_token_label: 'Bot API Token:',
-            chat_id_label: 'Destination Chat ID:',
-            caption_label: 'Incident Report Caption:',
-            auto_send_telegram: 'Auto-dispatch photos to Telegram',
-            remote_control_label: 'Remote Telegram Commands',
-            btn_save: 'Save Settings',
-            btn_test_tg: 'Test Connection',
-            btn_download: 'Download Capture',
-            btn_close: 'Close',
-            status_sent: 'Dispatched',
-            status_local: 'Local Audit',
-            status_error: 'Dispatch Error',
-            unit_sec: 'sec',
-            unit_frame: 'frame'
-        }
-    };
-
-    let currentLang = 'fa';
-
-    function setLanguage(lang) {
-        currentLang = lang;
-        document.documentElement.lang = lang;
-        document.documentElement.dir = (lang === 'fa') ? 'rtl' : 'ltr';
-
-        const dict = i18n[lang] || i18n.fa;
-        document.querySelectorAll('[data-i18n]').forEach(el => {
-            const key = el.getAttribute('data-i18n');
-            if (dict[key]) {
-                el.innerText = dict[key];
+    <script>
+        // Localization Dictionary
+        const dict = {
+            fa: {
+                lang: 'English',
+                idle: 'دوربین در حالت آماده‌باش قرار دارد',
+                standby: 'آماده',
+                active: 'پایش فعال',
+                start: 'شروع پایش',
+                stop: 'توقف',
+                snap: 'عکس دستی',
+                calib: 'تنظیم پس‌زمینه',
+                fps: 'نرخ فریم (FPS)',
+                persons: 'افراد در صحنه',
+                captures: 'ثبت رخدادها',
+                tg: 'هشدارهای تلگرام',
+                logTitle: 'لاگ آخرین رویدادها',
+                thTime: 'زمان',
+                thCount: 'تعداد',
+                thConf: 'اطمینان',
+                thWho: 'هویت',
+                thTg: 'وضعیت ارسال',
+                emptyLog: 'هنوز رویدادی ثبت نشده است',
+                tabFaces: 'پروفایل‌ها',
+                tabSettings: 'تنظیمات',
+                regTitle: 'ثبت پروفایل جدید',
+                nameLabel: 'نام شخص:',
+                btnReg: 'ثبت از تصویر دوربین',
+                listTitle: 'لیست چهره‌های ذخیره‌شده',
+                btnClear: 'حذف همه',
+                tgTitle: 'تنظیمات ربات تلگرام',
+                captionLabel: 'عنوان هشدار:',
+                cooldownLabel: 'فاصله بین ثبت‌ها (ثانیه):',
+                autoSend: 'ارسال خودکار:',
+                onlyNew: 'فقط فرد جدید:',
+                remote: 'دستورات راه دور:',
+                save: 'ذخیره',
+                test: 'تست',
+                unknown: 'ناشناس'
+            },
+            en: {
+                lang: 'فارسی',
+                idle: 'Camera is currently in standby',
+                standby: 'Standby',
+                active: 'Active Monitoring',
+                start: 'Start Camera',
+                stop: 'Stop',
+                snap: 'Snapshot',
+                calib: 'Calibrate BG',
+                fps: 'Frame Rate (FPS)',
+                persons: 'Persons in View',
+                captures: 'Total Captures',
+                tg: 'Telegram Alerts',
+                logTitle: 'Recent Events Log',
+                thTime: 'Time',
+                thCount: 'Count',
+                thConf: 'Confidence',
+                thWho: 'Identity',
+                thTg: 'Telegram Status',
+                emptyLog: 'No events logged yet',
+                tabFaces: 'Profiles',
+                tabSettings: 'Settings',
+                regTitle: 'Register New Profile',
+                nameLabel: 'Person Name:',
+                btnReg: 'Register from Feed',
+                listTitle: 'Saved Face Profiles',
+                btnClear: 'Clear All',
+                tgTitle: 'Telegram Bot Settings',
+                captionLabel: 'Alert Title:',
+                cooldownLabel: 'Cooldown (sec):',
+                autoSend: 'Auto-send:',
+                onlyNew: 'New person only:',
+                remote: 'Remote commands:',
+                save: 'Save',
+                test: 'Test',
+                unknown: 'Unknown'
             }
-        });
+        };
 
-        const langSelect = document.getElementById('languageSelect');
-        if (langSelect) langSelect.value = lang;
+        let currentLang = 'fa';
+        let isStreaming = false;
+        let isPaused = false;
+        let videoStream = null;
+        let animationFrameId = null;
 
-        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-            const key = el.getAttribute('data-i18n-placeholder');
-            if (dict[key]) {
-                el.placeholder = dict[key];
-            }
-        });
+        // Statistics
+        let fpsCounter = 0;
+        let lastFpsUpdate = performance.now();
+        let totalCaptures = 0;
+        let telegramSentCount = 0;
+        let lastCaptureTimestamp = 0;
+        let recognizedTrackedIds = new Set();
 
-        // به‌روزرسانی برچسب اسلایدرها
-        updateSliderLabels();
+        // Canvas & Detection Core
+        const video = document.getElementById('webcam');
+        const overlayCanvas = document.getElementById('overlayCanvas');
+        const ctx = overlayCanvas.getContext('2d');
 
-        if (typeof renderPersonsGallery === 'function') {
-            renderPersonsGallery();
+        const procW = 160;
+        const procH = 100;
+        const procCanvas = document.createElement('canvas');
+        procCanvas.width = procW;
+        procCanvas.height = procH;
+        const procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
+
+        let prevFrame = null;
+        let bgFrame = null;
+        let registeredProfiles = [];
+
+        function notify(msg) {
+            const wrap = document.getElementById('toasts');
+            const item = document.createElement('div');
+            item.className = 'apple-toast';
+            item.innerHTML = `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--apple-blue)" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="16" x2="12" y2="12"/>
+                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                <span>${msg}</span>
+            `;
+            wrap.appendChild(item);
+            setTimeout(() => item.remove(), 4000);
         }
 
-        try { localStorage.setItem('mikotim_lang', lang); } catch(e){}
-    }
+        function setLang(lang) {
+            currentLang = lang;
+            document.documentElement.lang = lang;
+            document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
 
-    function updateSliderLabels() {
-        const dict = i18n[currentLang] || i18n.fa;
-        document.getElementById('confidenceValLabel').innerText = confidenceSlider.value + '%';
-        document.getElementById('minSizeValLabel').innerText = `${minSizeSlider.value}% ${dict.unit_frame}`;
-        document.getElementById('cooldownValLabel').innerText = `${cooldownSlider.value} ${dict.unit_sec}`;
-    }
+            const d = dict[lang];
+            document.getElementById('langBtn').querySelector('span').innerText = d.lang;
+            document.getElementById('tCameraIdle').innerText = d.idle;
+            document.getElementById('tStart').innerText = d.start;
+            document.getElementById('tStop').innerText = d.stop;
+            document.getElementById('tSnap').innerText = d.snap;
+            document.getElementById('tCalib').innerText = d.calib;
+            document.getElementById('tFps').innerText = d.fps;
+            document.getElementById('tPersons').innerText = d.persons;
+            document.getElementById('tCaptures').innerText = d.captures;
+            document.getElementById('tTg').innerText = d.tg;
+            document.getElementById('tLogTitle').innerText = d.logTitle;
+            document.getElementById('thTime').innerText = d.thTime;
+            document.getElementById('thCount').innerText = d.thCount;
+            document.getElementById('thConf').innerText = d.thConf;
+            document.getElementById('thWho').innerText = d.thWho;
+            document.getElementById('thTg').innerText = d.thTg;
+            document.getElementById('tTabFaces').innerText = d.tabFaces;
+            document.getElementById('tTabSettings').innerText = d.tabSettings;
+            document.getElementById('tRegTitle').innerText = d.regTitle;
+            document.getElementById('tNameLabel').innerText = d.nameLabel;
+            document.getElementById('tBtnReg').innerText = d.btnReg;
+            document.getElementById('tListTitle').innerText = d.listTitle;
+            document.getElementById('tBtnClear').innerText = d.btnClear;
+            document.getElementById('tTgTitle').innerText = d.tgTitle;
+            document.getElementById('tCaptionLabel').innerText = d.captionLabel;
+            document.getElementById('tCooldownLabel').innerText = d.cooldownLabel;
+            document.getElementById('tAutoSend').innerText = d.autoSend;
+            document.getElementById('tOnlyNew').innerText = d.onlyNew;
+            document.getElementById('tRemote').innerText = d.remote;
+            document.getElementById('tSave').innerText = d.save;
+            document.getElementById('tTest').innerText = d.test;
 
-    // ==================== مدیریت تب‌های بخش‌بندی ====================
-    const tabButtons = document.querySelectorAll('.tab-btn');
-    const tabPanes = document.querySelectorAll('.tab-content-pane');
+            updateBadge();
+        }
 
-    tabButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const targetId = btn.getAttribute('data-tab');
-            tabButtons.forEach(b => b.classList.remove('active'));
-            tabPanes.forEach(p => p.classList.remove('active'));
+        function toggleLang() {
+            setLang(currentLang === 'fa' ? 'en' : 'fa');
+        }
 
-            btn.classList.add('active');
-            const targetPane = document.getElementById(targetId);
-            if (targetPane) targetPane.classList.add('active');
-        });
-    });
+        function toggleTheme() {
+            const cur = document.documentElement.getAttribute('data-theme');
+            const target = cur === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', target);
+            document.getElementById('themeBtn').innerHTML = target === 'light' ? `
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="5"/>
+                    <line x1="12" y1="1" x2="12" y2="3"/>
+                    <line x1="12" y1="21" x2="12" y2="23"/>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                    <line x1="1" y1="12" x2="3" y2="12"/>
+                    <line x1="21" y1="12" x2="23" y2="12"/>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                </svg>
+            ` : `
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+            `;
+        }
 
-    // ==================== وضعیت‌های عمومی و ردیابی ====================
-    let isStreaming = false;
-    let isPausedByRemote = false;
-    let animationId = null;
-    let lastCaptureTime = 0;
-    let previousConfirmedCount = 0;
-    let totalCaptures = 0;
-    let telegramSentTotal = 0;
-    let logsData = [];
+        function showTab(tab) {
+            document.getElementById('paneFaces').style.display = tab === 'faces' ? 'flex' : 'none';
+            document.getElementById('paneSettings').style.display = tab === 'settings' ? 'flex' : 'none';
+            document.getElementById('tab1').classList.toggle('active', tab === 'faces');
+            document.getElementById('tab2').classList.toggle('active', tab === 'settings');
+        }
 
-    // نگهداری شناسه‌های ثبت‌شده جهت اجرای تضمینی "فقط ورود فرد جدید"
-    let capturedSubjectIds = new Set();
-    let knownFaces = [];
-    let lastKnownFacesSaveTime = 0;
-
-    // ==================== هسته هوش مصنوعی ارتقاءیافته کاملاً آفلاین ====================
-    const procW = 200;
-    const procH = 120;
-    const procCanvas = document.createElement('canvas');
-    procCanvas.width = procW;
-    procCanvas.height = procH;
-    const procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
-
-    let prevFrameData = null;
-    let prevPrevFrameData = null;
-    let bgModel = null;
-    let trackedObjects = [];
-    let nextTrackId = 101;
-
-    let isDrawingZone = false;
-    let zoneStart = null;
-    let activeZone = null;
-
-    // المان‌های DOM
-    const video = document.getElementById('webcam');
-    const overlayCanvas = document.getElementById('overlayCanvas');
-    const ctx = overlayCanvas.getContext('2d');
-    const cameraWrapper = document.getElementById('cameraWrapper');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const manualSnapBtn = document.getElementById('manualSnapBtn');
-    const cameraSelect = document.getElementById('cameraSelect');
-
-    const botTokenInput = document.getElementById('botTokenInput');
-    const chatIdInput = document.getElementById('chatIdInput');
-    const customCaptionInput = document.getElementById('customCaptionInput');
-    const cooldownSlider = document.getElementById('cooldownSlider');
-    const confidenceSlider = document.getElementById('confidenceSlider');
-    const minSizeSlider = document.getElementById('minSizeSlider');
-    const autoTelegramToggle = document.getElementById('autoTelegramToggle');
-    const onlyNewPersonToggle = document.getElementById('onlyNewPersonToggle');
-    const soundAlertToggle = document.getElementById('soundAlertToggle');
-    const drawBoxOnPhotoToggle = document.getElementById('drawBoxOnPhotoToggle');
-    const remoteControlToggle = document.getElementById('remoteControlToggle');
-    const scheduleToggle = document.getElementById('scheduleToggle');
-    const startTimeInput = document.getElementById('startTimeInput');
-    const endTimeInput = document.getElementById('endTimeInput');
-    const languageSelect = document.getElementById('languageSelect');
-    const themeSwitchToggle = document.getElementById('themeSwitchToggle');
-
-    // انتخابگر زبان
-    languageSelect.addEventListener('change', (e) => {
-        setLanguage(e.target.value);
-    });
-
-    // تم دارک / لایت
-    themeSwitchToggle.addEventListener('change', (e) => {
-        const theme = e.target.checked ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', theme);
-        try { localStorage.setItem('mikotim_theme', theme); } catch(err){}
-    });
-
-    // ==================== بارگذاری مقادیر اولیه و تنظیمات ====================
-    function loadSavedSettings() {
-        try {
-            if (localStorage.getItem('mikotim_lang')) {
-                setLanguage(localStorage.getItem('mikotim_lang'));
+        function updateBadge() {
+            const dot = document.getElementById('dot');
+            const label = document.getElementById('tStatus');
+            const d = dict[currentLang];
+            if (isStreaming) {
+                dot.classList.add('active');
+                label.innerText = d.active;
             } else {
-                setLanguage('fa');
+                dot.classList.remove('active');
+                label.innerText = d.standby;
             }
-
-            if (localStorage.getItem('mikotim_theme')) {
-                const t = localStorage.getItem('mikotim_theme');
-                document.documentElement.setAttribute('data-theme', t);
-                themeSwitchToggle.checked = (t === 'dark');
-            }
-
-            if (localStorage.getItem('mikotim_bot_token')) botTokenInput.value = localStorage.getItem('mikotim_bot_token');
-            if (localStorage.getItem('mikotim_chat_id')) chatIdInput.value = localStorage.getItem('mikotim_chat_id');
-            if (localStorage.getItem('mikotim_caption')) customCaptionInput.value = localStorage.getItem('mikotim_caption');
-            if (localStorage.getItem('mikotim_cooldown')) cooldownSlider.value = localStorage.getItem('mikotim_cooldown');
-            if (localStorage.getItem('mikotim_confidence')) confidenceSlider.value = localStorage.getItem('mikotim_confidence');
-            if (localStorage.getItem('mikotim_minsize')) minSizeSlider.value = localStorage.getItem('mikotim_minsize');
-
-            updateSliderLabels();
-        } catch (e) {}
-        loadKnownFaces();
-    }
-    loadSavedSettings();
-
-    document.getElementById('saveSettingsBtn').addEventListener('click', () => {
-        try {
-            localStorage.setItem('mikotim_bot_token', botTokenInput.value.trim());
-            localStorage.setItem('mikotim_chat_id', chatIdInput.value.trim());
-            localStorage.setItem('mikotim_caption', customCaptionInput.value.trim());
-            localStorage.setItem('mikotim_cooldown', cooldownSlider.value);
-            localStorage.setItem('mikotim_confidence', confidenceSlider.value);
-            localStorage.setItem('mikotim_minsize', minSizeSlider.value);
-            showNotice((currentLang === 'fa') ? 'تنظیمات با موفقیت ذخیره شد.' : 'Settings saved successfully.', 'var(--status-success)', 'var(--status-success-bg)');
-        } catch (e) {
-            showNotice('Saved.', 'var(--status-success)', 'var(--status-success-bg)');
-        }
-    });
-
-    cooldownSlider.addEventListener('input', updateSliderLabels);
-    confidenceSlider.addEventListener('input', updateSliderLabels);
-    minSizeSlider.addEventListener('input', updateSliderLabels);
-
-    scheduleToggle.addEventListener('change', () => {
-        document.getElementById('scheduleBox').style.display = scheduleToggle.checked ? 'grid' : 'none';
-    });
-
-    function showNotice(msg, color, bg) {
-        const el = document.getElementById('tgTestResult');
-        el.style.display = 'block';
-        el.style.color = color;
-        el.style.backgroundColor = bg || 'var(--bg-elevated)';
-        el.style.border = `1px solid ${color}`;
-        el.innerText = msg;
-        setTimeout(() => { el.style.display = 'none'; }, 5500);
-    }
-
-    // ==================== مدیریت سخت‌افزار وب‌کم ====================
-    async function initCameraDevices() {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
-        try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const videoInputs = devices.filter(d => d.kind === 'videoinput');
-            if (videoInputs.length > 0) {
-                const curVal = cameraSelect.value;
-                cameraSelect.innerHTML = '';
-                videoInputs.forEach((dev, idx) => {
-                    const opt = document.createElement('option');
-                    opt.value = dev.deviceId;
-                    opt.text = dev.label ? dev.label : `Camera #${idx + 1}`;
-                    cameraSelect.appendChild(opt);
-                });
-                if (curVal) cameraSelect.value = curVal;
-            }
-        } catch (e) {}
-    }
-    initCameraDevices();
-
-    startBtn.addEventListener('click', async () => {
-        const errBox = document.getElementById('cameraErrorBox');
-        errBox.style.display = 'none';
-
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            errBox.innerText = (currentLang === 'fa') ? 'دسترسی به دوربین مسدود است.' : 'Camera access is blocked by the browser.';
-            errBox.style.display = 'block';
-            return;
         }
 
-        let stream = null;
-        try {
-            const devId = cameraSelect.value;
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: devId ? { deviceId: { exact: devId }, width: { ideal: 1280 }, height: { ideal: 720 } } : { width: { ideal: 1280 }, height: { ideal: 720 } },
-                audio: false
-            });
-        } catch (e1) {
+        // ==================== Direct Browser Camera Engine ====================
+        async function startCamera() {
             try {
-                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-            } catch (e2) {
-                errBox.innerText = (currentLang === 'fa') ? `خطا در باز کردن دوربین (${e2.name})` : `Camera error: ${e2.name}`;
-                errBox.style.display = 'block';
+                videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: "user"
+                    },
+                    audio: false
+                });
+
+                video.srcObject = videoStream;
+                await video.play();
+
+                isStreaming = true;
+                document.getElementById('camIdle').style.display = 'none';
+                video.style.display = 'block';
+                document.getElementById('startBtn').style.display = 'none';
+                document.getElementById('stopBtn').style.display = 'inline-flex';
+                updateBadge();
+
+                overlayCanvas.width = video.videoWidth || 1280;
+                overlayCanvas.height = video.videoHeight || 720;
+
+                prevFrame = null;
+                bgFrame = null;
+                processLoop();
+                notify(currentLang === 'fa' ? 'دوربین با موفقیت متصل شد' : 'Camera connected directly');
+            } catch (err) {
+                console.error(err);
+                notify((currentLang === 'fa' ? 'خطای دسترسی به وب‌کم: ' : 'Camera access error: ') + err.message);
+            }
+        }
+
+        function stopCamera() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            isStreaming = false;
+            document.getElementById('camIdle').style.display = 'flex';
+            video.style.display = 'none';
+            ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            document.getElementById('startBtn').style.display = 'inline-flex';
+            document.getElementById('stopBtn').style.display = 'none';
+            document.getElementById('personVal').innerText = "0";
+            document.getElementById('fpsVal').innerText = "0.0";
+            updateBadge();
+            notify(currentLang === 'fa' ? 'پایش متوقف شد' : 'Surveillance stopped');
+        }
+
+        function calibrate() {
+            bgFrame = null;
+            prevFrame = null;
+            notify(currentLang === 'fa' ? 'مدل پس‌زمینه کالیبره شد' : 'Background calibrated');
+        }
+
+        // Real-time Computer Vision Processing Loop (Runs 60FPS in Browser)
+        function processLoop() {
+            if (!isStreaming) return;
+
+            const now = performance.now();
+            fpsCounter++;
+            if (now - lastFpsUpdate >= 1000) {
+                document.getElementById('fpsVal').innerText = (fpsCounter * 1000 / (now - lastFpsUpdate)).toFixed(1);
+                fpsCounter = 0;
+                lastFpsUpdate = now;
+            }
+
+            const w = overlayCanvas.width;
+            const h = overlayCanvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            // Downsample to procCanvas for rapid motion diff
+            procCtx.drawImage(video, 0, 0, procW, procH);
+            const currImg = procCtx.getImageData(0, 0, procW, procH);
+            const currData = currImg.data;
+
+            if (!bgFrame) {
+                bgFrame = new Float32Array(procW * procH);
+                for (let i = 0, p = 0; i < currData.length; i += 4, p++) {
+                    bgFrame[p] = 0.299 * currData[i] + 0.587 * currData[i + 1] + 0.114 * currData[i + 2];
+                }
+            }
+
+            let diffCount = 0;
+            let minX = procW, maxX = 0, minY = procH, maxY = 0;
+
+            for (let i = 0, p = 0; i < currData.length; i += 4, p++) {
+                const gray = 0.299 * currData[i] + 0.587 * currData[i + 1] + 0.114 * currData[i + 2];
+                const diff = Math.abs(gray - bgFrame[p]);
+
+                // Slow background adaptation
+                bgFrame[p] += (gray - bgFrame[p]) * 0.015;
+
+                if (diff > 26) {
+                    diffCount++;
+                    const x = p % procW;
+                    const y = Math.floor(p / procW);
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+
+            const totalPixels = procW * procH;
+            const motionRatio = diffCount / totalPixels;
+            let detectedPersons = [];
+
+            if (motionRatio > 0.018 && maxX > minX && maxY > minY) {
+                const scaleX = w / procW;
+                const scaleY = h / procH;
+
+                const bx = Math.max(0, minX * scaleX - 20);
+                const by = Math.max(0, minY * scaleY - 20);
+                const bw = Math.min(w - bx, (maxX - minX) * scaleX + 40);
+                const bh = Math.min(h - by, (maxY - minY) * scaleY + 40);
+
+                if (bw > 60 && bh > 80) {
+                    const matchedName = matchFace(bx, by, bw, bh);
+                    detectedPersons.push({
+                        bbox: [bx, by, bw, bh],
+                        score: Math.min(0.96, 0.65 + motionRatio * 3),
+                        name: matchedName
+                    });
+                }
+            }
+
+            document.getElementById('personVal').innerText = detectedPersons.length;
+
+            // Draw HUD annotations
+            for (const det of detectedPersons) {
+                drawHud(det);
+            }
+
+            // Auto-incident trigger
+            if (detectedPersons.length > 0 && !isPaused) {
+                checkAutoIncident(detectedPersons);
+            }
+
+            animationFrameId = requestAnimationFrame(processLoop);
+        }
+
+        function drawHud(det) {
+            const [x, y, bw, bh] = det.bbox;
+            const isKnown = !!det.name;
+            const color = isKnown ? '#30d158' : '#ff9f0a';
+
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.5;
+
+            const edge = Math.min(24, Math.max(10, bw / 5));
+
+            // Tactical Corner Brackets
+            ctx.beginPath();
+            // Top-left
+            ctx.moveTo(x, y + edge); ctx.lineTo(x, y); ctx.lineTo(x + edge, y);
+            // Top-right
+            ctx.moveTo(x + bw - edge, y); ctx.lineTo(x + bw, y); ctx.lineTo(x + bw, y + edge);
+            // Bottom-left
+            ctx.moveTo(x, y + bh - edge); ctx.lineTo(x, y + bh); ctx.lineTo(x + edge, y + bh);
+            // Bottom-right
+            ctx.moveTo(x + bw - edge, y + bh); ctx.lineTo(x + bw, y + bh); ctx.lineTo(x + bw, y + bh - edge);
+            ctx.stroke();
+
+            // Label pill
+            const label = isKnown ? `${det.name} (92%)` : `Unknown (${Math.round(det.score * 100)}%)`;
+            ctx.font = '600 13px -apple-system, Vazirmatn, sans-serif';
+            const tw = ctx.measureText(label).width;
+
+            const tagY = y > 30 ? y - 10 : y + bh + 20;
+            ctx.fillStyle = 'rgba(18, 18, 20, 0.85)';
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(x, tagY - 18, tw + 16, 24, 8);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(label, x + 8, tagY - 2);
+
+            ctx.restore();
+        }
+
+        // ==================== Face Recognition Core ====================
+        function matchFace(x, y, bw, bh) {
+            if (!registeredProfiles.length) return null;
+
+            // Crop head region and compute simple invariant signature
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width = 32;
+            cropCanvas.height = 32;
+            const cCtx = cropCanvas.getContext('2d');
+            cCtx.drawImage(video, x, y, bw, Math.min(bh, bw * 1.3), 0, 0, 32, 32);
+
+            const imgData = cCtx.getImageData(0, 0, 32, 32).data;
+            const sig = computeSignature(imgData);
+
+            let bestMatch = null;
+            let bestSim = -1;
+
+            for (const profile of registeredProfiles) {
+                const sim = cosineSim(sig, profile.signature);
+                if (sim > bestSim && sim > 0.74) {
+                    bestSim = sim;
+                    bestMatch = profile.name;
+                }
+            }
+            return bestMatch;
+        }
+
+        function computeSignature(data) {
+            const sig = new Float32Array(32);
+            for (let i = 0; i < data.length; i += 4) {
+                const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                const block = Math.floor(i / (4 * 32));
+                sig[block % 32] += gray / 32;
+            }
+            let norm = 0;
+            for (let i = 0; i < sig.length; i++) norm += sig[i] * sig[i];
+            norm = Math.sqrt(norm) || 1;
+            for (let i = 0; i < sig.length; i++) sig[i] /= norm;
+            return sig;
+        }
+
+        function cosineSim(a, b) {
+            let dot = 0;
+            for (let i = 0; i < a.length; i++) dot += a[i] * b[i];
+            return dot;
+        }
+
+        function registerCurrentFace() {
+            if (!isStreaming) {
+                notify(currentLang === 'fa' ? 'ابتدا دوربین را فعال کنید' : 'Please start the camera first');
                 return;
             }
+            const nameInput = document.getElementById('nameInput');
+            const name = nameInput.value.trim();
+            if (!name) {
+                notify(currentLang === 'fa' ? 'لطفاً نام شخص را وارد کنید' : 'Please enter a name');
+                return;
+            }
+
+            const snap = document.createElement('canvas');
+            snap.width = 64;
+            snap.height = 64;
+            const sCtx = snap.getContext('2d');
+            sCtx.drawImage(video, 0, 0, snap.width, snap.height);
+
+            const imgData = sCtx.getImageData(0, 0, 32, 32).data;
+            const sig = Array.from(computeSignature(imgData));
+            const thumbUrl = snap.toDataURL('image/jpeg', 0.85);
+
+            const profile = {
+                id: 'face_' + Date.now(),
+                name: name,
+                signature: sig,
+                thumb: thumbUrl,
+                time: new Date().toLocaleTimeString()
+            };
+
+            registeredProfiles.push(profile);
+            saveProfiles();
+            nameInput.value = '';
+            renderProfileList();
+            notify(currentLang === 'fa' ? `پروفایل ${name} با موفقیت ذخیره شد` : `Profile ${name} registered`);
         }
 
-        video.srcObject = stream;
-        await video.play();
-
-        overlayCanvas.width = video.videoWidth || 640;
-        overlayCanvas.height = video.videoHeight || 480;
-        prevFrameData = null;
-        prevPrevFrameData = null;
-        bgModel = null;
-        trackedObjects = [];
-        capturedSubjectIds.clear();
-
-        await initCameraDevices();
-
-        isStreaming = true;
-        document.getElementById('cameraPlaceholder').style.display = 'none';
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        manualSnapBtn.disabled = false;
-        document.getElementById('drawZoneBtn').disabled = false;
-        document.getElementById('calibrateBgBtn').disabled = false;
-
-        const camBadge = document.getElementById('camBadge');
-        camBadge.className = 'status-pill active';
-        document.getElementById('camStatusText').innerText = (currentLang === 'fa') ? 'دوربین فعال' : 'Camera Active';
-
-        detectLoop();
-    });
-
-    stopBtn.addEventListener('click', () => {
-        isStreaming = false;
-        if (animationId) cancelAnimationFrame(animationId);
-        if (video.srcObject) {
-            video.srcObject.getTracks().forEach(t => t.stop());
-            video.srcObject = null;
-        }
-        ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-        cameraWrapper.classList.remove('alert-active');
-        document.getElementById('cameraPlaceholder').style.display = 'flex';
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        manualSnapBtn.disabled = true;
-        document.getElementById('drawZoneBtn').disabled = true;
-        document.getElementById('calibrateBgBtn').disabled = true;
-        document.getElementById('currentPeopleCount').innerText = '0';
-        document.getElementById('motionLevelText').innerText = '0%';
-
-        const faceCanvas = document.getElementById('facePreviewCanvas');
-        if (faceCanvas) {
-            const fpCtx = faceCanvas.getContext('2d');
-            fpCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
-            faceCanvas.classList.remove('quality-good');
-        }
-        const faceLbl = document.getElementById('facePreviewLabel');
-        if (faceLbl) {
-            faceLbl.innerText = (i18n[currentLang] || i18n.fa).register_face_instruction;
-            faceLbl.style.color = 'var(--text-secondary)';
+        function saveProfiles() {
+            try {
+                localStorage.setItem('mikotim_profiles', JSON.stringify(registeredProfiles));
+            } catch (e) {}
         }
 
-        const camBadge = document.getElementById('camBadge');
-        camBadge.className = 'status-pill standby';
-        document.getElementById('camStatusText').innerText = (currentLang === 'fa') ? 'دوربین خاموش' : 'Camera Off';
-    });
-
-    document.getElementById('mirrorBtn').addEventListener('click', () => {
-        video.classList.toggle('mirrored');
-    });
-
-    document.getElementById('calibrateBgBtn').addEventListener('click', () => {
-        bgModel = null;
-        prevFrameData = null;
-        prevPrevFrameData = null;
-        trackedObjects = [];
-        showNotice((currentLang === 'fa') ? 'کالیبراسیون نور انجام شد.' : 'Calibrated.', 'var(--brand-primary)', 'rgba(14, 165, 233, 0.1)');
-    });
-
-    document.getElementById('fullscreenBtn').addEventListener('click', () => {
-        if (!document.fullscreenElement) {
-            cameraWrapper.requestFullscreen().catch(() => {});
-        } else {
-            document.exitFullscreen();
+        function loadProfiles() {
+            try {
+                const raw = localStorage.getItem('mikotim_profiles');
+                if (raw) registeredProfiles = JSON.parse(raw);
+            } catch (e) {}
+            renderProfileList();
         }
-    });
 
-    // ==================== رسم زون حساس ====================
-    const drawZoneBtn = document.getElementById('drawZoneBtn');
-    const clearZoneBtn = document.getElementById('clearZoneBtn');
+        function renderProfileList() {
+            const list = document.getElementById('faceList');
+            list.innerHTML = '';
+            if (!registeredProfiles.length) {
+                list.innerHTML = `<p style="font-size:0.75rem; color:var(--text-secondary); text-align:center; padding:12px;">${currentLang === 'fa' ? 'پروفایلی ثبت نشده' : 'No profiles'}</p>`;
+                return;
+            }
 
-    drawZoneBtn.addEventListener('click', () => {
-        isDrawingZone = !isDrawingZone;
-        drawZoneBtn.classList.toggle('active-tool', isDrawingZone);
-        drawZoneBtn.innerHTML = isDrawingZone
-            ? `<svg class="svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg><span>${(currentLang === 'fa') ? 'رسم زون...' : 'Draw Zone...'}</span>`
-            : `<svg class="svg-icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg><span>${(currentLang === 'fa') ? 'رسم زون حساس' : 'Draw ROI Zone'}</span>`;
-    });
-
-    clearZoneBtn.addEventListener('click', () => {
-        activeZone = null;
-        clearZoneBtn.style.display = 'none';
-        document.getElementById('zoneStatusPill').innerHTML = `
-            <svg class="svg-icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>
-            <span>${(currentLang === 'fa') ? 'تمام کادر' : 'Full Frame'}</span>
-        `;
-    });
-
-    overlayCanvas.addEventListener('mousedown', (e) => {
-        if (!isDrawingZone || !isStreaming) return;
-        const rect = overlayCanvas.getBoundingClientRect();
-        zoneStart = {
-            x: (e.clientX - rect.left) / rect.width,
-            y: (e.clientY - rect.top) / rect.height
-        };
-    });
-
-    overlayCanvas.addEventListener('mousemove', (e) => {
-        if (!isDrawingZone || !zoneStart) return;
-        const rect = overlayCanvas.getBoundingClientRect();
-        const curX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-        const curY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-        activeZone = {
-            x: Math.min(zoneStart.x, curX),
-            y: Math.min(zoneStart.y, curY),
-            w: Math.abs(curX - zoneStart.x),
-            h: Math.abs(curY - zoneStart.y)
-        };
-    });
-
-    window.addEventListener('mouseup', () => {
-        if (isDrawingZone && zoneStart) {
-            zoneStart = null;
-            isDrawingZone = false;
-            drawZoneBtn.classList.remove('active-tool');
-            drawZoneBtn.innerHTML = `
-                <svg class="svg-icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>
-                <span>${(currentLang === 'fa') ? 'تغییر زون' : 'Edit Zone'}</span>
-            `;
-            if (activeZone && activeZone.w > 0.05 && activeZone.h > 0.05) {
-                clearZoneBtn.style.display = 'inline-flex';
-                document.getElementById('zoneStatusPill').innerHTML = `
-                    <svg class="svg-icon-sm" style="color:var(--status-danger);" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>
-                    <span style="color:var(--status-danger);">${(currentLang === 'fa') ? 'زون فعال' : 'Active Zone'}</span>
+            registeredProfiles.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'profile-card';
+                card.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <img src="${p.thumb}" style="width:28px; height:28px; border-radius:6px; object-fit:cover;">
+                        <span style="font-weight:600;">${p.name}</span>
+                    </div>
+                    <button class="btn-icon-danger" onclick="deleteProfile('${p.id}')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
                 `;
-            } else {
-                activeZone = null;
-            }
-        }
-    });
-
-    // ==================== موتور ارتقاءیافته هوش مصنوعی آفلاین ====================
-    function runEnhancedOfflineAIEngine() {
-        procCtx.save();
-        if (video.classList.contains('mirrored')) {
-            procCtx.translate(procW, 0);
-            procCtx.scale(-1, 1);
-        }
-        procCtx.drawImage(video, 0, 0, procW, procH);
-        procCtx.restore();
-
-        const currentFrame = procCtx.getImageData(0, 0, procW, procH).data;
-
-        if (!prevFrameData) {
-            prevFrameData = new Uint8ClampedArray(currentFrame);
-            bgModel = new Float32Array(currentFrame.length);
-            for (let i = 0; i < currentFrame.length; i++) bgModel[i] = currentFrame[i];
-            return { confirmed: [], motionPercent: 0 };
-        }
-        if (!prevPrevFrameData) {
-            prevPrevFrameData = new Uint8ClampedArray(prevFrameData);
-            prevFrameData = new Uint8ClampedArray(currentFrame);
-            return { confirmed: [], motionPercent: 0 };
-        }
-
-        const sensitivity = parseInt(confidenceSlider.value, 10);
-        const diffCutoff = Math.max(10, 42 - sensitivity * 0.32);
-        const streakReq = 2;
-
-        const gridCols = 25;
-        const gridRows = 15;
-        const cellW = procW / gridCols;
-        const cellH = procH / gridRows;
-        const activeGrid = Array.from({ length: gridRows }, () => Array(gridCols).fill(false));
-        const skinGrid = Array.from({ length: gridRows }, () => Array(gridCols).fill(0));
-        let activeCellsCount = 0;
-        let totalZoneCells = 0;
-
-        for (let r = 0; r < gridRows; r++) {
-            for (let c = 0; c < gridCols; c++) {
-                const normX = (c + 0.5) / gridCols;
-                const normY = (r + 0.5) / gridRows;
-
-                if (activeZone) {
-                    if (normX < activeZone.x || normX > activeZone.x + activeZone.w ||
-                        normY < activeZone.y || normY > activeZone.y + activeZone.h) {
-                        continue;
-                    }
-                }
-                totalZoneCells++;
-
-                let cellDiffScore = 0;
-                let skinPixels = 0;
-                const startX = Math.floor(c * cellW);
-                const startY = Math.floor(r * cellH);
-
-                for (let y = startY; y < startY + cellH; y += 2) {
-                    for (let x = startX; x < startX + cellW; x += 2) {
-                        const i = (y * procW + x) * 4;
-                        const rVal = currentFrame[i];
-                        const gVal = currentFrame[i + 1];
-                        const bVal = currentFrame[i + 2];
-
-                        // تفاضل ۳ فریمی
-                        const d1 = Math.abs(rVal - prevFrameData[i]) * 0.3 + Math.abs(gVal - prevFrameData[i + 1]) * 0.59 + Math.abs(bVal - prevFrameData[i + 2]) * 0.11;
-                        const d2 = Math.abs(prevFrameData[i] - prevPrevFrameData[i]) * 0.3 + Math.abs(prevFrameData[i + 1] - prevPrevFrameData[i + 1]) * 0.59 + Math.abs(prevFrameData[i + 2] - prevPrevFrameData[i + 2]) * 0.11;
-                        const kinetic = Math.min(d1, d2);
-
-                        // تفاضل پس‌زمینه
-                        const bgDiff = Math.abs(rVal - bgModel[i]) * 0.3 + Math.abs(gVal - bgModel[i + 1]) * 0.59 + Math.abs(bVal - bgModel[i + 2]) * 0.11;
-
-                        // بررسی فام رنگ چهره و پوست انسان
-                        if (rVal > 65 && gVal > 40 && bVal > 20 && rVal > gVal && rVal > bVal && (rVal - gVal) > 8) {
-                            skinPixels++;
-                        }
-
-                        if (kinetic > diffCutoff || bgDiff > (diffCutoff * 1.25)) {
-                            cellDiffScore++;
-                        }
-                    }
-                }
-
-                skinGrid[r][c] = skinPixels;
-
-                if (cellDiffScore >= 3 || (skinPixels >= 4 && cellDiffScore >= 1)) {
-                    activeGrid[r][c] = true;
-                    activeCellsCount++;
-                } else {
-                    for (let y = startY; y < startY + cellH; y++) {
-                        for (let x = startX; x < startX + cellW; x++) {
-                            const i = (y * procW + x) * 4;
-                            bgModel[i] = bgModel[i] * 0.93 + currentFrame[i] * 0.07;
-                            bgModel[i + 1] = bgModel[i + 1] * 0.93 + currentFrame[i + 1] * 0.07;
-                            bgModel[i + 2] = bgModel[i + 2] * 0.93 + currentFrame[i + 2] * 0.07;
-                        }
-                    }
-                }
-            }
-        }
-
-        prevPrevFrameData.set(prevFrameData);
-        prevFrameData.set(currentFrame);
-
-        const motionRatio = totalZoneCells > 0 ? (activeCellsCount / totalZoneCells) : 0;
-        if (motionRatio > 0.82) {
-            for (let i = 0; i < currentFrame.length; i++) bgModel[i] = currentFrame[i];
-            return { confirmed: [], motionPercent: 100 };
-        }
-
-        const visited = Array.from({ length: gridRows }, () => Array(gridCols).fill(false));
-        const detectedBlobs = [];
-        const minAreaPercent = parseInt(minSizeSlider.value, 10) / 100;
-        const minCellsRequired = Math.max(1, Math.round(gridCols * gridRows * minAreaPercent * 0.45));
-
-        for (let r = 0; r < gridRows; r++) {
-            for (let c = 0; c < gridCols; c++) {
-                if (activeGrid[r][c] && !visited[r][c]) {
-                    let minR = r, maxR = r, minC = c, maxC = c, count = 0, totalSkin = 0;
-                    const queue = [[r, c]];
-                    visited[r][c] = true;
-
-                    while (queue.length > 0) {
-                        const [cr, cc] = queue.shift();
-                        count++;
-                        totalSkin += skinGrid[cr][cc];
-                        if (cr < minR) minR = cr;
-                        if (cr > maxR) maxR = cr;
-                        if (cc < minC) minC = cc;
-                        if (cc > maxC) maxC = cc;
-
-                        for (let dr = -1; dr <= 1; dr++) {
-                            for (let dc = -1; dc <= 1; dc++) {
-                                const nr = cr + dr, nc = cc + dc;
-                                if (nr >= 0 && nr < gridRows && nc >= 0 && nc < gridCols &&
-                                    activeGrid[nr][nc] && !visited[nr][nc]) {
-                                    visited[nr][nc] = true;
-                                    queue.push([nr, nc]);
-                                }
-                            }
-                        }
-                    }
-
-                    if (count >= minCellsRequired) {
-                        const scaleX = overlayCanvas.width / gridCols;
-                        const scaleY = overlayCanvas.height / gridRows;
-                        const bx = minC * scaleX;
-                        const by = minR * scaleY;
-                        const bw = (maxC - minC + 1) * scaleX;
-                        const bh = (maxR - minR + 1) * scaleY;
-
-                        const aspect = bh / (bw || 1);
-                        const isLikelyHuman = (aspect >= 0.45 && aspect <= 4.2) || totalSkin > 12;
-
-                        if (isLikelyHuman) {
-                            detectedBlobs.push({
-                                x: bx, y: by, w: bw, h: bh,
-                                cx: bx + bw / 2, cy: by + bh / 2,
-                                score: Math.min(0.99, 0.80 + (totalSkin > 0 ? 0.12 : 0) + (count / 35) * 0.08)
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        const matchDist = overlayCanvas.width * 0.28;
-        const matchedIds = new Set();
-
-        detectedBlobs.forEach(blob => {
-            let bestTrack = null;
-            let bestDist = Infinity;
-
-            trackedObjects.forEach(track => {
-                if (matchedIds.has(track.id)) return;
-                const d = Math.hypot(blob.cx - track.cx, blob.cy - track.cy);
-                if (d < matchDist && d < bestDist) {
-                    bestDist = d;
-                    bestTrack = track;
-                }
+                list.appendChild(card);
             });
-
-            if (bestTrack) {
-                bestTrack.x = bestTrack.x * 0.3 + blob.x * 0.7;
-                bestTrack.y = bestTrack.y * 0.3 + blob.y * 0.7;
-                bestTrack.w = bestTrack.w * 0.3 + blob.w * 0.7;
-                bestTrack.h = bestTrack.h * 0.3 + blob.h * 0.7;
-                bestTrack.cx = bestTrack.x + bestTrack.w / 2;
-                bestTrack.cy = bestTrack.y + bestTrack.h / 2;
-                bestTrack.score = blob.score;
-                bestTrack.streak = Math.min(40, bestTrack.streak + 1);
-                bestTrack.missed = 0;
-                matchedIds.add(bestTrack.id);
-            } else {
-                trackedObjects.push({
-                    id: nextTrackId++,
-                    x: blob.x, y: blob.y, w: blob.w, h: blob.h,
-                    cx: blob.cx, cy: blob.cy,
-                    score: blob.score,
-                    streak: 1,
-                    missed: 0,
-                    matchedName: null,
-                    matchScore: 0
-                });
-            }
-        });
-
-        trackedObjects.forEach(t => {
-            if (!matchedIds.has(t.id)) t.missed++;
-        });
-        trackedObjects = trackedObjects.filter(t => t.missed <= 12);
-
-        const confirmed = trackedObjects
-            .filter(t => t.streak >= streakReq)
-            .map(t => ({
-                id: t.id,
-                bbox: [t.x, t.y, t.w, t.h],
-                score: t.score,
-                matchedName: t.matchedName || null,
-                matchScore: t.matchScore || 0,
-                streak: t.streak
-            }));
-
-        return {
-            confirmed,
-            motionPercent: Math.min(100, Math.round(motionRatio * 100))
-        };
-    }
-
-    // بررسی شیفت
-    function checkShiftSchedule() {
-        if (!scheduleToggle.checked) return true;
-        const now = new Date();
-        const curMins = now.getHours() * 60 + now.getMinutes();
-        const [sh, sm] = startTimeInput.value.split(':').map(Number);
-        const [eh, em] = endTimeInput.value.split(':').map(Number);
-        const sMins = sh * 60 + sm;
-        const eMins = eh * 60 + em;
-        return sMins <= eMins ? (curMins >= sMins && curMins <= eMins) : (curMins >= sMins || curMins <= eMins);
-    }
-
-    // ==================== حلقه مانیتورینگ زنده ====================
-    let lastTick = 0;
-    let fpsFrames = 0;
-    let lastFpsStamp = performance.now();
-    let faceMatchFrameCounter = 0;
-    let lastFacePreviewStamp = 0;
-
-    function detectLoop(timestamp = 0) {
-        if (!isStreaming) return;
-
-        fpsFrames++;
-        if (timestamp - lastFpsStamp >= 1000) {
-            document.getElementById('fpsPill').innerHTML = `
-                <span class="dot-indicator" style="color: #34D399;"></span>
-                <span>FPS: ${fpsFrames}</span>
-            `;
-            fpsFrames = 0;
-            lastFpsStamp = timestamp;
         }
 
-        if (timestamp - lastTick > 65) {
-            lastTick = timestamp;
+        function deleteProfile(id) {
+            registeredProfiles = registeredProfiles.filter(p => p.id !== id);
+            saveProfiles();
+            renderProfileList();
+            notify(currentLang === 'fa' ? 'پروفایل حذف شد' : 'Profile deleted');
+        }
 
-            const res = runEnhancedOfflineAIEngine();
-            const confirmedPersons = res.confirmed;
-            const motionPct = res.motionPercent;
+        function clearAllFaces() {
+            if (!confirm(currentLang === 'fa' ? 'تمام پروفایل‌ها حذف شوند؟' : 'Clear all profiles?')) return;
+            registeredProfiles = [];
+            saveProfiles();
+            renderProfileList();
+            notify(currentLang === 'fa' ? 'بانک چهره پاک شد' : 'All profiles cleared');
+        }
 
-            // تطبیق بیومتریک چهره هر ۵ فریم یک‌بار
-            faceMatchFrameCounter++;
-            if (faceMatchFrameCounter % 5 === 0 && knownFaces.length > 0 && confirmedPersons.length > 0) {
-                const curFrameData = procCtx.getImageData(0, 0, procW, procH);
-                let hasSeenChange = false;
-
-                confirmedPersons.forEach(p => {
-                    const trk = trackedObjects.find(t => t.id === p.id);
-                    const faceBox = getPersonFaceRegion(p.bbox[0], p.bbox[1], p.bbox[2], p.bbox[3], overlayCanvas.width, overlayCanvas.height);
-                    const procBox = getFaceRegionOnProc(faceBox, overlayCanvas.width, overlayCanvas.height);
-                    const desc = extractFaceDescriptor(curFrameData, procBox.x, procBox.y, procBox.w, procBox.h);
-
-                    let bestScore = 0;
-                    let bestFace = null;
-                    for (let i = 0; i < knownFaces.length; i++) {
-                        const kf = knownFaces[i];
-                        const score = compareFaceDescriptors(desc, kf.descriptor);
-                        if (score > bestScore) {
-                            bestScore = score;
-                            bestFace = kf;
-                        }
-                    }
-
-                    if (bestScore > 0.72 && bestFace) {
-                        const scorePct = Math.round(bestScore * 100);
-                        p.matchedName = bestFace.name;
-                        p.matchScore = scorePct;
-                        if (trk) {
-                            trk.matchedName = bestFace.name;
-                            trk.matchScore = scorePct;
-                        }
-                        bestFace.lastSeen = new Date().toISOString();
-                        hasSeenChange = true;
-                    } else {
-                        p.matchedName = null;
-                        p.matchScore = 0;
-                        if (trk) {
-                            trk.matchedName = null;
-                            trk.matchScore = 0;
-                        }
-                    }
-                });
-
-                if (hasSeenChange) {
-                    throttledSaveKnownFaces();
-                }
-            }
-
-            // به‌روزرسانی پیش‌نمایش چهره هر ۵۰۰ میلی‌ثانیه در حلقه اصلی
-            if (timestamp - lastFacePreviewStamp >= 500) {
-                lastFacePreviewStamp = timestamp;
-                updateFacePreviewCanvas(confirmedPersons);
-            }
-
-            ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-
-            // زون حساس
-            if (activeZone) {
-                const zx = activeZone.x * overlayCanvas.width;
-                const zy = activeZone.y * overlayCanvas.height;
-                const zw = activeZone.w * overlayCanvas.width;
-                const zh = activeZone.h * overlayCanvas.height;
-
-                ctx.strokeStyle = '#F43F5E';
-                ctx.lineWidth = 2.5;
-                ctx.setLineDash([7, 5]);
-                ctx.strokeRect(zx, zy, zw, zh);
-                ctx.setLineDash([]);
-                ctx.fillStyle = 'rgba(244, 63, 94, 0.12)';
-                ctx.fillRect(zx, zy, zw, zh);
-            }
-
-            // رسم براکت‌های هوش مصنوعی و وضعیت تشخیص چهره
-            confirmedPersons.forEach(p => {
-                const [x, y, w, h] = p.bbox;
-                const conf = Math.round(p.score * 100);
-                const corner = Math.min(20, Math.min(w, h) * 0.25);
-
-                const isRecognized = !!p.matchedName;
-                const bracketColor = isRecognized ? '#10B981' : '#F59E0B';
-                const glowColor = isRecognized ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)';
-
-                ctx.strokeStyle = bracketColor;
-                ctx.lineWidth = 3;
-                ctx.lineCap = 'round';
-
-                ctx.beginPath();
-                ctx.moveTo(x, y + corner); ctx.lineTo(x, y); ctx.lineTo(x + corner, y);
-                ctx.stroke();
-
-                ctx.beginPath();
-                ctx.moveTo(x + w - corner, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + corner);
-                ctx.stroke();
-
-                ctx.beginPath();
-                ctx.moveTo(x, y + h - corner); ctx.lineTo(x, y + h); ctx.lineTo(x + corner, y + h);
-                ctx.stroke();
-
-                ctx.beginPath();
-                ctx.moveTo(x + w - corner, y + h); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w, y + h - corner);
-                ctx.stroke();
-
-                ctx.strokeStyle = glowColor;
-                ctx.lineWidth = 1;
-                ctx.strokeRect(x, y, w, h);
-
-                const scoreVal = p.matchScore || conf;
-                const tag = isRecognized
-                    ? ((currentLang === 'fa') ? `نام: ${p.matchedName} (${scoreVal}%)` : `Name: ${p.matchedName} (${scoreVal}%)`)
-                    : `ID #${p.id} (${conf}%)`;
-
-                ctx.font = 'bold 13px Vazirmatn, Consolas, monospace, Tahoma';
-                const tagW = ctx.measureText(tag).width;
-                const tagY = y > 24 ? y - 24 : y + 3;
-
-                ctx.fillStyle = 'rgba(6, 10, 18, 0.88)';
-                ctx.fillRect(x, tagY, tagW + 14, 22);
-                ctx.strokeStyle = bracketColor;
-                ctx.strokeRect(x, tagY, tagW + 14, 22);
-
-                ctx.fillStyle = isRecognized ? '#34D399' : '#FBBF24';
-                ctx.fillText(tag, x + 7, tagY + 16);
-            });
-
-            const count = confirmedPersons.length;
-            document.getElementById('currentPeopleCount').innerText = count;
-            document.getElementById('motionLevelText').innerText = motionPct + '%';
-            cameraWrapper.classList.toggle('alert-active', count > 0);
-
-            // محاسبه و بررسی شرط ثبت عکس
+        // ==================== Telegram & Incident Dispatch ====================
+        async function checkAutoIncident(persons) {
             const now = Date.now();
-            const cooldownMs = parseInt(cooldownSlider.value, 10) * 1000;
-            const elapsed = now - lastCaptureTime;
+            const cooldownSec = parseInt(document.getElementById('cooldown').value) || 6;
+            if (now - lastCaptureTimestamp < cooldownSec * 1000) return;
 
-            const dict = i18n[currentLang] || i18n.fa;
-            if (isPausedByRemote) {
-                document.getElementById('cooldownTimerText').innerText = (currentLang === 'fa') ? 'متوقف (تلگرام)' : 'Paused (TG)';
-            } else if (!checkShiftSchedule()) {
-                document.getElementById('cooldownTimerText').innerText = (currentLang === 'fa') ? 'خارج از شیفت' : 'Out of Shift';
-            } else if (elapsed < cooldownMs) {
-                const rem = Math.ceil((cooldownMs - elapsed) / 1000);
-                document.getElementById('cooldownTimerText').innerText = `${rem}s`;
-            } else {
-                document.getElementById('cooldownTimerText').innerText = dict.ready_state;
+            const onlyNew = document.getElementById('chkNew').checked;
+            const names = persons.map(p => p.name).filter(Boolean);
+            const identifiedStr = names.join(', ') || (dict[currentLang].unknown);
+
+            if (onlyNew && names.length && names.every(n => recognizedTrackedIds.has(n))) {
+                return;
             }
 
-            // منطق پیشرفته: بررسی ورود فرد جدید
-            // اگر سوژه‌ای در کادر حضور دارد که شناسه‌اش تاکنون در این سشن ثبت نشده، فرد جدید است!
-            const hasNewPerson = confirmedPersons.some(p => !capturedSubjectIds.has(p.id)) || (count > previousConfirmedCount);
+            names.forEach(n => recognizedTrackedIds.add(n));
+            lastCaptureTimestamp = now;
+            totalCaptures++;
+            document.getElementById('captureVal').innerText = totalCaptures;
 
-            if (count > 0 && elapsed >= cooldownMs && !isPausedByRemote && checkShiftSchedule()) {
-                const shouldCapture = onlyNewPersonToggle.checked ? hasNewPerson : true;
+            // Take Full High-Res Snapshot
+            const snapCanvas = document.createElement('canvas');
+            snapCanvas.width = video.videoWidth || 1280;
+            snapCanvas.height = video.videoHeight || 720;
+            const sCtx = snapCanvas.getContext('2d');
+            sCtx.drawImage(video, 0, 0);
 
-                if (shouldCapture) {
-                    lastCaptureTime = now;
-                    // علامت‌گذاری شناسه‌های حاضر به عنوان افراد ثبت‌شده
-                    confirmedPersons.forEach(p => capturedSubjectIds.add(p.id));
+            // Watermark
+            sCtx.font = '14px -apple-system, sans-serif';
+            sCtx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            sCtx.fillText(`MikoTim Sentinel Pro | ${new Date().toLocaleString()}`, 16, snapCanvas.height - 18);
 
-                    const maxConf = Math.round(Math.max(...confirmedPersons.map(p => p.score)) * 100);
-                    captureAndProcessIncident(count, maxConf, confirmedPersons);
+            const imgUrl = snapCanvas.toDataURL('image/jpeg', 0.9);
+            const timeStr = new Date().toLocaleTimeString();
+
+            // Add to incident table
+            const tbody = document.getElementById('logRows');
+            const empty = document.getElementById('tEmptyLog');
+            if (empty) empty.parentElement.remove();
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${timeStr}</td>
+                <td>${persons.length}</td>
+                <td>${Math.round(persons[0].score * 100)}%</td>
+                <td><strong>${identifiedStr}</strong></td>
+                <td><span class="pill-tag pending" id="tag_${now}">Pending...</span></td>
+            `;
+            tbody.prepend(tr);
+
+            // Send to Telegram if enabled
+            const autoSend = document.getElementById('chkAuto').checked;
+            const token = document.getElementById('tgToken').value.trim();
+            const chatId = document.getElementById('tgChat').value.trim();
+
+            if (autoSend && token && chatId) {
+                const tagEl = document.getElementById(`tag_${now}`);
+                try {
+                    const blob = await (await fetch(imgUrl)).blob();
+                    const captionText = `🛡 MikoTim Sentinel Pro\n📌 ${document.getElementById('customCaption').value.trim()}\n👥 Persons: ${persons.length}\n🎯 Identity: ${identifiedStr}\n⏱ ${timeStr}`;
+
+                    const fd = new FormData();
+                    fd.append('chat_id', chatId);
+                    fd.append('caption', captionText);
+                    fd.append('photo', blob, `Incident_${now}.jpg`);
+
+                    const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+                        method: 'POST',
+                        body: fd
+                    });
+                    const resData = await res.json();
+                    if (resData.ok) {
+                        telegramSentCount++;
+                        document.getElementById('tgVal').innerText = telegramSentCount;
+                        if (tagEl) {
+                            tagEl.className = 'pill-tag sent';
+                            tagEl.innerText = 'Sent';
+                        }
+                    } else {
+                        if (tagEl) tagEl.innerText = 'Error';
+                    }
+                } catch (e) {
+                    if (tagEl) tagEl.innerText = 'Failed';
+                }
+            } else {
+                const tagEl = document.getElementById(`tag_${now}`);
+                if (tagEl) {
+                    tagEl.className = 'pill-tag local';
+                    tagEl.innerText = 'Local';
                 }
             }
-
-            previousConfirmedCount = count;
         }
 
-        animationId = requestAnimationFrame(detectLoop);
-    }
-
-    // ==================== صدا، عکاسی و ارسال تلگرام ====================
-    function triggerBiometricChime() {
-        if (!soundAlertToggle.checked) return;
-        try {
-            const AudioCtx = window.AudioContext || window.webkitAudioContext;
-            if (!AudioCtx) return;
-            const aCtx = new AudioCtx();
-            const osc = aCtx.createOscillator();
-            const gain = aCtx.createGain();
-
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(880, aCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(1320, aCtx.currentTime + 0.1);
-
-            gain.gain.setValueAtTime(0.08, aCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, aCtx.currentTime + 0.2);
-
-            osc.connect(gain);
-            gain.connect(aCtx.destination);
-            osc.start();
-            osc.stop(aCtx.currentTime + 0.21);
-        } catch (e) {}
-    }
-
-    manualSnapBtn.addEventListener('click', () => {
-        if (!isStreaming) return;
-        const curCount = parseInt(document.getElementById('currentPeopleCount').innerText, 10) || 1;
-        const currentList = trackedObjects
-            .filter(t => t.streak >= 1)
-            .map(t => ({
-                id: t.id,
-                bbox: [t.x, t.y, t.w, t.h],
-                score: t.score,
-                matchedName: t.matchedName || null,
-                matchScore: t.matchScore || 0
-            }));
-        captureAndProcessIncident(curCount, 100, currentList);
-    });
-
-    async function captureAndProcessIncident(personCount, confidence, personsList = []) {
-        triggerBiometricChime();
-
-        const flash = document.getElementById('flashEffect');
-        flash.classList.add('active');
-        setTimeout(() => flash.classList.remove('active'), 120);
-
-        const snapCanvas = document.createElement('canvas');
-        snapCanvas.width = video.videoWidth || 640;
-        snapCanvas.height = video.videoHeight || 480;
-        const sCtx = snapCanvas.getContext('2d');
-
-        sCtx.save();
-        if (video.classList.contains('mirrored')) {
-            sCtx.translate(snapCanvas.width, 0);
-            sCtx.scale(-1, 1);
-        }
-        sCtx.drawImage(video, 0, 0, snapCanvas.width, snapCanvas.height);
-        sCtx.restore();
-
-        if (drawBoxOnPhotoToggle.checked) {
-            sCtx.drawImage(overlayCanvas, 0, 0, snapCanvas.width, snapCanvas.height);
+        function manualSnapshot() {
+            if (!isStreaming) {
+                notify(currentLang === 'fa' ? 'دوربین فعال نیست' : 'Camera is offline');
+                return;
+            }
+            const snapCanvas = document.createElement('canvas');
+            snapCanvas.width = video.videoWidth || 1280;
+            snapCanvas.height = video.videoHeight || 720;
+            const sCtx = snapCanvas.getContext('2d');
+            sCtx.drawImage(video, 0, 0);
+            const w = window.open('');
+            w.document.write('<img src="' + snapCanvas.toDataURL('image/jpeg', 0.9) + '" style="max-width:100%; border-radius:12px;">');
         }
 
-        const nowStr = (currentLang === 'fa') ? new Date().toLocaleString('fa-IR') : new Date().toLocaleString('en-US');
-
-        // استخراج نام افراد شناسایی‌شده
-        const recognizedNames = (personsList || [])
-            .filter(p => p && p.matchedName)
-            .map(p => p.matchedName);
-        const uniqueRecognized = [...new Set(recognizedNames)];
-
-        sCtx.fillStyle = 'rgba(6, 10, 18, 0.88)';
-        sCtx.fillRect(0, snapCanvas.height - 38, snapCanvas.width, 38);
-
-        sCtx.fillStyle = '#0EA5E9';
-        sCtx.font = 'bold 14px Vazirmatn, Tahoma, sans-serif';
-
-        let watermarkStr = `MikoTim Sentinel | Confirmed: ${personCount}`;
-        if (uniqueRecognized.length > 0) {
-            watermarkStr += ` | ${uniqueRecognized.join(', ')}`;
-        }
-        watermarkStr += ` | Score: ${confidence}% | ${nowStr}`;
-
-        sCtx.fillText(watermarkStr, 14, snapCanvas.height - 13);
-
-        const dataUrl = snapCanvas.toDataURL('image/jpeg', 0.90);
-
-        totalCaptures++;
-        document.getElementById('totalCapturesCount').innerText = totalCaptures;
-
-        const logId = 'TRD-' + Date.now();
-        logsData.unshift({
-            id: logId,
-            time: nowStr,
-            count: personCount,
-            conf: confidence,
-            sent: false,
-            recognized: uniqueRecognized
-        });
-        renderLogEntry(logId, dataUrl, personCount, confidence, nowStr, uniqueRecognized);
-
-        const token = botTokenInput.value.trim();
-        const chatId = chatIdInput.value.trim();
-
-        if (autoTelegramToggle.checked && token && chatId) {
-            const badge = document.getElementById(`status_${logId}`);
-            if (badge) badge.innerText = (currentLang === 'fa') ? 'در حال ارسال...' : 'Dispatching...';
+        async function testTelegramConnection() {
+            const token = document.getElementById('tgToken').value.trim();
+            const chatId = document.getElementById('tgChat').value.trim();
+            if (!token || !chatId) {
+                notify(currentLang === 'fa' ? 'لطفاً توکن و چت‌آیدی را وارد کنید' : 'Please enter token & chat ID');
+                return;
+            }
 
             try {
-                const blob = await (await fetch(dataUrl)).blob();
-
-                let namesLine = '';
-                if (uniqueRecognized.length > 0) {
-                    namesLine = `\n👤 ${(currentLang === 'fa') ? 'افراد شناسایی‌شده:' : 'Recognized:'} ${uniqueRecognized.join('، ')}`;
-                }
-
-                const caption = `🛡️ MikoTim Sentinel Alert\n\n📌 Message: ${customCaptionInput.value.trim()}\n👥 Confirmed: ${personCount}${namesLine}\n🎯 Confidence: ${confidence}%\n⏱️ Time: ${nowStr}`;
-
-                const formData = new FormData();
-                formData.append('chat_id', chatId);
-                formData.append('photo', blob, `Capture_${logId}.jpg`);
-                formData.append('caption', caption);
-
-                const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+                const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
                     method: 'POST',
-                    body: formData
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: chatId,
+                        text: '✅ MikoTim Sentinel Pro - ارتباط مستقیم مرورگر برقرار است!'
+                    })
                 });
-                const resJson = await res.json();
-
-                if (resJson.ok) {
-                    telegramSentTotal++;
-                    document.getElementById('telegramSentCount').innerText = telegramSentTotal;
-                    if (badge) {
-                        badge.className = 'tag-status sent';
-                        badge.innerText = (currentLang === 'fa') ? 'ارسال شد' : 'Dispatched';
-                    }
-                    logsData[0].sent = true;
+                const d = await res.json();
+                if (d.ok) {
+                    notify(currentLang === 'fa' ? 'ارتباط با تلگرام برقرار است' : 'Telegram connected successfully');
                 } else {
-                    if (badge) {
-                        badge.className = 'tag-status error';
-                        badge.innerText = (currentLang === 'fa') ? 'خطای سرور' : 'Error';
+                    notify(d.description || 'Telegram error');
+                }
+            } catch (e) {
+                notify(e.message);
+            }
+        }
+
+        // ==================== Settings Persistence ====================
+        function saveConfig() {
+            const cfg = {
+                token: document.getElementById('tgToken').value.trim(),
+                chat: document.getElementById('tgChat').value.trim(),
+                caption: document.getElementById('customCaption').value.trim(),
+                cooldown: document.getElementById('cooldown').value,
+                auto: document.getElementById('chkAuto').checked,
+                onlyNew: document.getElementById('chkNew').checked,
+                remote: document.getElementById('chkRemote').checked
+            };
+            try {
+                localStorage.setItem('mikotim_cfg', JSON.stringify(cfg));
+                notify(currentLang === 'fa' ? 'تنظیمات ذخیره شد' : 'Settings saved');
+            } catch (e) {}
+        }
+
+        function loadConfig() {
+            try {
+                const raw = localStorage.getItem('mikotim_cfg');
+                if (raw) {
+                    const cfg = JSON.parse(raw);
+                    if (cfg.token) document.getElementById('tgToken').value = cfg.token;
+                    if (cfg.chat) document.getElementById('tgChat').value = cfg.chat;
+                    if (cfg.caption) document.getElementById('customCaption').value = cfg.caption;
+                    if (cfg.cooldown) document.getElementById('cooldown').value = cfg.cooldown;
+                    if (cfg.auto !== undefined) document.getElementById('chkAuto').checked = cfg.auto;
+                    if (cfg.onlyNew !== undefined) document.getElementById('chkNew').checked = cfg.onlyNew;
+                    if (cfg.remote !== undefined) document.getElementById('chkRemote').checked = cfg.remote;
+                }
+            } catch (e) {}
+        }
+
+        // ==================== Telegram Remote Commands Polling ====================
+        let lastUpdateId = 0;
+        setInterval(async () => {
+            const remoteOn = document.getElementById('chkRemote').checked;
+            const token = document.getElementById('tgToken').value.trim();
+            const chatId = document.getElementById('tgChat').value.trim();
+            if (!remoteOn || !token || !chatId) return;
+
+            try {
+                const res = await fetch(`https://api.telegram.org/bot${token}/getUpdates?offset=${lastUpdateId + 1}&timeout=1`);
+                const data = await res.json();
+                if (!data.ok || !data.result) return;
+
+                for (const update of data.result) {
+                    lastUpdateId = update.update_id;
+                    const msg = update.message;
+                    if (!msg || !msg.text) continue;
+                    if (String(msg.chat.id) !== String(chatId)) continue;
+
+                    const cmd = msg.text.trim().toLowerCase();
+                    if (cmd === '/photo' || cmd === 'عکس') {
+                        if (isStreaming) {
+                            const c = document.createElement('canvas');
+                            c.width = video.videoWidth || 1280;
+                            c.height = video.videoHeight || 720;
+                            c.getContext('2d').drawImage(video, 0, 0);
+                            const b = await (await fetch(c.toDataURL('image/jpeg', 0.9))).blob();
+                            const fd = new FormData();
+                            fd.append('chat_id', chatId);
+                            fd.append('photo', b, 'remote.jpg');
+                            fd.append('caption', '📸 Live Snapshot | ' + new Date().toLocaleTimeString());
+                            await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: fd });
+                        }
+                    } else if (cmd === '/pause' || cmd === 'توقف') {
+                        isPaused = true;
+                        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ chat_id: chatId, text: '⏸ Surveillance paused.' })
+                        });
+                    } else if (cmd === '/resume' || cmd === 'ادامه') {
+                        isPaused = false;
+                        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ chat_id: chatId, text: '▶ Surveillance resumed.' })
+                        });
                     }
                 }
-            } catch (err) {
-                if (badge) {
-                    badge.className = 'tag-status error';
-                    badge.innerText = (currentLang === 'fa') ? 'خطای اتصال' : 'Failed';
-                }
-            }
-        }
-    }
+            } catch (e) {}
+        }, 3500);
 
-    function renderLogEntry(id, imgUrl, count, conf, timeStr, uniqueRecognized = []) {
-        const container = document.getElementById('logsContainer');
-        const empty = container.querySelector('.empty-feed');
-        if (empty) empty.remove();
-
-        const item = document.createElement('div');
-        item.className = 'incident-item';
-
-        let titleText = '';
-        if (uniqueRecognized && uniqueRecognized.length > 0) {
-            if (currentLang === 'fa') {
-                titleText = `تردد: ${uniqueRecognized.join('، ')} (${count} فرد)`;
-            } else {
-                titleText = `Incident: ${uniqueRecognized.join(', ')} (${count} subjects)`;
-            }
-        } else {
-            titleText = (currentLang === 'fa') ? `تردد تاییدشده: ${count} فرد (${conf}%)` : `Confirmed: ${count} Subjects (${conf}%)`;
-        }
-
-        const timeText = (currentLang === 'fa') ? `زمان: ${timeStr}` : `Time: ${timeStr}`;
-        const localTag = (currentLang === 'fa') ? 'محلی' : 'Local';
-
-        item.innerHTML = `
-            <img src="${imgUrl}" class="incident-img" alt="Capture" onclick="showModal('${imgUrl}')">
-            <div class="incident-details">
-                <div class="incident-title">${escapeHtml(titleText)}</div>
-                <div class="incident-time">${timeText}</div>
-            </div>
-            <span id="status_${id}" class="tag-status local">${localTag}</span>
-        `;
-        container.prepend(item);
-    }
-
-    window.showModal = function(imgSrc) {
-        document.getElementById('modalImg').src = imgSrc;
-        document.getElementById('downloadImgBtn').href = imgSrc;
-        document.getElementById('imageModal').classList.add('open');
-    };
-
-    document.getElementById('clearLogsBtn').addEventListener('click', () => {
-        logsData = [];
-        const emptyTxt = (currentLang === 'fa') ? 'هیچ رکوردی ثبت نشده است.' : 'No incidents recorded yet.';
-        document.getElementById('logsContainer').innerHTML = `<div class="empty-feed">${emptyTxt}</div>`;
-    });
-
-    document.getElementById('exportCsvBtn').addEventListener('click', () => {
-        if (logsData.length === 0) {
-            alert((currentLang === 'fa') ? 'هنوز رویدادی ثبت نشده است.' : 'No records to export.');
-            return;
-        }
-        let csv = '\uFEFFID,Timestamp,Subjects,Recognized,Confidence,Telegram\n';
-        logsData.forEach(row => {
-            const rec = (row.recognized && row.recognized.length > 0) ? row.recognized.join('; ') : '-';
-            csv += `"${row.id}","${row.time}",${row.count},"${rec}","${row.conf}%","${row.sent ? 'Yes' : 'No'}"\n`;
+        // ==================== Initialize ====================
+        window.addEventListener('DOMContentLoaded', () => {
+            setLang('fa');
+            loadConfig();
+            loadProfiles();
         });
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `Incidents_${Date.now()}.csv`;
-        a.click();
-    });
-
-    // ==================== کنترل دوطرفه ریموت از داخل تلگرام ====================
-    let lastUpdateId = 0;
-    setInterval(async () => {
-        if (!remoteControlToggle.checked) return;
-        const token = botTokenInput.value.trim();
-        const allowedChatId = chatIdInput.value.trim();
-        if (!token || !allowedChatId) return;
-
-        try {
-            const res = await fetch(`https://api.telegram.org/bot${token}/getUpdates?offset=${lastUpdateId + 1}&timeout=1`);
-            const data = await res.json();
-            if (!data.ok || !data.result) return;
-
-            for (const update of data.result) {
-                lastUpdateId = update.update_id;
-                const msg = update.message;
-                if (!msg || !msg.text) continue;
-                if (String(msg.chat.id) !== String(allowedChatId)) continue;
-
-                const cmd = msg.text.trim().toLowerCase();
-                if (cmd === '/photo' || cmd === 'عکس') {
-                    if (isStreaming) {
-                        captureAndProcessIncident(parseInt(document.getElementById('currentPeopleCount').innerText, 10) || 0, 100, []);
-                    } else {
-                        sendTgMessage(token, allowedChatId, 'Camera is offline.');
-                    }
-                } else if (cmd === '/status' || cmd === 'وضعیت') {
-                    sendTgMessage(token, allowedChatId,
-                        `MikoTim Status:\nCamera: ${isStreaming ? 'Online' : 'Offline'}\nMode: ${isPausedByRemote ? 'Paused' : 'Monitoring'}\nCaptures: ${totalCaptures}\nTime: ${new Date().toLocaleString()}`
-                    );
-                } else if (cmd === '/pause' || cmd === 'توقف') {
-                    isPausedByRemote = true;
-                    sendTgMessage(token, allowedChatId, 'Monitoring paused.');
-                } else if (cmd === '/resume' || cmd === 'ادامه') {
-                    isPausedByRemote = false;
-                    sendTgMessage(token, allowedChatId, 'Monitoring resumed.');
-                }
-            }
-        } catch (e) {}
-    }, 3800);
-
-    async function sendTgMessage(token, chatId, text) {
-        try {
-            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: chatId, text })
-            });
-        } catch (e) {}
-    }
-
-    // تست تلگرام
-    document.getElementById('testTelegramBtn').addEventListener('click', async () => {
-        const token = botTokenInput.value.trim();
-        const chatId = chatIdInput.value.trim();
-        if (!token || !chatId) {
-            showNotice((currentLang === 'fa') ? 'ابتدا Bot Token و Chat ID را وارد فرمایید.' : 'Enter Bot Token and Chat ID first.', 'var(--status-warning)', 'var(--status-warning-bg)');
-            return;
-        }
-        showNotice((currentLang === 'fa') ? 'در حال ارسال پیام تست...' : 'Testing connection...', 'var(--brand-primary)', 'rgba(14, 165, 233, 0.1)');
-        try {
-            const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chat_id: chatId,
-                    text: `MikoTim Sentinel Pro Connection Verified!\n\nCommands:\n/photo - Snapshot\n/status - Status\n/pause - Pause\n/resume - Resume`
-                })
-            });
-            const data = await res.json();
-            if (data.ok) {
-                showNotice((currentLang === 'fa') ? 'اتصال با موفقیت برقرار شد.' : 'Connection confirmed successfully!', 'var(--status-success)', 'var(--status-success-bg)');
-            } else {
-                showNotice(`Error: ${data.description}`, 'var(--status-danger)', 'var(--status-danger-bg)');
-            }
-        } catch (err) {
-            showNotice((currentLang === 'fa') ? 'خطا در ارتباط با سرور تلگرام.' : 'Failed to connect to Telegram.', 'var(--status-danger)', 'var(--status-danger-bg)');
-        }
-    });
-
-    // ==================== پایگاه افراد و سیستم بیومتریک شناسایی چهره ====================
-
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
-
-    // بارگذاری افراد شناخته‌شده از localStorage
-    function loadKnownFaces() {
-        try {
-            const raw = localStorage.getItem('mikotim_known_faces');
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) {
-                    knownFaces = parsed.map(f => ({
-                        id: f.id,
-                        name: f.name,
-                        descriptor: new Float32Array(f.descriptor),
-                        thumbnail: f.thumbnail,
-                        registeredAt: f.registeredAt,
-                        lastSeen: f.lastSeen || null
-                    }));
-                }
-            }
-        } catch (e) {
-            console.error('Failed to load known faces from localStorage', e);
-            knownFaces = [];
-        }
-        renderPersonsGallery();
-    }
-
-    // ذخیره‌سازی افراد در localStorage با کنترل خطای حجم (Quota)
-    function saveKnownFaces() {
-        try {
-            const toSave = knownFaces.map(f => ({
-                id: f.id,
-                name: f.name,
-                descriptor: Array.from(f.descriptor),
-                thumbnail: f.thumbnail,
-                registeredAt: f.registeredAt,
-                lastSeen: f.lastSeen || null
-            }));
-            localStorage.setItem('mikotim_known_faces', JSON.stringify(toSave));
-            return true;
-        } catch (e) {
-            console.error('Storage quota error while saving faces', e);
-            const dict = i18n[currentLang] || i18n.fa;
-            showPersonNotice((currentLang === 'fa') ? 'خطا در ذخیره‌سازی چهره‌ها در حافظه مرورگر (احتمال پر بودن حافظه).' : 'Storage quota error while saving faces.', 'var(--status-danger)', 'var(--status-danger-bg)');
-            return false;
-        }
-    }
-
-    function throttledSaveKnownFaces() {
-        const now = Date.now();
-        if (now - lastKnownFacesSaveTime > 8000) {
-            lastKnownFacesSaveTime = now;
-            saveKnownFaces();
-            renderPersonsGallery();
-        }
-    }
-
-    // محاسبه ناحیه سر و صورت از روی کادر شخص
-    function getPersonFaceRegion(bx, by, bw, bh, maxW, maxH) {
-        let fw, fh, fx, fy;
-        if (bh / (bw || 1) > 1.3) {
-            fh = bh * 0.45;
-            fw = bw * 0.75;
-            fx = bx + (bw - fw) / 2;
-            fy = by + bh * 0.02;
-        } else {
-            fh = bh * 0.70;
-            fw = bw * 0.85;
-            fx = bx + (bw - fw) / 2;
-            fy = by + bh * 0.04;
-        }
-        const side = Math.max(fw, fh);
-        const cx = fx + fw / 2;
-        const cy = fy + fh / 2;
-        const rx = Math.max(0, cx - side / 2);
-        const ry = Math.max(0, cy - side / 2);
-        const rw = Math.min(side, maxW - rx);
-        const rh = Math.min(side, maxH - ry);
-        return { x: rx, y: ry, w: rw, h: rh };
-    }
-
-    // تبدیل ناحیه به مقیاس بوم پردازش هوش مصنوعی (procCanvas)
-    function getFaceRegionOnProc(faceBox, origW, origH) {
-        const scaleX = procW / (origW || 1);
-        const scaleY = procH / (origH || 1);
-        const px = Math.max(0, Math.min(procW - 1, Math.round(faceBox.x * scaleX)));
-        const py = Math.max(0, Math.min(procH - 1, Math.round(faceBox.y * scaleY)));
-        const pw = Math.max(2, Math.min(procW - px, Math.round(faceBox.w * scaleX)));
-        const ph = Math.max(2, Math.min(procH - py, Math.round(faceBox.h * scaleY)));
-        return { x: px, y: py, w: pw, h: ph };
-    }
-
-    // استخراج بردار توصیف‌گر بیومتریک ۴۲ بعدی از بوم پردازش
-    function extractFaceDescriptor(imageData, x, y, w, h) {
-        const imgW = imageData.width;
-        const imgH = imageData.height;
-        const data = imageData.data;
-
-        if (x === undefined || y === undefined || w === undefined || h === undefined) {
-            x = 0; y = 0; w = imgW; h = imgH;
-        }
-
-        const rx = Math.max(0, Math.min(imgW - 1, Math.floor(x)));
-        const ry = Math.max(0, Math.min(imgH - 1, Math.floor(y)));
-        const rw = Math.max(1, Math.min(imgW - rx, Math.floor(w)));
-        const rh = Math.max(1, Math.min(imgH - ry, Math.floor(h)));
-
-        const desc = new Float32Array(42);
-        const totalPixels = rw * rh;
-        let skinPixelCount = 0;
-
-        const gridSums = new Float32Array(16);
-        const gridCounts = new Int32Array(16);
-
-        for (let py = 0; py < rh; py++) {
-            const curY = ry + py;
-            const gridRow = Math.min(3, Math.floor((py / rh) * 4));
-
-            for (let px = 0; px < rw; px++) {
-                const curX = rx + px;
-                const gridCol = Math.min(3, Math.floor((px / rw) * 4));
-                const gridIdx = gridRow * 4 + gridCol;
-
-                const idx = (curY * imgW + curX) * 4;
-                const r = data[idx];
-                const g = data[idx + 1];
-                const b = data[idx + 2];
-
-                // ۱. هیستوگرام رنگی ۸ تایی برای R, G, B (۲۴ مقدار)
-                const rBin = Math.min(7, Math.floor(r / 32));
-                const gBin = Math.min(7, Math.floor(g / 32));
-                const bBin = Math.min(7, Math.floor(b / 32));
-                desc[rBin]++;
-                desc[8 + gBin]++;
-                desc[16 + bBin]++;
-
-                // ۲. الگوی گرادیان مقیاس خاکستری در شبکه ۴x۴ (۱۶ مقدار)
-                const gray = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
-                gridSums[gridIdx] += gray;
-                gridCounts[gridIdx]++;
-
-                // ۳. نسبت فام رنگ پوست (۱ مقدار)
-                if (r > 65 && g > 40 && b > 20 && r > g && r > b && (r - g) > 8) {
-                    skinPixelCount++;
-                }
-            }
-        }
-
-        if (totalPixels > 0) {
-            for (let i = 0; i < 24; i++) {
-                desc[i] /= totalPixels;
-            }
-        }
-
-        for (let k = 0; k < 16; k++) {
-            desc[24 + k] = gridCounts[k] > 0 ? (gridSums[k] / gridCounts[k]) : 0;
-        }
-
-        desc[40] = totalPixels > 0 ? (skinPixelCount / totalPixels) : 0;
-
-        // ۴. نسبت تصویر کادر (۱ مقدار)
-        const aspect = rw / (rh || 1);
-        desc[41] = Math.max(0, Math.min(1.0, aspect / 2.0));
-
-        return desc;
-    }
-
-    // مقایسه دو بردار توصیف‌گر چهره بر اساس تشابه کسینوسی (خروجی ۰ تا ۱)
-    function compareFaceDescriptors(desc1, desc2) {
-        if (!desc1 || !desc2 || desc1.length !== 42 || desc2.length !== 42) return 0;
-        let dot = 0;
-        let norm1 = 0;
-        let norm2 = 0;
-
-        for (let i = 0; i < 42; i++) {
-            const v1 = desc1[i];
-            const v2 = desc2[i];
-            dot += v1 * v2;
-            norm1 += v1 * v1;
-            norm2 += v2 * v2;
-        }
-
-        const mag = Math.sqrt(norm1) * Math.sqrt(norm2);
-        if (mag === 0) return 0;
-        const sim = dot / mag;
-        return Math.max(0, Math.min(1, sim));
-    }
-
-    // به‌روزرسانی بوم پیش‌نمایش چهره
-    function updateFacePreviewCanvas(confirmedPersons) {
-        const faceCanvas = document.getElementById('facePreviewCanvas');
-        if (!faceCanvas) return;
-        const fpCtx = faceCanvas.getContext('2d');
-        const labelEl = document.getElementById('facePreviewLabel');
-        const dict = i18n[currentLang] || i18n.fa;
-
-        if (!isStreaming || !video.videoWidth) {
-            fpCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
-            faceCanvas.classList.remove('quality-good');
-            if (labelEl) {
-                labelEl.innerText = dict.register_face_instruction;
-                labelEl.style.color = 'var(--text-secondary)';
-            }
-            return;
-        }
-
-        const targetPerson = (confirmedPersons && confirmedPersons.length > 0)
-            ? confirmedPersons[0]
-            : (trackedObjects.length > 0 ? trackedObjects[0] : null);
-
-        if (!targetPerson) {
-            fpCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
-            faceCanvas.classList.remove('quality-good');
-            if (labelEl) {
-                labelEl.innerText = dict.err_no_person;
-                labelEl.style.color = 'var(--text-secondary)';
-            }
-            return;
-        }
-
-        const bbox = targetPerson.bbox || [targetPerson.x, targetPerson.y, targetPerson.w, targetPerson.h];
-        const faceBox = getPersonFaceRegion(bbox[0], bbox[1], bbox[2], bbox[3], overlayCanvas.width, overlayCanvas.height);
-
-        fpCtx.save();
-        if (video.classList.contains('mirrored')) {
-            fpCtx.translate(faceCanvas.width, 0);
-            fpCtx.scale(-1, 1);
-        }
-        fpCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
-        fpCtx.drawImage(
-            video,
-            faceBox.x, faceBox.y, faceBox.w, faceBox.h,
-            0, 0, faceCanvas.width, faceCanvas.height
-        );
-        fpCtx.restore();
-
-        const trk = trackedObjects.find(t => t.id === targetPerson.id) || targetPerson;
-        const isGood = (trk.streak || 0) > 5;
-        faceCanvas.classList.toggle('quality-good', isGood);
-
-        if (labelEl) {
-            if (isGood) {
-                labelEl.innerText = (currentLang === 'fa') ? 'کیفیت چهره: مناسب جهت ثبت' : 'Face Quality: Optimal for Registration';
-                labelEl.style.color = 'var(--status-success)';
-            } else {
-                labelEl.innerText = (currentLang === 'fa') ? 'در حال تثبیت چهره...' : 'Stabilizing face...';
-                labelEl.style.color = 'var(--text-secondary)';
-            }
-        }
-    }
-
-    // رندر گالری افراد ثبت‌شده
-    function renderPersonsGallery() {
-        const grid = document.getElementById('personsGrid');
-        const titleEl = document.getElementById('registeredPersonsTitle');
-        const dict = i18n[currentLang] || i18n.fa;
-
-        if (titleEl) {
-            titleEl.innerText = `${dict.registered_persons_title} (${knownFaces.length})`;
-        }
-
-        if (!grid) return;
-
-        if (knownFaces.length === 0) {
-            grid.innerHTML = `<div class="empty-persons-feed" data-i18n="no_persons">${dict.no_persons}</div>`;
-            return;
-        }
-
-        grid.innerHTML = '';
-        knownFaces.forEach(p => {
-            const card = document.createElement('div');
-            card.className = 'person-card';
-
-            const regDate = new Date(p.registeredAt);
-            const regDateStr = isNaN(regDate.getTime()) ? p.registeredAt : ((currentLang === 'fa')
-                ? regDate.toLocaleDateString('fa-IR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                : regDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
-
-            let lastSeenStr = dict.never_seen;
-            if (p.lastSeen) {
-                const lsDate = new Date(p.lastSeen);
-                if (!isNaN(lsDate.getTime())) {
-                    lastSeenStr = (currentLang === 'fa')
-                        ? lsDate.toLocaleDateString('fa-IR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                        : lsDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                }
-            }
-
-            card.innerHTML = `
-                <img src="${p.thumbnail}" class="person-thumb" alt="${escapeHtml(p.name)}">
-                <div class="person-info">
-                    <div class="person-name">${escapeHtml(p.name)}</div>
-                    <div class="person-meta">
-                        <div>${dict.registered_at} ${regDateStr}</div>
-                        <div>${dict.last_seen} ${lastSeenStr}</div>
-                    </div>
-                </div>
-                <button type="button" class="person-delete-btn" title="${(currentLang === 'fa') ? 'حذف' : 'Delete'}" onclick="deletePerson('${p.id}')">
-                    <svg class="svg-icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-            `;
-            grid.appendChild(card);
-        });
-    }
-
-    window.deletePerson = function(id) {
-        const idx = knownFaces.findIndex(f => f.id === id);
-        if (idx !== -1) {
-            knownFaces.splice(idx, 1);
-            saveKnownFaces();
-            renderPersonsGallery();
-        }
-    };
-
-    function showPersonNotice(msg, color, bg) {
-        const el = document.getElementById('personNotice');
-        if (!el) return;
-        el.style.display = 'block';
-        el.style.color = color;
-        el.style.backgroundColor = bg || 'var(--bg-elevated)';
-        el.style.border = `1px solid ${color}`;
-        el.innerText = msg;
-        setTimeout(() => { el.style.display = 'none'; }, 4500);
-    }
-
-    // فرایند ثبت چهره جدید
-    document.getElementById('registerFaceBtn').addEventListener('click', () => {
-        const dict = i18n[currentLang] || i18n.fa;
-
-        if (!isStreaming) {
-            showPersonNotice(dict.err_no_camera, 'var(--status-danger)', 'var(--status-danger-bg)');
-            return;
-        }
-
-        if (trackedObjects.length === 0) {
-            showPersonNotice(dict.err_no_person, 'var(--status-danger)', 'var(--status-danger-bg)');
-            return;
-        }
-
-        const nameInput = document.getElementById('personNameInput');
-        const personName = nameInput.value.trim();
-        if (!personName) {
-            showPersonNotice(dict.err_no_name, 'var(--status-warning)', 'var(--status-warning-bg)');
-            nameInput.focus();
-            return;
-        }
-
-        const p = trackedObjects[0];
-        const bbox = [p.x, p.y, p.w, p.h];
-        const faceBox = getPersonFaceRegion(bbox[0], bbox[1], bbox[2], bbox[3], overlayCanvas.width, overlayCanvas.height);
-
-        // استخراج بردار ویژگی از بوم پردازش
-        const procBox = getFaceRegionOnProc(faceBox, overlayCanvas.width, overlayCanvas.height);
-        const curFrameData = procCtx.getImageData(0, 0, procW, procH);
-        const descriptor = extractFaceDescriptor(curFrameData, procBox.x, procBox.y, procBox.w, procBox.h);
-
-        // برش بندانگشتی ۶۴x۶۴ چهره
-        const thumbCanvas = document.createElement('canvas');
-        thumbCanvas.width = 64;
-        thumbCanvas.height = 64;
-        const tCtx = thumbCanvas.getContext('2d');
-        tCtx.save();
-        if (video.classList.contains('mirrored')) {
-            tCtx.translate(64, 0);
-            tCtx.scale(-1, 1);
-        }
-        tCtx.drawImage(
-            video,
-            faceBox.x, faceBox.y, faceBox.w, faceBox.h,
-            0, 0, 64, 64
-        );
-        tCtx.restore();
-
-        const thumbnail = thumbCanvas.toDataURL('image/jpeg', 0.85);
-
-        const newPerson = {
-            id: 'face_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-            name: personName,
-            descriptor: descriptor,
-            thumbnail: thumbnail,
-            registeredAt: new Date().toISOString(),
-            lastSeen: new Date().toISOString()
-        };
-
-        knownFaces.unshift(newPerson);
-        const ok = saveKnownFaces();
-
-        if (ok) {
-            nameInput.value = '';
-            showPersonNotice(dict.face_registered_ok, 'var(--status-success)', 'var(--status-success-bg)');
-            renderPersonsGallery();
-        }
-    });
-
-    document.getElementById('personNameInput').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            document.getElementById('registerFaceBtn').click();
-        }
-    });
-
-    document.getElementById('clearAllFacesBtn').addEventListener('click', () => {
-        if (knownFaces.length === 0) return;
-        const dict = i18n[currentLang] || i18n.fa;
-        if (confirm(dict.confirm_clear_faces)) {
-            knownFaces = [];
-            saveKnownFaces();
-            renderPersonsGallery();
-        }
-    });
-
-</script>
-
+    </script>
 </body>
 </html>
