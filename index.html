@@ -323,7 +323,7 @@
             height: 100%;
             object-fit: cover;
             display: none;
-            transform: scaleX(-1);
+            transform: none; transition: transform 0.3s ease;
         }
 
         canvas#overlayCanvas {
@@ -332,7 +332,7 @@
             width: 100%;
             height: 100%;
             pointer-events: auto;
-            transform: scaleX(-1);
+            transform: none !important;
         }
 
         .screen-idle {
@@ -813,6 +813,13 @@
             <div class="brand-title">
                 <span>MikoTim Sentinel Pro</span>
                 <span class="brand-tag">MikiVo Neural 512-D</span>
+                <div class="hud-badge" id="schedulePill" style="display:inline-flex; align-items:center; gap:6px;">
+                    <span style="color:var(--apple-blue);">⏰</span>
+                    <span id="tScheduleStatus" style="font-size:0.78rem;">۲۴ ساعته (فعال)</span>
+                </div>
+                <button class="hud-badge" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;" onclick="toggleMirror()" id="mirrorPill" title="تغییر جهت آینه‌ای دوربین">
+                    <span id="tMirrorStatus" style="font-size:0.78rem;">🪞 آینه: خاموش</span>
+                </button>
             </div>
         </div>
 
@@ -1126,7 +1133,7 @@
                                 <line x1="22" y1="2" x2="11" y2="13"/>
                                 <polygon points="22 2 15 22 11 13 2 9 22 2"/>
                             </svg>
-                            <span id="tTgTitle">تنظیمات ربات تلگرام</span>
+                            <span id="tTgTitle">تنظیمات ربات تلگرام و فیلتر هشدار</span>
                         </div>
                     </div>
                     <div class="form-field">
@@ -1145,20 +1152,22 @@
                         <label id="tMediaLabel">نوع رسانه هشدار:</label>
                         <select id="selAlertMedia" class="apple-input">
                             <option value="photo">📸 ارسال تک‌عکس باکیفیت (Photo)</option>
-                            <option value="video">🎬 ارسال ویدیوی کوتاه ۵ ثانیه‌ای (MP4 Video)</option>
+                            <option value="video">🎬 ارسال ویدیوی ۵ ثانیه‌ای (MP4 Video)</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label id="tTriggerLabel">شرط و اولویت ارسال هشدار:</label>
+                        <select id="selAlertTrigger" class="apple-input">
+                            <option value="stranger_only">👤 فقط چهره‌های جدید و ناشناس (غریبه)</option>
+                            <option value="all">⚡ تمام ترددها و حرکات (حساسیت کامل)</option>
+                            <option value="roi_only">🎯 فقط ورود به محدوده امنیتی (ROI Intrusion)</option>
+                            <option value="known_only">✅ فقط افراد مجاز و آشنا</option>
                         </select>
                     </div>
                     <div class="switch-row">
                         <span id="tAutoSend">ارسال خودکار به تلگرام:</span>
                         <label class="apple-switch">
                             <input type="checkbox" id="chkAuto" checked>
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="switch-row">
-                        <span id="tOnlyNew">فقط فرد جدید یا ناشناس:</span>
-                        <label class="apple-switch">
-                            <input type="checkbox" id="chkNew" checked>
                             <span class="slider"></span>
                         </label>
                     </div>
@@ -1179,7 +1188,49 @@
                     </div>
                 </div>
 
-                <!-- Group 2: Zones & Security Rules -->
+                <!-- Group 2: Active Hours Schedule -->
+                <div class="glass-card settings-group">
+                    <div class="section-header">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                            <span id="tScheduleTitle">زمان‌بندی هوشمند پایش (ساعات فعال)</span>
+                        </div>
+                    </div>
+                    <div class="switch-row">
+                        <span id="tScheduleEnable">فعال‌سازی بازه زمانی اختصاصی:</span>
+                        <label class="apple-switch">
+                            <input type="checkbox" id="chkSchedule" onchange="updateScheduleStatusUI()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div style="display:flex; gap:12px; margin-top:12px;">
+                        <div class="form-field" style="flex:1;">
+                            <label id="tScheduleStartLabel">ساعت شروع پایش:</label>
+                            <input type="time" id="scheduleStart" class="apple-input" value="22:00" onchange="updateScheduleStatusUI()">
+                        </div>
+                        <div class="form-field" style="flex:1;">
+                            <label id="tScheduleEndLabel">ساعت پایان پایش:</label>
+                            <input type="time" id="scheduleEnd" class="apple-input" value="07:00" onchange="updateScheduleStatusUI()">
+                        </div>
+                    </div>
+                    <div style="margin-top:10px;">
+                        <label style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:6px; display:block;">الگوهای آماده سریع:</label>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                            <button type="button" class="pill-btn" onclick="setSchedulePreset('22:00', '07:00')">🌙 شبانه (۲۲ تا ۷)</button>
+                            <button type="button" class="pill-btn" onclick="setSchedulePreset('08:00', '17:00')">🏢 اداری (۸ تا ۱۷)</button>
+                            <button type="button" class="pill-btn" onclick="setSchedulePreset('18:00', '08:00')">🔒 غیر اداری (۱۸ تا ۸)</button>
+                            <button type="button" class="pill-btn" onclick="disableSchedulePreset()">⚡ ۲۴ ساعته</button>
+                        </div>
+                    </div>
+                    <div style="margin-top:14px; padding:12px; background:rgba(10,132,255,0.08); border:1px solid rgba(10,132,255,0.2); border-radius:12px; font-size:0.8rem; line-height:1.6; color:var(--text-secondary);">
+                        💡 <strong style="color:var(--text-primary);">نحوه کارکرد:</strong> در خارج از بازه زمانی تعیین‌شده، سامانه در حالت «سکوت» کار می‌کند؛ وقایع در جدول لاگ ثبت می‌شوند اما پیام تلگرام یا آژیر محلی ارسال نمی‌شود.
+                    </div>
+                </div>
+
+                <!-- Group 3: Zones & Security Rules -->
                 <div class="glass-card settings-group">
                     <div class="section-header">
                         <div style="display:flex; align-items:center; gap:8px;">
@@ -1214,6 +1265,13 @@
                         <span id="tVoiceWarning">اعلان صوتی هوشمند (Voice Alert):</span>
                         <label class="apple-switch">
                             <input type="checkbox" id="chkVoiceWarning">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="switch-row">
+                        <span id="tMirrorLabel">حالت آینه‌ای تصویر دوربین:</span>
+                        <label class="apple-switch">
+                            <input type="checkbox" id="chkMirror" onchange="applyMirrorState(this.checked)">
                             <span class="slider"></span>
                         </label>
                     </div>
@@ -1487,6 +1545,97 @@
         });
 
         // ==================== Interactive ROI Zone Editor ====================
+                function applyDefaultRoi() {
+            roiPoints = [
+                [0.18, 0.22],
+                [0.82, 0.22],
+                [0.82, 0.88],
+                [0.18, 0.88]
+            ];
+            updateRoiBanner();
+            notify(currentLang === 'fa' ? 'کادر مرکزی استاندارد فعال شد' : 'Default center box applied');
+        }
+
+        function toggleMirror() {
+            const chk = document.getElementById('chkMirror');
+            if (chk) {
+                chk.checked = !chk.checked;
+                applyMirrorState(chk.checked);
+            } else {
+                applyMirrorState(!isMirrored);
+            }
+        }
+
+        function applyMirrorState(mirrored) {
+            isMirrored = !!mirrored;
+            video.style.transform = isMirrored ? 'scaleX(-1)' : 'none';
+            const mText = document.getElementById('tMirrorStatus');
+            if (mText) mText.innerText = isMirrored
+                ? (currentLang === 'fa' ? '🪞 آینه: روشن' : '🪞 Mirror: ON')
+                : (currentLang === 'fa' ? '🪞 آینه: خاموش' : '🪞 Mirror: OFF');
+            const btnM = document.getElementById('btnMirrorAction');
+            if (btnM) btnM.innerHTML = isMirrored ? '<span>🪞 آینه (فعال)</span>' : '<span>🪞 حالت آینه‌ای</span>';
+            saveConfig();
+        }
+
+        // ==================== Active Schedule Helper ====================
+        function isWithinSchedule() {
+            const enabled = document.getElementById('chkSchedule') && document.getElementById('chkSchedule').checked;
+            if (!enabled) return true;
+            const sStart = document.getElementById('scheduleStart').value || '22:00';
+            const sEnd = document.getElementById('scheduleEnd').value || '07:00';
+            const now = new Date();
+            const curMin = now.getHours() * 60 + now.getMinutes();
+
+            const [sh, sm] = sStart.split(':').map(Number);
+            const [eh, em] = sEnd.split(':').map(Number);
+            const startMin = (sh || 0) * 60 + (sm || 0);
+            const endMin = (eh || 0) * 60 + (em || 0);
+
+            if (startMin <= endMin) {
+                return curMin >= startMin && curMin <= endMin;
+            } else { // Overnight window
+                return curMin >= startMin || curMin <= endMin;
+            }
+        }
+
+        function updateScheduleStatusUI() {
+            const enabled = document.getElementById('chkSchedule') && document.getElementById('chkSchedule').checked;
+            const pill = document.getElementById('tScheduleStatus');
+            if (!pill) return;
+            if (!enabled) {
+                pill.innerText = currentLang === 'fa' ? '۲۴ ساعته (فعال)' : '24/7 Always Active';
+                pill.style.color = 'var(--apple-green)';
+            } else {
+                const sStart = document.getElementById('scheduleStart').value || '22:00';
+                const sEnd = document.getElementById('scheduleEnd').value || '07:00';
+                const activeNow = isWithinSchedule();
+                if (activeNow) {
+                    pill.innerText = currentLang === 'fa' ? `⏰ پایش فعال (${sStart} - ${sEnd})` : `⏰ Active (${sStart} - ${sEnd})`;
+                    pill.style.color = 'var(--apple-green)';
+                } else {
+                    pill.innerText = currentLang === 'fa' ? `🌙 حالت سکوت (${sStart} - ${sEnd})` : `🌙 Silent (${sStart} - ${sEnd})`;
+                    pill.style.color = 'var(--apple-amber)';
+                }
+            }
+        }
+
+        function setSchedulePreset(start, end) {
+            document.getElementById('chkSchedule').checked = true;
+            document.getElementById('scheduleStart').value = start;
+            document.getElementById('scheduleEnd').value = end;
+            updateScheduleStatusUI();
+            saveConfig();
+            notify(currentLang === 'fa' ? `زمان‌بندی روی ${start} تا ${end} تنظیم شد` : `Schedule set to ${start} - ${end}`);
+        }
+
+        function disableSchedulePreset() {
+            document.getElementById('chkSchedule').checked = false;
+            updateScheduleStatusUI();
+            saveConfig();
+            notify(currentLang === 'fa' ? 'زمان‌بندی غیرفعال شد (پایش ۲۴ ساعته)' : 'Schedule disabled (24/7 active)');
+        }
+
         function startRoiEditor() {
             switchView('viewMonitor');
             isEditingRoi = true;
@@ -1530,10 +1679,13 @@
                 c.addEventListener('click', (e) => {
                     if (!isEditingRoi) return;
                     const rect = c.getBoundingClientRect();
-                    const nx = (e.clientX - rect.left) / rect.width;
-                    const ny = (e.clientY - rect.top) / rect.height;
+                    const clickX = e.clientX - rect.left;
+                    const clickY = e.clientY - rect.top;
+                    const realX = isMirrored ? (rect.width - clickX) : clickX;
+                    const nx = Math.max(0, Math.min(1, realX / rect.width));
+                    const ny = Math.max(0, Math.min(1, clickY / rect.height));
                     if (roiPoints.length < 4) {
-                        roiPoints.push([Math.max(0, Math.min(1, nx)), Math.max(0, Math.min(1, ny))]);
+                        roiPoints.push([nx, ny]);
                         updateRoiBanner();
                     }
                 });
@@ -1720,42 +1872,47 @@
             const h = overlayCanvas.height;
             ctx.clearRect(0, 0, w, h);
 
-            // 1. Draw ROI Security Polygon
+            // 1. Draw ROI Security Polygon (Accurate display for both normal & mirror modes)
             const roiEnabled = document.getElementById('chkRoi') && document.getElementById('chkRoi').checked;
             if (roiPoints.length >= 3 && (roiEnabled || isEditingRoi)) {
                 ctx.save();
-                ctx.fillStyle = 'rgba(255, 69, 58, 0.16)';
+                const p0x = isMirrored ? (1 - roiPoints[0][0]) * w : roiPoints[0][0] * w;
+                const p0y = roiPoints[0][1] * h;
+
+                ctx.fillStyle = 'rgba(255, 69, 58, 0.18)';
                 ctx.strokeStyle = '#ff453a';
                 ctx.lineWidth = 2.5;
                 ctx.beginPath();
-                ctx.moveTo(roiPoints[0][0] * w, roiPoints[0][1] * h);
+                ctx.moveTo(p0x, p0y);
                 for (let i = 1; i < roiPoints.length; i++) {
-                    ctx.lineTo(roiPoints[i][0] * w, roiPoints[i][1] * h);
+                    const px = isMirrored ? (1 - roiPoints[i][0]) * w : roiPoints[i][0] * w;
+                    const py = roiPoints[i][1] * h;
+                    ctx.lineTo(px, py);
                 }
                 ctx.closePath();
                 ctx.fill();
                 ctx.stroke();
 
-                ctx.fillStyle = '#ff453a';
-                ctx.font = '700 12px -apple-system, sans-serif';
-                ctx.fillText('RESTRICTED SECURITY ZONE', roiPoints[0][0] * w + 8, roiPoints[0][1] * h - 8);
-                ctx.restore();
-            }
-
-            // Draw points currently being placed
-            if (isEditingRoi) {
-                ctx.save();
+                // Draw pins & numbers
                 for (let i = 0; i < roiPoints.length; i++) {
-                    const px = roiPoints[i][0] * w;
+                    const px = isMirrored ? (1 - roiPoints[i][0]) * w : roiPoints[i][0] * w;
                     const py = roiPoints[i][1] * h;
                     ctx.fillStyle = '#ff453a';
                     ctx.beginPath();
-                    ctx.arc(px, py, 6, 0, Math.PI * 2);
+                    ctx.arc(px, py, 5, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 1.5;
                     ctx.stroke();
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = '700 10px -apple-system, sans-serif';
+                    ctx.fillText(`P${i+1}`, px + 7, py - 4);
                 }
+
+                ctx.fillStyle = '#ff453a';
+                ctx.font = '700 12px -apple-system, sans-serif';
+                ctx.fillText('RESTRICTED SECURITY ZONE', p0x + 8, p0y - 8);
                 ctx.restore();
             }
 
@@ -1824,19 +1981,22 @@
                 if (bw > 60 && bh > 80) {
                     const matchedName = matchFace(bx, by, bw, bh);
                     const feetPt = [(bx + bw / 2) / w, (by + bh) / h];
-                    const inRoi = (roiPoints.length >= 3 && roiEnabled) ? isPointInPoly(feetPt, roiPoints) : true;
+                    const hasRoi = roiPoints.length >= 3 && roiEnabled;
+                    const inRoi = hasRoi ? isPointInPoly(feetPt, roiPoints) : true;
+                    const isIntruder = hasRoi && inRoi;
 
-                    if (inRoi) {
-                        detectedPersons.push({
-                            bbox: [bx, by, bw, bh],
-                            score: Math.min(0.96, 0.65 + motionRatio * 3),
-                            name: matchedName,
-                            inRoi: true
-                        });
+                    detectedPersons.push({
+                        bbox: [bx, by, bw, bh],
+                        score: Math.min(0.96, 0.65 + motionRatio * 3),
+                        name: matchedName,
+                        inRoi: inRoi,
+                        inRoiAlert: isIntruder
+                    });
 
-                        if (!matchedName && (document.getElementById('chkAudioAlarm').checked || document.getElementById('chkVoiceWarning').checked)) {
+                    if (isIntruder || (!hasRoi && !matchedName)) {
+                        if (document.getElementById('chkAudioAlarm').checked || document.getElementById('chkVoiceWarning').checked) {
                             playAlarmSiren();
-                            playVoiceWarning(currentLang === 'fa' ? 'هشدار ورود غیرمجاز' : 'Warning: Unauthorized intrusion');
+                            playVoiceWarning(isIntruder ? (currentLang === 'fa' ? 'هشدار نفوذ به محدوده ممنوعه' : 'Restricted zone intrusion') : (currentLang === 'fa' ? 'هشدار تردد ناشناس' : 'Unauthorized intrusion'));
                         }
                     }
                 }
@@ -1858,7 +2018,13 @@
         function drawHud(det) {
             const [x, y, bw, bh] = det.bbox;
             const isKnown = !!det.name;
-            const color = isKnown ? '#30d158' : '#ff9f0a';
+            const isIntruder = !!det.inRoiAlert;
+            let color = isKnown ? '#30d158' : '#ff9f0a';
+            if (det.inRoi === false) color = '#636366';
+            if (isIntruder) color = '#ff453a';
+
+            // Calculate display X coordinate (handles mirror flip without reversing text)
+            const rx = isMirrored ? (overlayCanvas.width - (x + bw)) : x;
 
             ctx.save();
             ctx.strokeStyle = color;
@@ -1867,27 +2033,31 @@
             const edge = Math.min(24, Math.max(10, bw / 5));
 
             ctx.beginPath();
-            ctx.moveTo(x, y + edge); ctx.lineTo(x, y); ctx.lineTo(x + edge, y);
-            ctx.moveTo(x + bw - edge, y); ctx.lineTo(x + bw, y); ctx.lineTo(x + bw, y + edge);
-            ctx.moveTo(x, y + bh - edge); ctx.lineTo(x, y + bh); ctx.lineTo(x + edge, y + bh);
-            ctx.moveTo(x + bw - edge, y + bh); ctx.lineTo(x + bw, y + bh); ctx.lineTo(x + bw, y + bh - edge);
+            ctx.moveTo(rx, y + edge); ctx.lineTo(rx, y); ctx.lineTo(rx + edge, y);
+            ctx.moveTo(rx + bw - edge, y); ctx.lineTo(rx + bw, y); ctx.lineTo(rx + bw, y + edge);
+            ctx.moveTo(rx, y + bh - edge); ctx.lineTo(rx, y + bh); ctx.lineTo(rx + edge, y + bh);
+            ctx.moveTo(rx + bw - edge, y + bh); ctx.lineTo(rx + bw, y + bh); ctx.lineTo(rx + bw, y + bh - edge);
             ctx.stroke();
 
-            const label = isKnown ? `MikiVo • ${det.name} (94%)` : `MikiVo • Unknown (${Math.round(det.score * 100)}%)`;
+            const prefix = isIntruder ? '⚠️ نفوذ: ' : '';
+            const whoTxt = isKnown ? det.name : (currentLang === 'fa' ? 'ناشناس' : 'Unknown');
+            const confPct = isKnown ? 94 : Math.round(det.score * 100);
+            const label = `MikiVo • ${prefix}${whoTxt} (${confPct}%)`;
+
             ctx.font = '700 13px -apple-system, Vazirmatn, sans-serif';
             const tw = ctx.measureText(label).width;
 
             const tagY = y > 30 ? y - 10 : y + bh + 20;
-            ctx.fillStyle = 'rgba(18, 18, 20, 0.88)';
+            ctx.fillStyle = 'rgba(18, 18, 20, 0.90)';
             ctx.strokeStyle = color;
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.roundRect(x, tagY - 18, tw + 16, 24, 8);
+            ctx.roundRect(rx, tagY - 18, tw + 16, 24, 8);
             ctx.fill();
             ctx.stroke();
 
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(label, x + 8, tagY - 2);
+            ctx.fillText(label, rx + 8, tagY - 2);
 
             ctx.restore();
         }
@@ -2036,6 +2206,21 @@
         }
 
         // ==================== Auto-Incident Logging & Telegram Dispatch ====================
+        async         function addSilentLogEntry(who, count, statusTxt) {
+            const tbody = document.getElementById('logRows');
+            const empty = document.getElementById('tEmptyLog');
+            if (empty && empty.parentElement) empty.parentElement.remove();
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${new Date().toLocaleTimeString()}</td>
+                <td>${count}</td>
+                <td>94%</td>
+                <td><strong>${who}</strong></td>
+                <td><span class="pill-tag" style="background:rgba(255,159,10,0.15); color:var(--apple-amber);">${statusTxt}</span></td>
+            `;
+            tbody.insertBefore(tr, tbody.firstChild);
+        }
+
         async function checkAutoIncident(persons) {
             const now = Date.now();
             const cooldownMs = (parseInt(document.getElementById('cooldown').value) || 6) * 1000;
@@ -2220,7 +2405,7 @@
                 caption: document.getElementById('customCaption').value.trim(),
                 cooldown: document.getElementById('cooldown').value,
                 auto: document.getElementById('chkAuto').checked,
-                onlyNew: document.getElementById('chkNew').checked,
+                alertTrigger: (document.getElementById('selAlertTrigger') && document.getElementById('selAlertTrigger').value) || 'stranger_only',
                 remote: document.getElementById('chkRemote').checked,
                 alertMedia: document.getElementById('selAlertMedia').value,
                 roiEnabled: document.getElementById('chkRoi').checked,
@@ -2228,6 +2413,10 @@
                 audioAlarm: document.getElementById('chkAudioAlarm').checked,
                 voiceWarning: document.getElementById('chkVoiceWarning').checked,
                 loiterSec: document.getElementById('loiterSec').value,
+                scheduleEnabled: document.getElementById('chkSchedule') ? document.getElementById('chkSchedule').checked : false,
+                scheduleStart: document.getElementById('scheduleStart') ? document.getElementById('scheduleStart').value : '22:00',
+                scheduleEnd: document.getElementById('scheduleEnd') ? document.getElementById('scheduleEnd').value : '07:00',
+                mirrorCamera: isMirrored,
                 roiPoints: roiPoints
             };
             try {
@@ -2244,13 +2433,18 @@
                     custom_caption: cfg.caption,
                     cooldown_sec: parseInt(cfg.cooldown) || 6,
                     auto_send: cfg.auto,
-                    only_new_person: cfg.onlyNew,
+                    alert_trigger: cfg.alertTrigger,
+                    only_new_person: cfg.alertTrigger === 'stranger_only',
                     remote_control: cfg.remote,
                     alert_media: cfg.alertMedia,
                     roi_enabled: cfg.roiEnabled,
                     tripwire_enabled: cfg.tripwireEnabled,
                     audio_alarm: cfg.audioAlarm,
                     loiter_sec: parseInt(cfg.loiterSec) || 10,
+                    schedule_enabled: cfg.scheduleEnabled,
+                    schedule_start: cfg.scheduleStart,
+                    schedule_end: cfg.scheduleEnd,
+                    mirror_mode: cfg.mirrorCamera,
                     roi_polygon: roiPoints
                 })
             }).catch(() => {});
@@ -2274,7 +2468,13 @@
                     if (cfg.audioAlarm !== undefined) document.getElementById('chkAudioAlarm').checked = cfg.audioAlarm;
                     if (cfg.voiceWarning !== undefined) document.getElementById('chkVoiceWarning').checked = cfg.voiceWarning;
                     if (cfg.loiterSec) document.getElementById('loiterSec').value = cfg.loiterSec;
+                    if (cfg.alertTrigger && document.getElementById('selAlertTrigger')) document.getElementById('selAlertTrigger').value = cfg.alertTrigger;
+                    if (cfg.scheduleEnabled !== undefined && document.getElementById('chkSchedule')) document.getElementById('chkSchedule').checked = cfg.scheduleEnabled;
+                    if (cfg.scheduleStart && document.getElementById('scheduleStart')) document.getElementById('scheduleStart').value = cfg.scheduleStart;
+                    if (cfg.scheduleEnd && document.getElementById('scheduleEnd')) document.getElementById('scheduleEnd').value = cfg.scheduleEnd;
+                    if (cfg.mirrorCamera !== undefined) applyMirrorState(cfg.mirrorCamera);
                     if (cfg.roiPoints && Array.isArray(cfg.roiPoints)) roiPoints = cfg.roiPoints;
+                    updateScheduleStatusUI();
                 }
             } catch (e) {}
         }
