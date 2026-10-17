@@ -3,6 +3,7 @@ import json
 import time
 import base64
 import threading
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 from flask import Flask, Response, render_template, request, jsonify
@@ -14,6 +15,14 @@ app = Flask(__name__, template_folder="templates")
 app.config["JSON_ENSURE_ASCII"] = False
 
 CONFIG_FILE = Path(__file__).parent / "settings.json"
+
+
+@app.after_request
+def enable_cors(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
 
 
 def get_default_config():
@@ -150,8 +159,6 @@ worker_thread = threading.Thread(target=alert_worker, daemon=True)
 worker_thread.start()
 
 
-# HTTP Endpoints
-
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -170,8 +177,10 @@ def video_feed():
     return Response(mjpeg_stream(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 
-@app.route("/api/start", methods=["POST"])
+@app.route("/api/start", methods=["POST", "OPTIONS"])
 def api_start():
+    if request.method == "OPTIONS":
+        return jsonify(ok=True)
     idx = config.get("camera_index", 0)
     ok = detector.start(device_index=int(idx))
     if ok:
@@ -181,16 +190,20 @@ def api_start():
     return jsonify(ok=False, error="Camera could not be opened"), 500
 
 
-@app.route("/api/stop", methods=["POST"])
+@app.route("/api/stop", methods=["POST", "OPTIONS"])
 def api_stop():
+    if request.method == "OPTIONS":
+        return jsonify(ok=True)
     detector.stop()
     state["is_streaming"] = False
     detector.stats.update({"fps": 0, "person_count": 0, "motion_level": 0})
     return jsonify(ok=True)
 
 
-@app.route("/api/status")
+@app.route("/api/status", methods=["GET", "OPTIONS"])
 def api_status():
+    if request.method == "OPTIONS":
+        return jsonify(ok=True)
     dets = []
     for d in detector.last_detections:
         dets.append({
@@ -213,16 +226,20 @@ def api_status():
     )
 
 
-@app.route("/api/snapshot", methods=["POST"])
+@app.route("/api/snapshot", methods=["POST", "OPTIONS"])
 def api_snapshot():
+    if request.method == "OPTIONS":
+        return jsonify(ok=True)
     raw = detector.take_raw_snapshot()
     if raw is None:
         return jsonify(ok=False, error="Camera is offline"), 400
     return jsonify(ok=True, image="data:image/jpeg;base64," + base64.b64encode(raw).decode())
 
 
-@app.route("/api/register", methods=["POST"])
+@app.route("/api/register", methods=["POST", "OPTIONS"])
 def api_register():
+    if request.method == "OPTIONS":
+        return jsonify(ok=True)
     data = request.get_json() or {}
     name = (data.get("name") or "").strip()
     if not name:
@@ -232,35 +249,41 @@ def api_register():
     return jsonify(ok=ok, message=res if not ok else "Face registered", face_id=res if ok else None)
 
 
-@app.route("/api/faces")
+@app.route("/api/faces", methods=["GET", "OPTIONS"])
 def api_faces():
+    if request.method == "OPTIONS":
+        return jsonify(ok=True)
     return jsonify(faces=detector.db.all_records_json())
 
 
-@app.route("/api/faces/<face_id>", methods=["DELETE"])
+@app.route("/api/faces/<face_id>", methods=["DELETE", "OPTIONS"])
 def api_delete_face(face_id):
+    if request.method == "OPTIONS":
+        return jsonify(ok=True)
     deleted = detector.db.delete(face_id)
     return jsonify(ok=deleted)
 
 
-@app.route("/api/faces/clear", methods=["POST"])
+@app.route("/api/faces/clear", methods=["POST", "OPTIONS"])
 def api_clear_faces():
+    if request.method == "OPTIONS":
+        return jsonify(ok=True)
     detector.db.clear()
     return jsonify(ok=True)
 
 
-@app.route("/api/settings", methods=["GET"])
-def api_get_settings():
-    s = {k: v for k, v in config.items() if k != "bot_token"}
-    s["has_token"] = bool(config.get("bot_token"))
-    return jsonify(s)
-
-
-@app.route("/api/settings", methods=["POST"])
-def api_save_settings():
+@app.route("/api/settings", methods=["GET", "POST", "OPTIONS"])
+def api_settings():
     global config
-    data = request.get_json() or {}
+    if request.method == "OPTIONS":
+        return jsonify(ok=True)
 
+    if request.method == "GET":
+        s = {k: v for k, v in config.items() if k != "bot_token"}
+        s["has_token"] = bool(config.get("bot_token"))
+        return jsonify(s)
+
+    data = request.get_json() or {}
     for k in get_default_config():
         if k in data:
             config[k] = data[k]
@@ -277,20 +300,30 @@ def api_save_settings():
     return jsonify(ok=True)
 
 
-@app.route("/api/test_telegram", methods=["POST"])
+@app.route("/api/test_telegram", methods=["POST", "OPTIONS"])
 def api_test_telegram():
+    if request.method == "OPTIONS":
+        return jsonify(ok=True)
     state["bot_token"] = config.get("bot_token", "")
     state["chat_id"] = config.get("chat_id", "")
     ok, msg = telegram.test_connection()
     return jsonify(ok=ok, message=msg)
 
 
-@app.route("/api/calibrate", methods=["POST"])
+@app.route("/api/calibrate", methods=["POST", "OPTIONS"])
 def api_calibrate():
+    if request.method == "OPTIONS":
+        return jsonify(ok=True)
     if hasattr(detector, "_bg_subtractor"):
         detector._bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=40, detectShadows=False)
     return jsonify(ok=True)
 
 
+def open_browser():
+    time.sleep(1.2)
+    webbrowser.open("http://127.0.0.1:5000")
+
+
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)
+    threading.Thread(target=open_browser, daemon=True).start()
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

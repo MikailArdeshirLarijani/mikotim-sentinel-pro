@@ -58,14 +58,6 @@ python app.py
 
 ---
 
-## اجرای تست‌های خودکار | Running Tests
-پروژه شامل یک مجموعه تست واحد برای بررسی عملکرد پایگاه داده چهره، ریاضیات بردارها، درگاه تلگرام و مسیرهای سرور است:
-```bash
-python -m unittest tests/test_suite.py
-```
-
----
-
 ## ساختار فایل‌ها | Directory Structure
 ```text
 ├── app.py              # سرور اصلی Flask و کنترل‌کننده‌های API
@@ -73,8 +65,6 @@ python -m unittest tests/test_suite.py
 ├── telegram_bot.py     # کلاس ارتباط با تلگرام و پولینگ دستورات
 ├── templates/
 │   └── index.html      # قالب وب دوزبانه و داشبورد زنده
-├── tests/
-│   └── test_suite.py   # تست‌های خودکار
 ├── faces/              # محل ذخیره بردارهای مشخصه چهره‌ها
 ├── requirements.txt    # لیست کتابخانه‌های پایتون
 └── run.bat             # اسکریپت اجرای سریع در ویندوز

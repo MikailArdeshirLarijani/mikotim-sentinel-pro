@@ -1234,6 +1234,22 @@
             document.getElementById('tab2').classList.toggle('active', tab === 'settings');
         }
 
+        const API_BASE = (window.location.protocol === 'file:' || !window.location.host.includes(':5000')) ? 'http://127.0.0.1:5000' : '';
+
+        function getApiUrl(path) {
+            return API_BASE + path;
+        }
+
+        function handleFetchError(e) {
+            console.error(e);
+            if (e && e.message && (e.message.toLowerCase().includes('fetch') || e.message.toLowerCase().includes('network'))) {
+                return currentLang === 'fa' 
+                    ? 'عدم برقراری ارتباط: سرور پایتون فعال نیست (لطفاً فایل run.bat را اجرا کنید)' 
+                    : 'Server is offline. Please launch run.bat first.';
+            }
+            return (e && e.message) ? e.message : 'Error';
+        }
+
         function updateBadge() {
             const dot = document.getElementById('dot');
             const label = document.getElementById('tStatus');
@@ -1249,13 +1265,13 @@
 
         async function startStream() {
             try {
-                const res = await fetch('/api/start', { method: 'POST' });
+                const res = await fetch(getApiUrl('/api/start'), { method: 'POST' });
                 const data = await res.json();
                 if (data.ok) {
                     streaming = true;
                     document.getElementById('camIdle').style.display = 'none';
                     const feed = document.getElementById('camFeed');
-                    feed.src = '/video_feed?_=' + Date.now();
+                    feed.src = getApiUrl('/video_feed?_=') + Date.now();
                     feed.style.display = 'block';
                     document.getElementById('startBtn').style.display = 'none';
                     document.getElementById('stopBtn').style.display = 'inline-flex';
@@ -1265,13 +1281,13 @@
                     notify(data.error || 'Failed');
                 }
             } catch (e) {
-                notify(e.message);
+                notify(handleFetchError(e));
             }
         }
 
         async function stopStream() {
             try {
-                await fetch('/api/stop', { method: 'POST' });
+                await fetch(getApiUrl('/api/stop'), { method: 'POST' });
                 streaming = false;
                 document.getElementById('camIdle').style.display = 'flex';
                 document.getElementById('camFeed').style.display = 'none';
@@ -1280,29 +1296,29 @@
                 updateBadge();
                 notify(currentLang === 'fa' ? 'پایش متوقف شد' : 'Surveillance paused');
             } catch (e) {
-                notify(e.message);
+                notify(handleFetchError(e));
             }
         }
 
         async function takePhoto() {
             try {
-                const res = await fetch('/api/snapshot', { method: 'POST' });
+                const res = await fetch(getApiUrl('/api/snapshot'), { method: 'POST' });
                 const d = await res.json();
                 if (d.ok) {
                     const w = window.open('');
                     w.document.write('<img src="' + d.image + '" style="max-width:100%; border-radius:12px;">');
                 }
             } catch (e) {
-                notify(e.message);
+                notify(handleFetchError(e));
             }
         }
 
         async function calibrate() {
             try {
-                await fetch('/api/calibrate', { method: 'POST' });
+                await fetch(getApiUrl('/api/calibrate'), { method: 'POST' });
                 notify(currentLang === 'fa' ? 'مدل پس‌زمینه با موفقیت تنظیم شد' : 'Background calibrated');
             } catch (e) {
-                notify(e.message);
+                notify(handleFetchError(e));
             }
         }
 
@@ -1314,7 +1330,7 @@
                 return;
             }
             try {
-                const res = await fetch('/api/register', {
+                const res = await fetch(getApiUrl('/api/register'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name })
@@ -1328,13 +1344,13 @@
                     notify(d.message || 'Error');
                 }
             } catch (e) {
-                notify(e.message);
+                notify(handleFetchError(e));
             }
         }
 
         async function loadProfiles() {
             try {
-                const res = await fetch('/api/faces');
+                const res = await fetch(getApiUrl('/api/faces'));
                 const d = await res.json();
                 const box = document.getElementById('faceList');
                 box.innerHTML = '';
@@ -1367,7 +1383,7 @@
 
         async function removeFace(id) {
             try {
-                await fetch(`/api/faces/${id}`, { method: 'DELETE' });
+                await fetch(getApiUrl(`/api/faces/${id}`), { method: 'DELETE' });
                 loadProfiles();
             } catch (e) {}
         }
@@ -1375,14 +1391,14 @@
         async function clearFaces() {
             if (!confirm(currentLang === 'fa' ? 'همه پروفایل‌ها حذف شوند؟' : 'Clear all profiles?')) return;
             try {
-                await fetch('/api/faces/clear', { method: 'POST' });
+                await fetch(getApiUrl('/api/faces/clear'), { method: 'POST' });
                 loadProfiles();
             } catch (e) {}
         }
 
         async function loadConfig() {
             try {
-                const res = await fetch('/api/settings');
+                const res = await fetch(getApiUrl('/api/settings'));
                 const d = await res.json();
                 if (d.chat_id) document.getElementById('tgChat').value = d.chat_id;
                 if (d.custom_caption) document.getElementById('customCaption').value = d.custom_caption;
@@ -1407,7 +1423,7 @@
             if (token) payload.bot_token = token;
 
             try {
-                const res = await fetch('/api/settings', {
+                const res = await fetch(getApiUrl('/api/settings'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -1415,23 +1431,23 @@
                 const d = await res.json();
                 if (d.ok) notify(currentLang === 'fa' ? 'تنظیمات با موفقیت ذخیره شد' : 'Settings saved');
             } catch (e) {
-                notify(e.message);
+                notify(handleFetchError(e));
             }
         }
 
         async function testTg() {
             try {
-                const res = await fetch('/api/test_telegram', { method: 'POST' });
+                const res = await fetch(getApiUrl('/api/test_telegram'), { method: 'POST' });
                 const d = await res.json();
                 notify(d.ok ? (currentLang === 'fa' ? 'ارتباط برقرار است' : 'Connected') : (d.message || 'Error'));
             } catch (e) {
-                notify(e.message);
+                notify(handleFetchError(e));
             }
         }
 
         async function pollStatus() {
             try {
-                const res = await fetch('/api/status');
+                const res = await fetch(getApiUrl('/api/status'));
                 const d = await res.json();
 
                 document.getElementById('fpsVal').innerText = d.fps.toFixed(1);

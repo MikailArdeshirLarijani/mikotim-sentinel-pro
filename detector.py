@@ -168,7 +168,10 @@ class MikoDetector:
 
             if not cap.isOpened():
                 cap.release()
-                return False
+                cap = cv2.VideoCapture(device_index)
+                if not cap.isOpened():
+                    cap.release()
+                    return False
 
             self.cap = cap
             self.running = True
