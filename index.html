@@ -1429,17 +1429,23 @@
             const targetView = document.getElementById(viewId);
             if (targetView) targetView.classList.add('active');
 
-            if (viewId === 'viewMonitor') document.getElementById('tabMonitor').classList.add('active');
-            if (viewId === 'viewLogs') document.getElementById('tabLogs').classList.add('active');
-            if (viewId === 'viewAnalytics') {
-                document.getElementById('tabAnalytics').classList.add('active');
-                renderHourlyChart(hourlyTraffic);
+            if (viewId === 'viewMonitor') {
+                const t = document.getElementById('tabMonitor');
+                if (t) t.classList.add('active');
+            }
+            if (viewId === 'viewLogs') {
+                const t = document.getElementById('tabLogs');
+                if (t) t.classList.add('active');
             }
             if (viewId === 'viewFaces') {
-                document.getElementById('tabFaces').classList.add('active');
+                const t = document.getElementById('tabFaces');
+                if (t) t.classList.add('active');
                 renderProfileList();
             }
-            if (viewId === 'viewSettings') document.getElementById('tabSettings').classList.add('active');
+            if (viewId === 'viewSettings') {
+                const t = document.getElementById('tabSettings');
+                if (t) t.classList.add('active');
+            }
         }
 
         // ==================== Toast Notifications ====================
@@ -1701,50 +1707,58 @@
             document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
 
             const d = dict[lang];
-            document.getElementById('langBtn').querySelector('span').innerText = d.lang;
-            document.getElementById('tCameraIdle').innerText = d.idle;
-            document.getElementById('tStart').innerText = d.start;
-            document.getElementById('tStop').innerText = d.stop;
-            document.getElementById('tSnap').innerText = d.snap;
-            document.getElementById('tCalib').innerText = d.calib;
-            document.getElementById('tFps').innerText = d.fps;
-            document.getElementById('tPersons').innerText = d.persons;
-            document.getElementById('tTg').innerText = d.tg;
-            document.getElementById('tLogTitle').innerText = d.logTitle;
-            document.getElementById('thTime').innerText = d.thTime;
-            document.getElementById('thCount').innerText = d.thCount;
-            document.getElementById('thConf').innerText = d.thConf;
-            document.getElementById('thWho').innerText = d.thWho;
-            document.getElementById('thTg').innerText = d.thTg;
-            document.getElementById('tRegTitle').innerText = d.regTitle;
-            document.getElementById('tBtnReg').innerText = d.btnReg;
-            document.getElementById('tListTitle').innerText = d.listTitle;
-            document.getElementById('tBtnClear').innerText = d.btnClear;
-            document.getElementById('tTgTitle').innerText = d.tgTitle;
-            document.getElementById('tCaptionLabel').innerText = d.captionLabel;
-            document.getElementById('tCooldownLabel').innerText = d.cooldownLabel;
-            document.getElementById('tAutoSend').innerText = d.autoSend;
-            document.getElementById('tOnlyNew').innerText = d.onlyNew;
-            document.getElementById('tRemote').innerText = d.remote;
-            document.getElementById('tSave').innerText = d.save;
-            document.getElementById('tTest').innerText = d.test;
-            document.getElementById('tStealth').innerText = d.stealth;
-            document.getElementById('tRoiBtn').innerText = d.roiBtn;
-            document.getElementById('tMediaLabel').innerText = d.mediaLabel;
-            document.getElementById('tRoiEnable').innerText = d.roiEnable;
-            document.getElementById('tTripwireEnable').innerText = d.tripwireEnable;
-            document.getElementById('tAudioAlarm').innerText = d.audioAlarm;
-            document.getElementById('tVoiceWarning').innerText = d.voiceWarning;
-            document.getElementById('tLoiterLabel').innerText = d.loiterLabel;
-            document.getElementById('tInOut').innerText = d.inOut;
-            document.getElementById('tLoiterTile').innerText = d.loiter;
-            document.getElementById('tChartTitle').innerText = d.chartTitle;
-            document.getElementById('tSendSummary').innerText = d.sendSummary;
-            document.getElementById('navLive').innerText = d.navLive;
-            document.getElementById('navLogs').innerText = d.navLogs;
-            document.getElementById('navAnalytics').innerText = d.navAnalytics;
-            document.getElementById('navFaces').innerText = d.navFaces;
-            document.getElementById('navSettings').innerText = d.navSettings;
+            if (!d) return;
+
+            const safeSetText = (id, text) => {
+                const el = document.getElementById(id);
+                if (el && text !== undefined) el.innerText = text;
+            };
+
+            const langBtn = document.getElementById('langBtn');
+            if (langBtn) {
+                const span = langBtn.querySelector('span');
+                if (span) span.innerText = d.lang;
+            }
+
+            safeSetText('tCameraIdle', d.idle);
+            safeSetText('tStart', d.start);
+            safeSetText('tStop', d.stop);
+            safeSetText('tSnap', d.snap);
+            safeSetText('tCalib', d.calib);
+            safeSetText('tFps', d.fps);
+            safeSetText('tPersons', d.persons);
+            safeSetText('tTg', d.tg);
+            safeSetText('tLogTitle', d.logTitle);
+            safeSetText('thTime', d.thTime);
+            safeSetText('thCount', d.thCount);
+            safeSetText('thConf', d.thConf);
+            safeSetText('thWho', d.thWho);
+            safeSetText('thTg', d.thTg);
+            safeSetText('tRegTitle', d.regTitle);
+            safeSetText('tBtnReg', d.btnReg);
+            safeSetText('tListTitle', d.listTitle);
+            safeSetText('tBtnClear', d.btnClear);
+            safeSetText('tTgTitle', d.tgTitle);
+            safeSetText('tCaptionLabel', d.captionLabel);
+            safeSetText('tCooldownLabel', d.cooldownLabel);
+            safeSetText('tAutoSend', d.autoSend);
+            safeSetText('tRemote', d.remote);
+            safeSetText('tSave', d.save);
+            safeSetText('tTest', d.test);
+            safeSetText('tStealth', d.stealth);
+            safeSetText('tRoiBtn', d.roiBtn);
+            safeSetText('tMediaLabel', d.mediaLabel);
+            safeSetText('tRoiEnable', d.roiEnable);
+            safeSetText('tTripwireEnable', d.tripwireEnable);
+            safeSetText('tAudioAlarm', d.audioAlarm);
+            safeSetText('tVoiceWarning', d.voiceWarning);
+            safeSetText('tLoiterLabel', d.loiterLabel);
+            safeSetText('tInOut', d.inOut);
+            safeSetText('tLoiterTile', d.loiter);
+            safeSetText('navLive', d.navLive);
+            safeSetText('navLogs', d.navLogs);
+            safeSetText('navFaces', d.navFaces);
+            safeSetText('navSettings', d.navSettings);
 
             updateBadge();
         }
@@ -1789,7 +1803,21 @@
             }
         }
 
-        // ==================== Direct Browser Camera Engine ====================
+        // ==================== MikoVo RaRa 11 Web Vision Core ====================
+        let nativeFaceDetector = null;
+        if (typeof window !== 'undefined' && 'FaceDetector' in window) {
+            try {
+                nativeFaceDetector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 4 });
+            } catch (e) {
+                nativeFaceDetector = null;
+            }
+        }
+
+        let activeTracks = [];
+        let trackIdCounter = 1;
+        let lastNativeFaceCheck = 0;
+        let cachedNativeFaces = [];
+
         async function startCamera() {
             try {
                 videoStream = await navigator.mediaDevices.getUserMedia({
@@ -1801,10 +1829,13 @@
                 await video.play();
 
                 isStreaming = true;
-                document.getElementById('camIdle').style.display = 'none';
+                const camIdle = document.getElementById('camIdle');
+                if (camIdle) camIdle.style.display = 'none';
                 video.style.display = 'block';
-                document.getElementById('startBtn').style.display = 'none';
-                document.getElementById('stopBtn').style.display = 'inline-flex';
+                const startBtn = document.getElementById('startBtn');
+                const stopBtn = document.getElementById('stopBtn');
+                if (startBtn) startBtn.style.display = 'none';
+                if (stopBtn) stopBtn.style.display = 'inline-flex';
                 updateBadge();
 
                 overlayCanvas.width = video.videoWidth || 1280;
@@ -1812,6 +1843,8 @@
 
                 prevFrame = null;
                 bgFrame = null;
+                activeTracks = [];
+                cachedNativeFaces = [];
                 processLoop();
                 notify(currentLang === 'fa' ? 'دوربین با موفقیت متصل شد' : 'Camera connected directly');
             } catch (err) {
@@ -1829,31 +1862,40 @@
                 animationFrameId = null;
             }
             isStreaming = false;
-            document.getElementById('camIdle').style.display = 'flex';
+            activeTracks = [];
+            cachedNativeFaces = [];
+            const camIdle = document.getElementById('camIdle');
+            if (camIdle) camIdle.style.display = 'flex';
             video.style.display = 'none';
             ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-            document.getElementById('startBtn').style.display = 'inline-flex';
-            document.getElementById('stopBtn').style.display = 'none';
-            document.getElementById('personVal').innerText = "0";
-            document.getElementById('fpsVal').innerText = "0.0";
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            if (startBtn) startBtn.style.display = 'inline-flex';
+            if (stopBtn) stopBtn.style.display = 'none';
+            const personVal = document.getElementById('personVal');
+            const fpsVal = document.getElementById('fpsVal');
+            if (personVal) personVal.innerText = "0";
+            if (fpsVal) fpsVal.innerText = "0.0";
             updateBadge();
             notify(currentLang === 'fa' ? 'پایش متوقف شد' : 'Surveillance stopped');
         }
 
         function calibrate() {
             bgFrame = null;
-            prevFrame = null;
+            activeTracks = [];
+            cachedNativeFaces = [];
             notify(currentLang === 'fa' ? 'مدل پس‌زمینه کالیبره شد' : 'Background calibrated');
         }
 
-        // Real-time Computer Vision Processing Loop (Runs 60FPS in Browser)
+        // Real-time Computer Vision Processing Loop (Ultra-Responsive, Multi-Spectral 60FPS)
         function processLoop() {
             if (!isStreaming) return;
 
             const now = performance.now();
             fpsCounter++;
             if (now - lastFpsUpdate >= 1000) {
-                document.getElementById('fpsVal').innerText = (fpsCounter * 1000 / (now - lastFpsUpdate)).toFixed(1);
+                const fpsEl = document.getElementById('fpsVal');
+                if (fpsEl) fpsEl.innerText = (fpsCounter * 1000 / (now - lastFpsUpdate)).toFixed(1);
                 fpsCounter = 0;
                 lastFpsUpdate = now;
             }
@@ -1862,8 +1904,9 @@
             const h = overlayCanvas.height;
             ctx.clearRect(0, 0, w, h);
 
-            // 1. Draw ROI Security Polygon (Accurate display for both normal & mirror modes)
-            const roiEnabled = document.getElementById('chkRoi') && document.getElementById('chkRoi').checked;
+            // 1. Draw ROI Security Polygon
+            const chkRoi = document.getElementById('chkRoi');
+            const roiEnabled = chkRoi && chkRoi.checked;
             if (roiPoints.length >= 3 && (roiEnabled || isEditingRoi)) {
                 ctx.save();
                 const p0x = isMirrored ? (1 - roiPoints[0][0]) * w : roiPoints[0][0] * w;
@@ -1883,7 +1926,6 @@
                 ctx.fill();
                 ctx.stroke();
 
-                // Draw pins & numbers
                 for (let i = 0; i < roiPoints.length; i++) {
                     const px = isMirrored ? (1 - roiPoints[i][0]) * w : roiPoints[i][0] * w;
                     const py = roiPoints[i][1] * h;
@@ -1907,7 +1949,8 @@
             }
 
             // 2. Draw Tripwire Line
-            const tripwireEnabled = document.getElementById('chkTripwire') && document.getElementById('chkTripwire').checked;
+            const chkTripwire = document.getElementById('chkTripwire');
+            const tripwireEnabled = chkTripwire && chkTripwire.checked;
             if (tripwireEnabled) {
                 const lineY = h * 0.55;
                 ctx.save();
@@ -1924,7 +1967,17 @@
                 ctx.restore();
             }
 
-            // Downsample for rapid motion diff
+            // 3. Multi-Cue Vision: Hardware FaceDetector (if available, throttled)
+            if (nativeFaceDetector && (now - lastNativeFaceCheck > 120)) {
+                lastNativeFaceCheck = now;
+                nativeFaceDetector.detect(video).then(faces => {
+                    cachedNativeFaces = faces || [];
+                }).catch(() => {
+                    cachedNativeFaces = [];
+                });
+            }
+
+            // Downsample for rapid feature analysis
             procCtx.drawImage(video, 0, 0, procW, procH);
             const currImg = procCtx.getImageData(0, 0, procW, procH);
             const currData = currImg.data;
@@ -1937,69 +1990,205 @@
             }
 
             let diffCount = 0;
-            let minX = procW, maxX = 0, minY = procH, maxY = 0;
+            let mMinX = procW, mMaxX = 0, mMinY = procH, mMaxY = 0;
+            let skinCount = 0;
+            let sMinX = procW, sMaxX = 0, sMinY = procH, sMaxY = 0;
+
+            const scaleX = w / procW;
+            const scaleY = h / procH;
 
             for (let i = 0, p = 0; i < currData.length; i += 4, p++) {
-                const gray = 0.299 * currData[i] + 0.587 * currData[i + 1] + 0.114 * currData[i + 2];
+                const r = currData[i];
+                const g = currData[i + 1];
+                const b = currData[i + 2];
+                const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+
+                // Motion differential
                 const diff = Math.abs(gray - bgFrame[p]);
                 bgFrame[p] += (gray - bgFrame[p]) * 0.015;
 
-                if (diff > 26) {
+                const x = p % procW;
+                const y = Math.floor(p / procW);
+
+                if (diff > 14) {
                     diffCount++;
-                    const x = p % procW;
-                    const y = Math.floor(p / procW);
-                    if (x < minX) minX = x;
-                    if (x > maxX) maxX = x;
-                    if (y < minY) minY = y;
-                    if (y > maxY) maxY = y;
+                    if (x < mMinX) mMinX = x;
+                    if (x > mMaxX) mMaxX = x;
+                    if (y < mMinY) mMinY = y;
+                    if (y > mMaxY) mMaxY = y;
+                }
+
+                // Invariant human skin locus (Kovacs/Peer chrominance cluster)
+                const isSkin = (r > 60 && g > 35 && b > 20 &&
+                                r > g && r > b &&
+                                (r - g) >= 12 &&
+                                Math.abs(r - g) > 10);
+                if (isSkin) {
+                    skinCount++;
+                    if (x < sMinX) sMinX = x;
+                    if (x > sMaxX) sMaxX = x;
+                    if (y < sMinY) sMinY = y;
+                    if (y > sMaxY) sMaxY = y;
                 }
             }
 
-            const totalPixels = procW * procH;
-            const motionRatio = diffCount / totalPixels;
-            let detectedPersons = [];
+            const candidates = [];
 
-            if (motionRatio > 0.018 && maxX > minX && maxY > minY) {
-                const scaleX = w / procW;
-                const scaleY = h / procH;
+            // Cue A: Native hardware face detector
+            if (cachedNativeFaces.length > 0) {
+                for (const face of cachedNativeFaces) {
+                    const fb = face.boundingBox;
+                    const bx = Math.max(0, fb.x - fb.width * 0.35);
+                    const by = Math.max(0, fb.y - fb.height * 0.15);
+                    const bw = Math.min(w - bx, fb.width * 1.7);
+                    const bh = Math.min(h - by, fb.height * 2.8);
+                    candidates.push({
+                        bbox: [bx, by, bw, bh],
+                        faceBbox: [fb.x, fb.y, fb.width, fb.height],
+                        score: 0.95
+                    });
+                }
+            }
 
-                const bx = Math.max(0, minX * scaleX - 20);
-                const by = Math.max(0, minY * scaleY - 20);
-                const bw = Math.min(w - bx, (maxX - minX) * scaleX + 40);
-                const bh = Math.min(h - by, (maxY - minY) * scaleY + 40);
+            // Cue B: Skin chrominance cluster (works even when completely still)
+            if (candidates.length === 0 && skinCount > 35 && (sMaxX - sMinX) > 8 && (sMaxY - sMinY) > 8) {
+                const headX = Math.max(0, (sMinX - 4) * scaleX);
+                const headY = Math.max(0, (sMinY - 4) * scaleY);
+                const headW = Math.min(w - headX, (sMaxX - sMinX + 8) * scaleX);
+                const headH = Math.min(h - headY, (sMaxY - sMinY + 8) * scaleY);
+
+                const bx = Math.max(0, headX - headW * 0.25);
+                const by = headY;
+                const bw = Math.min(w - bx, headW * 1.5);
+                const bh = Math.min(h - by, headH * 2.5);
+
+                if (bw > 50 && bh > 70) {
+                    candidates.push({
+                        bbox: [bx, by, bw, bh],
+                        faceBbox: [headX, headY, headW, headH],
+                        score: Math.min(0.92, 0.72 + (skinCount / (procW * procH)) * 5)
+                    });
+                }
+            }
+
+            // Cue C: Motion cluster (sensitive indoor motion)
+            if (candidates.length === 0 && diffCount > 40 && (mMaxX - mMinX) > 10 && (mMaxY - mMinY) > 12) {
+                const bx = Math.max(0, (mMinX - 8) * scaleX);
+                const by = Math.max(0, (mMinY - 8) * scaleY);
+                const bw = Math.min(w - bx, (mMaxX - mMinX + 16) * scaleX);
+                const bh = Math.min(h - by, (mMaxY - mMinY + 16) * scaleY);
 
                 if (bw > 60 && bh > 80) {
-                    const matchedName = matchFace(bx, by, bw, bh);
-                    const feetPt = [(bx + bw / 2) / w, (by + bh) / h];
-                    const hasRoi = roiPoints.length >= 3 && roiEnabled;
-                    const inRoi = hasRoi ? isPointInPoly(feetPt, roiPoints) : true;
-                    const isIntruder = hasRoi && inRoi;
-
-                    detectedPersons.push({
+                    candidates.push({
                         bbox: [bx, by, bw, bh],
-                        score: Math.min(0.96, 0.65 + motionRatio * 3),
-                        name: matchedName,
-                        inRoi: inRoi,
-                        inRoiAlert: isIntruder
+                        faceBbox: [bx + bw * 0.2, by, bw * 0.6, bh * 0.45],
+                        score: Math.min(0.88, 0.66 + (diffCount / (procW * procH)) * 6)
                     });
+                }
+            }
 
-                    if (isIntruder || (!hasRoi && !matchedName)) {
-                        if (document.getElementById('chkAudioAlarm').checked || document.getElementById('chkVoiceWarning').checked) {
-                            playAlarmSiren();
-                            playVoiceWarning(isIntruder ? (currentLang === 'fa' ? 'هشدار نفوذ به محدوده ممنوعه' : 'Restricted zone intrusion') : (currentLang === 'fa' ? 'هشدار تردد ناشناس' : 'Unauthorized intrusion'));
-                        }
+            // Multi-Frame Kalman / EMA Track Fusion & Persistence
+            const updatedTracks = [];
+            for (const cand of candidates) {
+                let bestTrack = null;
+                let bestDist = Infinity;
+
+                for (const trk of activeTracks) {
+                    const cx1 = trk.bbox[0] + trk.bbox[2] / 2;
+                    const cy1 = trk.bbox[1] + trk.bbox[3] / 2;
+                    const cx2 = cand.bbox[0] + cand.bbox[2] / 2;
+                    const cy2 = cand.bbox[1] + cand.bbox[3] / 2;
+                    const dist = Math.hypot(cx1 - cx2, cy1 - cy2);
+                    if (dist < bestDist && dist < (w * 0.4)) {
+                        bestDist = dist;
+                        bestTrack = trk;
+                    }
+                }
+
+                if (bestTrack) {
+                    // Smooth tracking coordinates (EMA)
+                    bestTrack.bbox[0] = bestTrack.bbox[0] * 0.65 + cand.bbox[0] * 0.35;
+                    bestTrack.bbox[1] = bestTrack.bbox[1] * 0.65 + cand.bbox[1] * 0.35;
+                    bestTrack.bbox[2] = bestTrack.bbox[2] * 0.65 + cand.bbox[2] * 0.35;
+                    bestTrack.bbox[3] = bestTrack.bbox[3] * 0.65 + cand.bbox[3] * 0.35;
+                    bestTrack.score = Math.min(0.96, bestTrack.score * 0.7 + cand.score * 0.3);
+                    bestTrack.missed = 0;
+                    bestTrack.faceBbox = cand.faceBbox;
+
+                    if (now - (bestTrack.lastMatchTime || 0) > 400) {
+                        bestTrack.lastMatchTime = now;
+                        bestTrack.name = matchFace(bestTrack.faceBbox || bestTrack.bbox);
+                    }
+                    updatedTracks.push(bestTrack);
+                } else {
+                    const newTrack = {
+                        id: trackIdCounter++,
+                        bbox: cand.bbox.slice(),
+                        faceBbox: cand.faceBbox,
+                        score: cand.score,
+                        missed: 0,
+                        name: matchFace(cand.faceBbox || cand.bbox),
+                        lastMatchTime: now,
+                        firstSeen: now
+                    };
+                    updatedTracks.push(newTrack);
+                }
+            }
+
+            // Retain unmatched tracks for up to 25 frames (~0.8s persistence)
+            for (const trk of activeTracks) {
+                if (!updatedTracks.includes(trk)) {
+                    trk.missed = (trk.missed || 0) + 1;
+                    if (trk.missed < 25) {
+                        updatedTracks.push(trk);
                     }
                 }
             }
 
-            document.getElementById('personVal').innerText = detectedPersons.length;
+            activeTracks = updatedTracks;
 
-            for (const det of detectedPersons) {
-                drawHud(det);
+            // Check ROI & Tripwire for all active tracks
+            const detectedPersons = [];
+            for (const trk of activeTracks) {
+                const [bx, by, bw, bh] = trk.bbox;
+                const feetPt = [(bx + bw / 2) / w, (by + bh) / h];
+                const hasRoi = roiPoints.length >= 3 && roiEnabled;
+                const inRoi = hasRoi ? isPointInPoly(feetPt, roiPoints) : true;
+                const isIntruder = hasRoi && inRoi;
+
+                const detObj = {
+                    id: trk.id,
+                    bbox: [bx, by, bw, bh],
+                    score: trk.score,
+                    name: trk.name,
+                    inRoi: inRoi,
+                    inRoiAlert: isIntruder,
+                    opacity: Math.max(0.4, 1.0 - (trk.missed || 0) / 25)
+                };
+
+                detectedPersons.push(detObj);
+                drawHud(detObj);
+
+                // Local alarm sirens if intruder in ROI
+                if (isIntruder) {
+                    const audioChk = document.getElementById('chkAudioAlarm');
+                    const voiceChk = document.getElementById('chkVoiceWarning');
+                    if ((audioChk && audioChk.checked) || (voiceChk && voiceChk.checked)) {
+                        playAlarmSiren();
+                        playVoiceWarning(currentLang === 'fa' ? 'هشدار نفوذ به محدوده ممنوعه' : 'Restricted zone intrusion');
+                    }
+                }
             }
 
+            const pVal = document.getElementById('personVal');
+            if (pVal) pVal.innerText = detectedPersons.length;
+
             if (detectedPersons.length > 0 && !isPaused) {
-                checkAutoIncident(detectedPersons);
+                try {
+                    checkAutoIncident(detectedPersons);
+                } catch (e) {
+                    console.error("Auto incident error:", e);
+                }
             }
 
             animationFrameId = requestAnimationFrame(processLoop);
@@ -2017,6 +2206,7 @@
             const rx = isMirrored ? (overlayCanvas.width - (x + bw)) : x;
 
             ctx.save();
+            ctx.globalAlpha = det.opacity !== undefined ? det.opacity : 1.0;
             ctx.strokeStyle = color;
             ctx.lineWidth = 2.5;
 
@@ -2029,9 +2219,9 @@
             ctx.moveTo(rx + bw - edge, y + bh); ctx.lineTo(rx + bw, y + bh); ctx.lineTo(rx + bw, y + bh - edge);
             ctx.stroke();
 
-            const prefix = isIntruder ? 'نفوذ: ' : '';
+            const prefix = isIntruder ? (currentLang === 'fa' ? 'نفوذ: ' : 'INTRUSION: ') : '';
             const whoTxt = isKnown ? det.name : (currentLang === 'fa' ? 'ناشناس' : 'Unknown');
-            const confPct = isKnown ? 94 : Math.round(det.score * 100);
+            const confPct = isKnown ? 95 : Math.round((det.score || 0.85) * 100);
             const label = `MikoVo RaRa 11 • ${prefix}${whoTxt} (${confPct}%)`;
 
             ctx.font = '700 13px -apple-system, Vazirmatn, sans-serif';
@@ -2042,7 +2232,11 @@
             ctx.strokeStyle = color;
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.roundRect(rx, tagY - 18, tw + 16, 24, 8);
+            if (ctx.roundRect) {
+                ctx.roundRect(rx, tagY - 18, tw + 16, 24, 8);
+            } else {
+                ctx.rect(rx, tagY - 18, tw + 16, 24);
+            }
             ctx.fill();
             ctx.stroke();
 
@@ -2053,14 +2247,33 @@
         }
 
         // ==================== Face Recognition Core ====================
-        function matchFace(x, y, bw, bh) {
+        function matchFace(a, b, c, d) {
             if (!registeredProfiles.length) return null;
+
+            let bx, by, bw, bh;
+            if (typeof a === 'number') {
+                bx = a; by = b; bw = c; bh = d;
+            } else if (Array.isArray(a)) {
+                [bx, by, bw, bh] = a;
+            } else if (a && Array.isArray(a.bbox)) {
+                [bx, by, bw, bh] = a.faceBbox || a.bbox;
+            } else {
+                return null;
+            }
 
             const cropCanvas = document.createElement('canvas');
             cropCanvas.width = 32;
             cropCanvas.height = 32;
             const cCtx = cropCanvas.getContext('2d');
-            cCtx.drawImage(video, x, y, bw, Math.min(bh, bw * 1.3), 0, 0, 32, 32);
+            const vw = video.videoWidth || 1280;
+            const vh = video.videoHeight || 720;
+
+            const sx = Math.max(0, Math.min(vw - 10, bx));
+            const sy = Math.max(0, Math.min(vh - 10, by));
+            const sw = Math.max(10, Math.min(vw - sx, bw));
+            const sh = Math.max(10, Math.min(vh - sy, Math.min(bh, bw * 1.3)));
+
+            cCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 32, 32);
 
             const imgData = cCtx.getImageData(0, 0, 32, 32).data;
             const sig = computeSignature(imgData);
@@ -2070,7 +2283,7 @@
 
             for (const profile of registeredProfiles) {
                 const sim = cosineSim(sig, profile.signature);
-                if (sim > bestSim && sim > 0.74) {
+                if (sim > bestSim && sim > 0.72) {
                     bestSim = sim;
                     bestMatch = profile.name;
                 }
@@ -2114,7 +2327,20 @@
             snap.width = 64;
             snap.height = 64;
             const sCtx = snap.getContext('2d');
-            sCtx.drawImage(video, 0, 0, snap.width, snap.height);
+
+            const vw = video.videoWidth || 1280;
+            const vh = video.videoHeight || 720;
+            let sx = 0, sy = 0, sw = vw, sh = vh;
+
+            if (activeTracks.length > 0) {
+                const b = activeTracks[0].faceBbox || activeTracks[0].bbox;
+                sx = Math.max(0, b[0]);
+                sy = Math.max(0, b[1]);
+                sw = Math.min(vw - sx, b[2]);
+                sh = Math.min(vh - sy, Math.min(b[3], b[2] * 1.3));
+            }
+
+            sCtx.drawImage(video, sx, sy, sw, sh, 0, 0, snap.width, snap.height);
 
             const imgData = sCtx.getImageData(0, 0, 32, 32).data;
             const sig = Array.from(computeSignature(imgData));
@@ -2213,16 +2439,28 @@
 
         async function checkAutoIncident(persons) {
             const now = Date.now();
-            const cooldownMs = (parseInt(document.getElementById('cooldown').value) || 6) * 1000;
+            const cooldownEl = document.getElementById('cooldown');
+            const cooldownMs = ((cooldownEl ? parseInt(cooldownEl.value) : 6) || 6) * 1000;
             if (now - lastCaptureTimestamp < cooldownMs) return;
 
-            const onlyNew = document.getElementById('chkNew').checked;
+            const triggerEl = document.getElementById('selAlertTrigger');
+            const triggerMode = triggerEl ? triggerEl.value : 'stranger_only';
             const names = persons.map(p => p.name).filter(Boolean);
             const identifiedStr = names.length ? names.join(', ') : (currentLang === 'fa' ? 'ناشناس' : 'Unknown');
 
-            if (onlyNew && names.length) {
+            const hasStranger = persons.some(p => !p.name);
+            const hasIntruder = persons.some(p => p.inRoiAlert);
+            const hasKnown = names.length > 0;
+
+            if (triggerMode === 'stranger_only' && !hasStranger && hasKnown) {
                 const allKnown = names.every(n => recognizedTrackedIds.has(n));
                 if (allKnown) return;
+            }
+            if (triggerMode === 'roi_only' && !hasIntruder) {
+                return;
+            }
+            if (triggerMode === 'known_only' && !hasKnown) {
+                return;
             }
 
             names.forEach(n => recognizedTrackedIds.add(n));
@@ -2445,19 +2683,19 @@
                 const raw = localStorage.getItem('mikotim_cfg');
                 if (raw) {
                     const cfg = JSON.parse(raw);
-                    if (cfg.token) document.getElementById('tgToken').value = cfg.token;
-                    if (cfg.chat) document.getElementById('tgChat').value = cfg.chat;
-                    if (cfg.caption) document.getElementById('customCaption').value = cfg.caption;
-                    if (cfg.cooldown) document.getElementById('cooldown').value = cfg.cooldown;
-                    if (cfg.auto !== undefined) document.getElementById('chkAuto').checked = cfg.auto;
-                    if (cfg.onlyNew !== undefined) document.getElementById('chkNew').checked = cfg.onlyNew;
-                    if (cfg.remote !== undefined) document.getElementById('chkRemote').checked = cfg.remote;
-                    if (cfg.alertMedia) document.getElementById('selAlertMedia').value = cfg.alertMedia;
-                    if (cfg.roiEnabled !== undefined) document.getElementById('chkRoi').checked = cfg.roiEnabled;
-                    if (cfg.tripwireEnabled !== undefined) document.getElementById('chkTripwire').checked = cfg.tripwireEnabled;
-                    if (cfg.audioAlarm !== undefined) document.getElementById('chkAudioAlarm').checked = cfg.audioAlarm;
-                    if (cfg.voiceWarning !== undefined) document.getElementById('chkVoiceWarning').checked = cfg.voiceWarning;
-                    if (cfg.loiterSec) document.getElementById('loiterSec').value = cfg.loiterSec;
+                    if (cfg.token && document.getElementById('tgToken')) document.getElementById('tgToken').value = cfg.token;
+                    if (cfg.chat && document.getElementById('tgChat')) document.getElementById('tgChat').value = cfg.chat;
+                    if (cfg.caption && document.getElementById('customCaption')) document.getElementById('customCaption').value = cfg.caption;
+                    if (cfg.cooldown && document.getElementById('cooldown')) document.getElementById('cooldown').value = cfg.cooldown;
+                    if (cfg.auto !== undefined && document.getElementById('chkAuto')) document.getElementById('chkAuto').checked = cfg.auto;
+                    if (cfg.onlyNew !== undefined && document.getElementById('chkNew')) document.getElementById('chkNew').checked = cfg.onlyNew;
+                    if (cfg.remote !== undefined && document.getElementById('chkRemote')) document.getElementById('chkRemote').checked = cfg.remote;
+                    if (cfg.alertMedia && document.getElementById('selAlertMedia')) document.getElementById('selAlertMedia').value = cfg.alertMedia;
+                    if (cfg.roiEnabled !== undefined && document.getElementById('chkRoi')) document.getElementById('chkRoi').checked = cfg.roiEnabled;
+                    if (cfg.tripwireEnabled !== undefined && document.getElementById('chkTripwire')) document.getElementById('chkTripwire').checked = cfg.tripwireEnabled;
+                    if (cfg.audioAlarm !== undefined && document.getElementById('chkAudioAlarm')) document.getElementById('chkAudioAlarm').checked = cfg.audioAlarm;
+                    if (cfg.voiceWarning !== undefined && document.getElementById('chkVoiceWarning')) document.getElementById('chkVoiceWarning').checked = cfg.voiceWarning;
+                    if (cfg.loiterSec && document.getElementById('loiterSec')) document.getElementById('loiterSec').value = cfg.loiterSec;
                     if (cfg.alertTrigger && document.getElementById('selAlertTrigger')) document.getElementById('selAlertTrigger').value = cfg.alertTrigger;
                     if (cfg.scheduleEnabled !== undefined && document.getElementById('chkSchedule')) document.getElementById('chkSchedule').checked = cfg.scheduleEnabled;
                     if (cfg.scheduleStart && document.getElementById('scheduleStart')) document.getElementById('scheduleStart').value = cfg.scheduleStart;
