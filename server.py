@@ -1,14 +1,14 @@
 """
 MikoTim Sentinel Pro - Unified Server
 ======================================
-Powered by MikiVo AI Vision Core (Derived & Evolved from YOLOv8 Architecture)
+Powered by MikoVo RaRa 11 AI Vision Core (Derived & Evolved from YOLOv8 Architecture)
 
 Consolidated Architecture (4 Core Sections):
   1. Configuration & State Management (ROI, Tripwire, Media Selector, Loitering)
-  2. MikiVo Neural Vision Core:
+  2. MikoVo RaRa 11 Neural Vision Core:
      - 3D-Aware Face Alignment via Weighted Umeyama Similarity Transform
      - Adaptive LAB Illumination Compensator (CLAHE + Dynamic Gamma Curve)
-     - 512-D MikiVo Deep Metric Feature Descriptor (HOG + Multi-Radius ULBP + Anthropometrics)
+     - 512-D MikoVo RaRa 11 Deep Metric Feature Descriptor (HOG + Multi-Radius ULBP + Anthropometrics)
      - 8-State Kalman Filter Temporal Tracker with Mahalanobis Gating (Chi-Square 95%)
      - Circular Frame Buffer for Instant MP4 Video Alert Dispatch
   3. Telegram Bot Gateway (Photo & MP4 Video Dispatch, Remote Commands, Daily Summary)
@@ -55,7 +55,7 @@ BASE_WEIGHTS = BASE_DIR / "yolov8n.pt"
 DEFAULT_CONFIG = {
     "bot_token": "",
     "chat_id": "",
-    "custom_caption": "هشدار تردد هوشمند MikiVo",
+    "custom_caption": "هشدار تردد هوشمند MikoVo RaRa 11",
     "auto_send": True,
     "remote_control": False,
     "cooldown_sec": 6,
@@ -110,7 +110,7 @@ state = {
 
 
 # ===================================================================
-# 2. MikiVo Neural Vision Core (Advanced Edge Biometrics)
+# 2. MikoVo RaRa 11 Neural Vision Core (Advanced Edge Biometrics)
 # ===================================================================
 
 # Canonical 112x112 facial keypoint coordinates [nose, left_eye, right_eye, left_ear, right_ear]
@@ -395,7 +395,7 @@ def _anthropometric_ratios(canonical_kpts: np.ndarray, confidences: np.ndarray, 
     )
     return feats
 
-class MikiVoFeatureExtractor:
+class MikoVoRaRa11FeatureExtractor:
     def __init__(self, projection_matrix: Optional[np.ndarray] = None):
         self.projection = projection_matrix if projection_matrix is not None else _PROJECTION_MATRIX
 
@@ -410,14 +410,14 @@ class MikiVoFeatureExtractor:
         norm = np.linalg.norm(embedding) + 1e-9
         return (embedding / norm).astype(np.float32)
 
-_DEFAULT_EXTRACTOR = MikiVoFeatureExtractor()
+_DEFAULT_EXTRACTOR = MikoVoRaRa11FeatureExtractor()
 
-def mikivo_extract_face_descriptor(
+def mikovo_rara11_extract_face_descriptor(
     frame: np.ndarray,
     bbox: Tuple[float, float, float, float],
     keypoints: Optional[np.ndarray] = None,
     confidences: Optional[np.ndarray] = None,
-    extractor: Optional[MikiVoFeatureExtractor] = None,
+    extractor: Optional[MikoVoRaRa11FeatureExtractor] = None,
 ) -> Tuple[np.ndarray, np.ndarray, AlignmentResult]:
     extractor = extractor or _DEFAULT_EXTRACTOR
     result = align_face(frame, bbox, keypoints, confidences)
@@ -427,7 +427,7 @@ def mikivo_extract_face_descriptor(
 
 
 # 8-State Kalman Tracker with Mahalanobis Gating
-class MikiVoKalmanTracker:
+class MikoVoRaRa11KalmanTracker:
     def __init__(self, measurement: np.ndarray, track_id: Optional[int] = None, dt: float = 1.0, id_window: int = 10):
         ndim = 4
         self._motion_mat = np.eye(2 * ndim, dtype=np.float64)
@@ -530,7 +530,7 @@ def compute_iou(box_a, box_b):
     return inter / float(area_a + area_b - inter + 1e-9)
 
 
-class MikiVoMultiKalmanTracker:
+class MikoVoRaRa11MultiKalmanTracker:
     """
     Multi-Target 8-State Kalman Tracker:
       - Continuous Track IDs across video frames
@@ -617,7 +617,7 @@ class MikiVoMultiKalmanTracker:
             meas = np.array([db[0] + db[2] / 2.0, db[1] + db[3] / 2.0, db[2] / float(max(1, db[3])), db[3]], dtype=np.float64)
             tid = self.next_id
             self.next_id += 1
-            trk = MikiVoKalmanTracker(meas, track_id=tid, id_window=self.id_window)
+            trk = MikoVoRaRa11KalmanTracker(meas, track_id=tid, id_window=self.id_window)
             trk.first_seen = now
             trk.prev_feet_y = db[1] + db[3]
             trk.tripwire_crossed = False
@@ -717,9 +717,9 @@ class FaceDatabase:
             return [{k: v for k, v in r.items() if k != "embedding"} for r in self.records]
 
 
-class MikiVoVisionEngine:
+class MikoVoRaRa11VisionEngine:
     """
-    MikiVo Autonomous AI Vision Core:
+    MikoVo RaRa 11 Autonomous AI Vision Core:
       - YOLOv8 Neural Backbone + SVD Weighted Umeyama Alignment
       - 512-Dimensional Deep Metric Embeddings (< 3.5ms on CPU)
       - 8-State Kalman Filter Temporal Tracking with Mahalanobis Gating
@@ -728,7 +728,7 @@ class MikiVoVisionEngine:
     """
     def __init__(self, db: FaceDatabase):
         self.db = db
-        self.tracker = MikiVoMultiKalmanTracker()
+        self.tracker = MikoVoRaRa11MultiKalmanTracker()
         self._lock = threading.Lock()
         self.running = False
         self.cap = None
@@ -929,8 +929,8 @@ class MikiVoVisionEngine:
                     else:
                         kp_pts, kp_conf = None, None
 
-                    # MikiVo 512-D Neural Core Alignment + Descriptor Extraction
-                    aligned_face, emb, align_res = mikivo_extract_face_descriptor(
+                    # MikoVo RaRa 11 512-D Neural Core Alignment + Descriptor Extraction
+                    aligned_face, emb, align_res = mikovo_rara11_extract_face_descriptor(
                         frame, (x1, y1, bw, bh), kp_pts, kp_conf
                     )
                     name, match_score = self.db.find_match(emb)
@@ -968,8 +968,8 @@ class MikiVoVisionEngine:
             cv2.putText(frame, "TRIPWIRE LINE [ IN / OUT ]", (20, line_y - 8),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 215, 255), 1, cv2.LINE_AA)
 
-        # MikiVo Neural Watermark
-        cv2.putText(frame, "MikiVo Neural Core (512-D SVD Kalman)", (18, 28),
+        # MikoVo RaRa 11 Neural Watermark
+        cv2.putText(frame, "MikoVo RaRa 11 Neural Core (512-D SVD Kalman)", (18, 28),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 1, cv2.LINE_AA)
 
         for det in detections:
@@ -1009,7 +1009,7 @@ class MikiVoVisionEngine:
             # Label pill
             prefix = "LOITERING! " if is_loiter else ""
             id_txt = f"{name} ({det.get('match_score', 0.94)*100:.0f}%)" if name else f"Unknown ({det['score']*100:.0f}%)"
-            label = f"MikiVo #{tid} | {prefix}{id_txt}"
+            label = f"MikoVo RaRa 11 #{tid} | {prefix}{id_txt}"
 
             (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1)
             ly = max(24, y - 8)
@@ -1042,7 +1042,7 @@ class MikiVoVisionEngine:
         count = len(detections)
         identified = [d["name"] for d in detections if d.get("name")]
         has_loitering = any(d.get("is_loitering") for d in detections)
-        custom_cap = config.get("custom_caption", "هشدار تردد MikiVo")
+        custom_cap = config.get("custom_caption", "هشدار تردد MikoVo RaRa 11")
 
         state["stats"]["total_captures"] += 1
         log_entry = {
@@ -1109,7 +1109,7 @@ class TelegramBot:
         names = ", ".join(identified_names) if identified_names else "ناشناس (Unknown)"
         alert_badge = "⚠️ هشدار پرسه زدن فرد ناشناس!\n" if is_loitering else ""
         text = (
-            f"🛡 MikoTim Sentinel Pro | MikiVo AI (512-D Core)\n"
+            f"🛡 MikoTim Sentinel Pro | MikoVo RaRa 11 AI (512-D Core)\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"{alert_badge}"
             f"📌 {caption}\n"
@@ -1138,7 +1138,7 @@ class TelegramBot:
         names = ", ".join(identified_names) if identified_names else "ناشناس (Unknown)"
         alert_badge = "⚠️ هشدار پرسه زدن فرد ناشناس!\n" if is_loitering else ""
         text = (
-            f"🎬 ویدیو رخداد امنیتی | MikiVo AI\n"
+            f"🎬 ویدیو رخداد امنیتی | MikoVo RaRa 11 AI\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"{alert_badge}"
             f"📌 {caption}\n"
@@ -1191,7 +1191,7 @@ class TelegramBot:
         try:
             r = requests.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": chat_id, "text": "✅ اتصال با سرور پایش MikoTim و موتور هوش مصنوعی MikiVo با موفقیت برقرار شد."},
+                json={"chat_id": chat_id, "text": "✅ اتصال با سرور پایش MikoTim و موتور هوش مصنوعی MikoVo RaRa 11 با موفقیت برقرار شد."},
                 timeout=8
             )
             return r.json().get("ok", False), "OK"
@@ -1251,7 +1251,7 @@ class TelegramBot:
 # 4. Web Server & API Endpoints
 # ===================================================================
 face_db = FaceDatabase()
-detector = MikiVoVisionEngine(face_db)
+detector = MikoVoRaRa11VisionEngine(face_db)
 telegram = TelegramBot()
 
 app = Flask(__name__)
@@ -1285,7 +1285,7 @@ def video_feed():
 @app.route("/api/mikivo/info")
 def api_mikivo_info():
     return jsonify(
-        engine="MikiVo AI Neural Vision Core",
+        engine="MikoVo RaRa 11 AI Neural Vision Core",
         origin="Derived & Evolved from YOLOv8 Architecture",
         version="3.5.0-edge-pro",
         descriptor_dim=512,
