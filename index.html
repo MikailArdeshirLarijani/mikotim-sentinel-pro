@@ -2352,54 +2352,17 @@
             ctx.moveTo(rx + bw - edge, y + bh); ctx.lineTo(rx + bw, y + bh); ctx.lineTo(rx + bw, y + bh - edge);
             ctx.stroke();
 
-            // 3. Subtle Cyber Center Target Crosshair
-            const hx = rx + bw / 2;
-            const hy = y + Math.min(bh * 0.25, 45);
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 1.2;
-            ctx.beginPath();
-            ctx.arc(hx, hy, 12, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(hx - 16, hy); ctx.lineTo(hx - 7, hy);
-            ctx.moveTo(hx + 7, hy); ctx.lineTo(hx + 16, hy);
-            ctx.moveTo(hx, hy - 16); ctx.lineTo(hx, hy - 7);
-            ctx.moveTo(hx, hy + 7); ctx.lineTo(hx, hy + 16);
-            ctx.stroke();
-
-            // 4. Tactical Name & Security Status Badge
-            const prefix = isIntruder ? (currentLang === 'fa' ? 'هشدار نفوذ: ' : 'INTRUSION: ') : '';
-            const whoTxt = isKnown ? det.name : (currentLang === 'fa' ? 'فرد شناسایی‌شده' : 'Detected Person');
-            const confPct = isKnown ? 96 : Math.round((det.score || 0.88) * 100);
-            const label = `MikoVo RaRa 11 • ${prefix}${whoTxt} (${confPct}%)`;
-
-            ctx.font = '700 13px -apple-system, Vazirmatn, Consolas, sans-serif';
-            const tw = ctx.measureText(label).width;
-            const tagH = 26;
-            const tagY = y > (tagH + 10) ? (y - tagH - 6) : (y + bh + 10);
-
-            // Badge Background Pill
-            ctx.fillStyle = 'rgba(8, 12, 22, 0.92)';
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            if (ctx.roundRect) {
-                ctx.roundRect(rx, tagY, tw + 26, tagH, 6);
-            } else {
-                ctx.rect(rx, tagY, tw + 26, tagH);
+            // 3. Optional minimal text only for recognized identities or security zone intrusions (NO black background)
+            if (isKnown || isIntruder) {
+                const prefix = isIntruder ? (currentLang === 'fa' ? 'هشدار نفوذ: ' : 'INTRUSION: ') : '';
+                const label = prefix + (isKnown ? det.name : '');
+                ctx.font = '700 14px -apple-system, Vazirmatn, sans-serif';
+                ctx.fillStyle = color;
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+                ctx.shadowBlur = 4;
+                const tagY = y > 22 ? (y - 8) : (y + bh + 20);
+                ctx.fillText(label, rx + 4, tagY);
             }
-            ctx.fill();
-            ctx.stroke();
-
-            // Status Indicator Dot
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(rx + 12, tagY + tagH / 2, 4, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Badge Label Text
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(label, rx + 22, tagY + 17);
 
             ctx.restore();
         }
