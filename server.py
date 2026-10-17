@@ -4,9 +4,9 @@ MikoTim Sentinel Pro - Unified Server
 Powered by MikiVo AI Vision Engine (Derived & Evolved from YOLOv8 Architecture)
 
 Consolidated Architecture (4 Core Sections):
-  1. Configuration & State Management
-  2. MikiVo AI Vision & Facial Identity Pipeline
-  3. Telegram Bot Gateway & Remote Command Dispatcher
+  1. Configuration & State Management (ROI, Tripwire, Media Selector, Loitering)
+  2. MikiVo AI Vision Pipeline (Pose, Alignment, 256-D Descriptor, Tracklets, Video Clip Buffer)
+  3. Telegram Bot Gateway (Photo & MP4 Video Dispatch, Remote Commands, Daily Summary)
   4. Web Server & High-Throughput RESTful Endpoints
 """
 
@@ -15,7 +15,9 @@ import cv2
 import json
 import time
 import base64
+import tempfile
 import threading
+import collections
 from pathlib import Path
 from datetime import datetime
 import numpy as np
@@ -50,15 +52,26 @@ DEFAULT_CONFIG = {
     "cooldown_sec": 6,
     "only_new_person": True,
     "camera_index": 0,
+    "alert_media": "photo",          # "photo" (عکس) or "video" (ویدیو MP4)
+    "video_duration_sec": 4,         # Duration of MP4 alert clip
+    "roi_enabled": False,            # Virtual ROI security zone
+    "roi_polygon": [],               # [[x, y], ...] normalized 0.0-1.0
+    "tripwire_enabled": False,       # Directional line crossing
+    "tripwire_y": 0.55,              # Normalized Y coordinate for tripwire line
+    "loitering_enabled": True,       # Loitering detection flag
+    "loitering_sec": 10,             # Loitering time threshold in seconds
+    "audio_alarm": False,            # Local sound/speech alert toggle
 }
 
 def load_config():
+    cfg = DEFAULT_CONFIG.copy()
     if CONFIG_PATH.exists():
         try:
-            return json.loads(CONFIG_PATH.read_text("utf-8"))
+            stored = json.loads(CONFIG_PATH.read_text("utf-8"))
+            cfg.update(stored)
         except Exception:
             pass
-    return DEFAULT_CONFIG.copy()
+    return cfg
 
 def save_config(cfg):
     CONFIG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), "utf-8")
@@ -68,7 +81,16 @@ config = load_config()
 state = {
     "is_streaming": False,
     "is_paused": False,
-    "stats": {"fps": 0.0, "person_count": 0, "total_captures": 0, "telegram_sent": 0},
+    "stats": {
+        "fps": 0.0,
+        "person_count": 0,
+        "total_captures": 0,
+        "telegram_sent": 0,
+        "in_count": 0,
+        "out_count": 0,
+        "loitering_count": 0,
+    },
+    "hourly_traffic": [0] * 24,
     "logs": [],
 }
 
@@ -76,12 +98,6 @@ state = {
 # ===================================================================
 # 2. MikiVo AI Vision Engine (Derived & Evolved from YOLO Architecture)
 # ===================================================================
-# MikiVo integrates YOLO's deep convolutional backbone with:
-#  - Adaptive LAB Optical CLAHE Equalization (illumination invariance)
-#  - Pose-Guided Affine Landmark Alignment (head tilt invariance)
-#  - 256-Dimensional Multi-Scale Spatial-Geometric Feature Embedder
-#  - IoU + EMA Temporal Tracklet Smoother with Identity Stabilization
-
 clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
 
 def cosine_similarity(a, b):
@@ -100,7 +116,7 @@ def compute_iou(box_a, box_b):
 
 def extract_mikivo_embedding(crop, kpts=None):
     """
-    MikiVo 256-D Feature Descriptor:
+    MikiVo 256-D Multi-Scale Hybrid Feature Descriptor:
       - 8x8 spatial block statistics (means + stds): 128-D
       - Multi-scale gradient energy (Sobel Gx, Gy, Magnitude): 48-D
       - Fast texture Laplacian & intensity distribution: 32-D
@@ -113,7 +129,7 @@ def extract_mikivo_embedding(crop, kpts=None):
     gray = cv2.resize(gray, (64, 64))
     norm_gray = clahe.apply(gray)
 
-    # 1. Spatial Block Statistics (8x8 blocks of 8x8 pixels)
+    # 1. Spatial Block Statistics (8x8 blocks)
     blocks_8 = norm_gray.reshape(8, 8, 8, 8)
     means_8 = blocks_8.mean(axis=(1, 3)).ravel() / 255.0
     stds_8 = blocks_8.std(axis=(1, 3)).ravel() / 128.0
@@ -131,7 +147,7 @@ def extract_mikivo_embedding(crop, kpts=None):
     lap = np.abs(cv2.Laplacian(norm_gray, cv2.CV_32F)).reshape(4, 16, 4, 16).mean(axis=(1, 3)).ravel() / 255.0
     hist, _ = np.histogram(norm_gray, bins=16, range=(0, 256), density=True)
 
-    # 4. Anthropometric Geometry (Invariant to distance & scale)
+    # 4. Anthropometric Geometry
     geom = np.zeros(48, dtype=np.float32)
     if kpts is not None and len(kpts) >= 5:
         ref_pt = kpts[0][:2]
@@ -222,19 +238,25 @@ class FaceDatabase:
 class MikiVoTracker:
     """
     Temporal Tracklet Engine:
-      - Assigns continuous Track IDs across frames
-      - Smooths bounding box coordinates using Exponential Moving Average (EMA)
-      - Majority-vote temporal identity stabilization (filters momentary recognition noise)
+      - Continuous Track IDs across video frames
+      - EMA coordinate smoothing to eliminate jitter
+      - Temporal majority-vote identity stabilization
+      - Directional Tripwire crossing (IN / OUT)
+      - Unauthorized Loitering detection timer
     """
     def __init__(self):
         self.next_id = 1
         self.tracks = {}
 
-    def update(self, detections, now=None):
+    def update(self, detections, frame_shape, now=None):
         now = now or time.time()
+        fh, fw = frame_shape[:2]
         updated = []
         unmatched_indices = list(range(len(detections)))
         matched_tracks = set()
+
+        line_y = float(config.get("tripwire_y", 0.55)) * fh
+        loitering_limit = float(config.get("loitering_sec", 10))
 
         for idx in list(unmatched_indices):
             det = detections[idx]
@@ -260,9 +282,35 @@ class MikiVoTracker:
                     for i in range(4)
                 ]
 
+                # Feet Y coordinate
+                curr_feet_y = smooth_box[1] + smooth_box[3]
+                prev_feet_y = trk["feet_y"]
+
+                # Directional Tripwire Crossing
+                direction = None
+                if config.get("tripwire_enabled") and not trk["tripwire_crossed"]:
+                    if prev_feet_y < line_y <= curr_feet_y:
+                        direction = "IN"
+                        trk["tripwire_crossed"] = True
+                        state["stats"]["in_count"] += 1
+                    elif prev_feet_y > line_y >= curr_feet_y:
+                        direction = "OUT"
+                        trk["tripwire_crossed"] = True
+                        state["stats"]["out_count"] += 1
+
+                # Loitering Detection
+                duration = now - trk["first_seen"]
+                is_loitering = False
+                if config.get("loitering_enabled") and duration >= loitering_limit:
+                    is_loitering = True
+                    if not trk["loitering_logged"]:
+                        trk["loitering_logged"] = True
+                        state["stats"]["loitering_count"] += 1
+
                 trk["bbox"] = cb
                 trk["smooth_bbox"] = smooth_box
                 trk["last_seen"] = now
+                trk["feet_y"] = curr_feet_y
                 trk["history"].append(det.get("name"))
                 if len(trk["history"]) > 8:
                     trk["history"].pop(0)
@@ -274,24 +322,37 @@ class MikiVoTracker:
                 det_copy["track_id"] = best_tid
                 det_copy["smooth_bbox"] = smooth_box
                 det_copy["name"] = stable_name or det.get("name")
+                det_copy["direction"] = direction
+                det_copy["is_loitering"] = is_loitering
+                det_copy["duration"] = round(duration, 1)
                 updated.append(det_copy)
 
+        # Allocate new tracks
         for idx in unmatched_indices:
             det = detections[idx]
             tid = self.next_id
             self.next_id += 1
+            feet_y = det["bbox"][1] + det["bbox"][3]
             self.tracks[tid] = {
                 "bbox": det["bbox"],
                 "smooth_bbox": det["bbox"],
+                "first_seen": now,
                 "last_seen": now,
+                "feet_y": feet_y,
+                "tripwire_crossed": False,
+                "loitering_logged": False,
                 "history": [det.get("name")],
             }
             det_copy = dict(det)
             det_copy["track_id"] = tid
             det_copy["smooth_bbox"] = det["bbox"]
             det_copy["name"] = det.get("name")
+            det_copy["direction"] = None
+            det_copy["is_loitering"] = False
+            det_copy["duration"] = 0.0
             updated.append(det_copy)
 
+        # Clean expired tracks
         expired = [tid for tid, trk in self.tracks.items() if now - trk["last_seen"] > 2.0]
         for tid in expired:
             del self.tracks[tid]
@@ -302,9 +363,10 @@ class MikiVoTracker:
 class MikiVoVisionEngine:
     """
     MikiVo Autonomous AI Vision Core:
-      - Derived and evolved from YOLOv8 Architecture
-      - High-speed pose detection + keypoint tracking
-      - Optical normalization & affine face canonicalization
+      - YOLOv8 Neural Backbone + MikiVo Custom Preprocessing
+      - Pose-Guided Affine Face Canonicalization
+      - Virtual Tripwire & ROI Spatial Filtering
+      - Circular Frame Buffer for Instant Video Alert Dispatch
     """
     def __init__(self, db):
         self.db = db
@@ -318,6 +380,10 @@ class MikiVoVisionEngine:
         self.stats = {"fps": 0.0, "person_count": 0}
         self.last_alert_time = 0.0
         self.reported_tracks = set()
+
+        # Circular buffer for pre-incident video clip (~4 sec @ 15 FPS)
+        self.frame_buffer = collections.deque(maxlen=60)
+        self.latest_annotated_mat = None
 
         self.model = None
         if HAS_YOLO:
@@ -358,6 +424,7 @@ class MikiVoVisionEngine:
                 self.cap = None
         self.latest_annotated = None
         self.latest_frame = None
+        self.latest_annotated_mat = None
 
     def _align_face(self, frame, bbox, kpts=None):
         h, w = frame.shape[:2]
@@ -385,6 +452,19 @@ class MikiVoVisionEngine:
                 return np.zeros((112, 112, 3), dtype=np.uint8)
             return cv2.resize(crop, (112, 112))
 
+    def _is_in_roi(self, smooth_box, frame_shape):
+        if not config.get("roi_enabled"):
+            return True
+        poly = config.get("roi_polygon")
+        if not poly or len(poly) < 3:
+            return True
+
+        fh, fw = frame_shape[:2]
+        pts = np.array([[int(p[0] * fw), int(p[1] * fh)] for p in poly], dtype=np.int32)
+        # Feet center point
+        feet_pt = (smooth_box[0] + smooth_box[2] // 2, smooth_box[1] + smooth_box[3])
+        return cv2.pointPolygonTest(pts, feet_pt, False) >= 0
+
     def _loop(self):
         while self.running:
             if not self.cap:
@@ -402,36 +482,52 @@ class MikiVoVisionEngine:
                 self._fps_time = now
 
             detections = self._detect(frame)
-            tracked_detections = self.tracker.update(detections, now=now)
-            self.last_detections = tracked_detections
-            self.stats["person_count"] = len(tracked_detections)
+            tracked = self.tracker.update(detections, frame.shape, now=now)
 
-            annotated = self._draw(frame.copy(), tracked_detections)
+            # Apply ROI filter if enabled
+            active_detections = []
+            for d in tracked:
+                in_roi = self._is_in_roi(d.get("smooth_bbox", d["bbox"]), frame.shape)
+                d["in_roi"] = in_roi
+                if in_roi:
+                    active_detections.append(d)
+
+            self.last_detections = tracked
+            self.stats["person_count"] = len(active_detections)
+
+            annotated = self._draw(frame.copy(), tracked)
+            self.latest_annotated_mat = annotated
+            self.frame_buffer.append(annotated.copy())
+
             _, jpg = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 85])
             self.latest_annotated = jpg.tobytes()
 
             _, raw = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
             self.latest_frame = raw.tobytes()
 
+            # Record hourly traffic statistic
+            current_hour = datetime.now().hour
+            if active_detections:
+                state["hourly_traffic"][current_hour] += 1
+
             # Automated Telegram Alert Dispatch
-            if tracked_detections and not state["is_paused"] and config.get("auto_send"):
+            if active_detections and not state["is_paused"] and config.get("auto_send"):
                 cooldown = max(2, int(config.get("cooldown_sec", 6)))
                 if now - self.last_alert_time >= cooldown:
-                    names = [d["name"] for d in tracked_detections if d.get("name")]
-                    track_ids = [d.get("track_id") for d in tracked_detections]
+                    track_ids = [d.get("track_id") for d in active_detections]
                     should_alert = True
 
                     if config.get("only_new_person"):
-                        # Alert if any track is new or an unknown intruder is present
-                        has_unknown = any(not d.get("name") for d in tracked_detections)
+                        has_unknown = any(not d.get("name") for d in active_detections)
                         has_unreported_track = any(t not in self.reported_tracks for t in track_ids)
-                        should_alert = has_unknown or has_unreported_track
+                        has_loitering = any(d.get("is_loitering") for d in active_detections)
+                        should_alert = has_unknown or has_unreported_track or has_loitering
 
                     if should_alert:
                         self.last_alert_time = now
                         for t in track_ids:
                             self.reported_tracks.add(t)
-                        self._trigger_alert(self.latest_annotated, tracked_detections)
+                        self._trigger_alert(active_detections)
 
             time.sleep(0.01)
 
@@ -474,17 +570,47 @@ class MikiVoVisionEngine:
     def _draw(self, frame, detections):
         h, w = frame.shape[:2]
 
-        # Engine watermark
+        # 1. Draw Virtual ROI Zone if enabled
+        if config.get("roi_enabled"):
+            poly = config.get("roi_polygon")
+            if poly and len(poly) >= 3:
+                pts = np.array([[int(p[0] * w), int(p[1] * h)] for p in poly], dtype=np.int32)
+                overlay = frame.copy()
+                cv2.fillPoly(overlay, [pts], (255, 69, 58))
+                cv2.addWeighted(overlay, 0.15, frame, 0.85, 0, frame)
+                cv2.polylines(frame, [pts], True, (255, 69, 58), 2, cv2.LINE_AA)
+                cv2.putText(frame, "RESTRICTED SECURITY ZONE", (pts[0][0] + 5, pts[0][1] - 8),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 69, 58), 1, cv2.LINE_AA)
+
+        # 2. Draw Tripwire Line if enabled
+        if config.get("tripwire_enabled"):
+            line_y = int(float(config.get("tripwire_y", 0.55)) * h)
+            cv2.line(frame, (0, line_y), (w, line_y), (0, 215, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, "TRIPWIRE LINE [ IN / OUT ]", (20, line_y - 8),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 215, 255), 1, cv2.LINE_AA)
+
+        # 3. Watermark
         cv2.putText(frame, "MikiVo AI [YOLOv8 Core]", (18, 28),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
 
+        # 4. Annotate Persons
         for det in detections:
             x, y, bw, bh = det.get("smooth_bbox", det["bbox"])
             name = det.get("name")
             tid = det.get("track_id", 1)
-            color = (48, 209, 88) if name else (0, 165, 255)
+            is_loiter = det.get("is_loitering", False)
+            in_roi = det.get("in_roi", True)
 
-            # Apple-inspired HUD corner brackets
+            if is_loiter:
+                color = (0, 0, 255) # Warning Red
+            elif not in_roi:
+                color = (120, 120, 120) # Outside Zone Grey
+            elif name:
+                color = (48, 209, 88) # Authorized Green
+            else:
+                color = (0, 165, 255) # Unknown Amber
+
+            # Apple-inspired corner brackets
             edge = min(22, max(8, bw // 5))
             t = 2
             cv2.line(frame, (x, y + edge), (x, y), color, t)
@@ -503,9 +629,10 @@ class MikiVoVisionEngine:
                 cv2.circle(frame, (nx, ny), 3, color, -1)
 
             # Informative HUD label
-            label = f"MikiVo #{tid} | {name} ({det.get('match_score', 0.92)*100:.0f}%)" if name else f"MikiVo #{tid} | Unknown ({det['score']*100:.0f}%)"
-            
-            # Label background pill
+            prefix = "LOITERING! " if is_loiter else ""
+            id_txt = f"{name} ({det.get('match_score', 0.92)*100:.0f}%)" if name else f"Unknown ({det['score']*100:.0f}%)"
+            label = f"MikiVo #{tid} | {prefix}{id_txt}"
+
             (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1)
             ly = max(24, y - 8)
             cv2.rectangle(frame, (x, ly - th - 4), (x + tw + 10, ly + 4), (20, 20, 22), -1)
@@ -514,9 +641,29 @@ class MikiVoVisionEngine:
 
         return frame
 
-    def _trigger_alert(self, jpg_bytes, detections):
+    def _encode_mp4_clip(self, frames):
+        if not frames:
+            return b""
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tf:
+            tmp_path = tf.name
+        try:
+            h, w = frames[0].shape[:2]
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(tmp_path, fourcc, 15.0, (w, h))
+            for f in frames:
+                out.write(f)
+            out.release()
+            with open(tmp_path, "rb") as f:
+                data = f.read()
+            return data
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+    def _trigger_alert(self, detections):
         count = len(detections)
         identified = [d["name"] for d in detections if d.get("name")]
+        has_loitering = any(d.get("is_loitering") for d in detections)
         custom_cap = config.get("custom_caption", "هشدار تردد MikiVo")
 
         state["stats"]["total_captures"] += 1
@@ -525,19 +672,35 @@ class MikiVoVisionEngine:
             "time": datetime.now().strftime("%H:%M:%S"),
             "persons": count,
             "names": ", ".join(identified) if identified else "ناشناس",
+            "type": "ویدیو MP4" if config.get("alert_media") == "video" else "عکس JPG",
             "telegram": "در حال ارسال...",
         }
         state["logs"].insert(0, log_entry)
         if len(state["logs"]) > 50:
             state["logs"].pop()
 
-        def dispatch_worker():
-            ok = telegram.dispatch(jpg_bytes, count, identified, custom_cap)
+        def alert_worker():
+            media_type = config.get("alert_media", "photo")
+            if media_type == "video":
+                # Gather pre-incident buffer + record post-incident frames
+                clip_frames = list(self.frame_buffer)
+                for _ in range(25):
+                    time.sleep(0.06)
+                    if self.latest_annotated_mat is not None:
+                        clip_frames.append(self.latest_annotated_mat.copy())
+                mp4_bytes = self._encode_mp4_clip(clip_frames)
+                ok = telegram.dispatch_video(mp4_bytes, count, identified, custom_cap, is_loitering=has_loitering)
+                if not ok and self.latest_annotated:
+                    # Graceful fallback to photo
+                    ok = telegram.dispatch_photo(self.latest_annotated, count, identified, custom_cap, is_loitering=has_loitering)
+            else:
+                ok = telegram.dispatch_photo(self.latest_annotated, count, identified, custom_cap, is_loitering=has_loitering)
+
             log_entry["telegram"] = "ارسال شد" if ok else "ارسال ناموفق"
             if ok:
                 state["stats"]["telegram_sent"] += 1
 
-        threading.Thread(target=dispatch_worker, daemon=True).start()
+        threading.Thread(target=alert_worker, daemon=True).start()
 
     def register_face(self, name):
         if not self.latest_frame or not self.last_detections:
@@ -554,27 +717,30 @@ class MikiVoVisionEngine:
 
 
 # ===================================================================
-# 3. Telegram Bot Gateway
+# 3. Telegram Bot Gateway (Photo, MP4 Video, Remote Commands & Summary)
 # ===================================================================
 class TelegramBot:
     def __init__(self):
         self._last_id = 0
         threading.Thread(target=self._poll_loop, daemon=True).start()
 
-    def dispatch(self, jpeg_bytes, count, identified_names, caption=""):
+    def dispatch_photo(self, jpeg_bytes, count, identified_names, caption="", is_loitering=False):
         token = config.get("bot_token", "").strip()
         chat_id = config.get("chat_id", "").strip()
         if not token or not chat_id:
             return False
 
         names = ", ".join(identified_names) if identified_names else "ناشناس (Unknown)"
+        alert_badge = "⚠️ هشدار پرسه زدن فرد ناشناس!\n" if is_loitering else ""
         text = (
-            f"🛡 MikoTim Sentinel Pro | MikiVo AI (Derived from YOLO)\n"
+            f"🛡 MikoTim Sentinel Pro | MikiVo AI\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"{alert_badge}"
             f"📌 {caption}\n"
             f"👥 تعداد اشخاص: {count}\n"
             f"🧬 هویت: {names}\n"
-            f"⏱ زمان ثبت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            f"📥 ورود: {state['stats']['in_count']} | 📤 خروج: {state['stats']['out_count']}\n"
+            f"⏱ زمان: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
         try:
             r = requests.post(
@@ -584,6 +750,60 @@ class TelegramBot:
                 timeout=12,
             )
             return r.json().get("ok", False)
+        except Exception:
+            return False
+
+    def dispatch_video(self, mp4_bytes, count, identified_names, caption="", is_loitering=False):
+        token = config.get("bot_token", "").strip()
+        chat_id = config.get("chat_id", "").strip()
+        if not token or not chat_id or not mp4_bytes:
+            return False
+
+        names = ", ".join(identified_names) if identified_names else "ناشناس (Unknown)"
+        alert_badge = "⚠️ هشدار پرسه زدن فرد ناشناس!\n" if is_loitering else ""
+        text = (
+            f"🎬 ویدیو رخداد امنیتی | MikiVo AI\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"{alert_badge}"
+            f"📌 {caption}\n"
+            f"👥 افراد در صحنه: {count}\n"
+            f"🧬 هویت: {names}\n"
+            f"📥 ورود: {state['stats']['in_count']} | 📤 خروج: {state['stats']['out_count']}\n"
+            f"⏱ زمان ثبت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        try:
+            r = requests.post(
+                f"https://api.telegram.org/bot{token}/sendVideo",
+                data={"chat_id": chat_id, "caption": text, "supports_streaming": True},
+                files={"video": ("alert_clip.mp4", mp4_bytes, "video/mp4")},
+                timeout=25,
+            )
+            return r.json().get("ok", False)
+        except Exception:
+            return False
+
+    def send_summary(self):
+        token = config.get("bot_token", "").strip()
+        chat_id = config.get("chat_id", "").strip()
+        if not token or not chat_id:
+            return False
+
+        active_faces = len(face_db.records)
+        text = (
+            f"📊 گزارش آماری امنیتی MikoTim Sentinel Pro\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📅 تاریخ: {datetime.now().strftime('%Y/%m/%d')}\n"
+            f"👥 کل رخدادهای ثبت‌شده: {state['stats']['total_captures']}\n"
+            f"📥 مجموع ورود: {state['stats']['in_count']} نفر\n"
+            f"📤 مجموع خروج: {state['stats']['out_count']} نفر\n"
+            f"🚨 هشدارهای پرسه زدن: {state['stats']['loitering_count']} مورد\n"
+            f"🧬 پروفایل‌های ذخیره‌شده: {active_faces} نفر\n"
+            f"📡 وضعیت پایش: {'🟢 فعال' if state['is_streaming'] else '⚪ آماده‌باش'}"
+        )
+        try:
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                          json={"chat_id": chat_id, "text": text}, timeout=8)
+            return True
         except Exception:
             return False
 
@@ -625,7 +845,24 @@ class TelegramBot:
                         text = (msg.get("text") or "").strip().lower()
                         if text in ("/photo", "عکس") and detector.latest_annotated:
                             names = [d["name"] for d in detector.last_detections if d.get("name")]
-                            self.dispatch(detector.latest_annotated, len(detector.last_detections), names, "عکس درخواستی زنده")
+                            self.dispatch_photo(detector.latest_annotated, len(detector.last_detections), names, "عکس درخواستی زنده")
+                        elif text in ("/video", "ویدیو"):
+                            frames = list(detector.frame_buffer)
+                            clip = detector._encode_mp4_clip(frames)
+                            names = [d["name"] for d in detector.last_detections if d.get("name")]
+                            self.dispatch_video(clip, len(detector.last_detections), names, "ویدیو درخواستی زنده")
+                        elif text in ("/summary", "خلاصه", "گزارش"):
+                            self.send_summary()
+                        elif text in ("/mode photo", "حالت عکس"):
+                            config["alert_media"] = "photo"
+                            save_config(config)
+                            requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                                          json={"chat_id": chat_id, "text": "📸 نوع هشدار روی عکس تنظیم شد."}, timeout=5)
+                        elif text in ("/mode video", "حالت ویدیو"):
+                            config["alert_media"] = "video"
+                            save_config(config)
+                            requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                                          json={"chat_id": chat_id, "text": "🎬 نوع هشدار روی ویدیو تنظیم شد."}, timeout=5)
                         elif text in ("/pause", "توقف"):
                             state["is_paused"] = True
                         elif text in ("/resume", "ادامه"):
@@ -674,13 +911,16 @@ def api_mikivo_info():
     return jsonify(
         engine="MikiVo AI Vision Core",
         origin="Derived & Evolved from YOLOv8 Architecture",
-        version="2.4.0-pro",
+        version="3.0.0-pro",
         features=[
             "Adaptive LAB Optical CLAHE Equalization",
             "Pose-Guided Affine Landmark Canonicalization",
             "256-D Multi-Scale Spatial-Geometric Embedding",
             "IoU + EMA Temporal Tracklet Smoother",
-            "Local High-Performance Execution",
+            "Virtual Security Zone (ROI) & Tripwire Line",
+            "In/Out Direction Trajectory Counter",
+            "Unauthorized Loitering Detection",
+            "Dual Media Alert Dispatch (Photo / Short MP4 Video)",
         ]
     )
 
@@ -706,7 +946,12 @@ def api_status():
         person_count=detector.stats["person_count"],
         total_captures=state["stats"]["total_captures"],
         telegram_sent=state["stats"]["telegram_sent"],
-        logs=state["logs"][:30],
+        in_count=state["stats"]["in_count"],
+        out_count=state["stats"]["out_count"],
+        loitering_count=state["stats"]["loitering_count"],
+        hourly_traffic=state["hourly_traffic"],
+        alert_media=config.get("alert_media", "photo"),
+        logs=state["logs"][:35],
     )
 
 @app.route("/api/register", methods=["POST", "OPTIONS"])
@@ -740,6 +985,20 @@ def api_settings():
     s = config.copy()
     s["has_token"] = bool(s.get("bot_token"))
     return jsonify(s)
+
+@app.route("/api/summary", methods=["GET", "POST", "OPTIONS"])
+def api_summary():
+    if request.method == "POST":
+        ok = telegram.send_summary()
+        return jsonify(ok=ok)
+    return jsonify(
+        total_captures=state["stats"]["total_captures"],
+        in_count=state["stats"]["in_count"],
+        out_count=state["stats"]["out_count"],
+        loitering_count=state["stats"]["loitering_count"],
+        hourly_traffic=state["hourly_traffic"],
+        faces_count=len(face_db.records)
+    )
 
 @app.route("/api/test_telegram", methods=["POST", "OPTIONS"])
 def api_test_tg():

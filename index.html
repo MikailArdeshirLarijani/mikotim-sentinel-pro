@@ -757,6 +757,51 @@
             from { opacity: 0; transform: translateY(16px) scale(0.96); }
             to { opacity: 1; transform: translateY(0) scale(1); }
         }
+
+        /* Stealth Mode Overlay */
+        #stealthOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 99999;
+            background: #000000;
+            color: #f5f5f7;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            cursor: pointer;
+        }
+
+        /* Hourly Bar Chart */
+        .chart-bar-wrap {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            justify-content: flex-end;
+            gap: 4px;
+        }
+
+        .chart-bar {
+            width: 100%;
+            background: linear-gradient(180deg, var(--apple-blue), rgba(10, 132, 255, 0.25));
+            border-radius: 4px 4px 0 0;
+            min-height: 4px;
+            transition: height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .chart-bar:hover {
+            background: linear-gradient(180deg, var(--apple-green), rgba(48, 209, 88, 0.45));
+        }
+
+        .chart-label {
+            font-size: 0.65rem;
+            color: var(--text-tertiary);
+            font-family: var(--font-mono);
+        }
+
     </style>
 </head>
 <body>
@@ -777,6 +822,14 @@
             </div>
         </div>
         <div class="header-actions">
+            <button class="pill-btn" onclick="toggleStealthMode()" id="stealthBtn" title="حالت استتار (Stealth Mode)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+                <span id="tStealth">استتار</span>
+            </button>
+
             <button class="pill-btn" onclick="toggleLang()" id="langBtn">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"/>
@@ -797,6 +850,18 @@
         <section class="viewport-section">
             <div class="glass-card">
                 <div class="screen-stage">
+                    <div id="roiEditorBanner" style="display:none; position:absolute; top:14px; left:14px; right:14px; background:rgba(20,20,22,0.92); backdrop-filter:blur(24px); border:1px solid rgba(255,69,58,0.4); border-radius:14px; padding:9px 16px; z-index:30; display:flex; align-items:center; justify-content:space-between; box-shadow:0 12px 30px rgba(0,0,0,0.5);">
+                        <div style="display:flex; align-items:center; gap:8px; font-size:0.82rem; font-weight:500;">
+                            <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#ff453a; box-shadow:0 0 8px #ff453a;"></span>
+                            <span id="tRoiInstruct">روی تصویر کلیک کنید تا ۴ نقطه محدوده مشخص شود (0/4)</span>
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            <button class="pill-btn" onclick="saveRoiZone()" style="background:#30d158; color:#fff; border:none; padding:4px 10px; font-size:0.75rem; font-weight:600;">ذخیره</button>
+                            <button class="pill-btn" onclick="clearRoiZone()" style="padding:4px 10px; font-size:0.75rem;">پاک کردن</button>
+                            <button class="pill-btn" onclick="cancelRoiEditor()" style="padding:4px 10px; font-size:0.75rem;">بستن</button>
+                        </div>
+                    </div>
+
                     <video id="webcam" autoplay playsinline muted></video>
                     <canvas id="overlayCanvas"></canvas>
                     <div id="camIdle" class="screen-idle">
@@ -837,6 +902,14 @@
                         </button>
                     </div>
                     <div class="btn-stack">
+                                                <button class="apple-btn apple-btn-secondary" onclick="startRoiEditor()" id="btnRoiEdit">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                                <polyline points="2 17 12 22 22 17"/>
+                                <polyline points="2 12 12 17 22 12"/>
+                            </svg>
+                            <span id="tRoiBtn">محدوده امنیتی</span>
+                        </button>
                         <button class="apple-btn apple-btn-secondary" onclick="calibrate()">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
@@ -872,14 +945,23 @@
                 </div>
                 <div class="bento-tile">
                     <div class="bento-head">
-                        <span class="bento-label" id="tCaptures">ثبت رخدادها</span>
+                        <span class="bento-label" id="tInOut">ورود / خروج</span>
                         <svg class="bento-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                            <circle cx="8.5" cy="8.5" r="1.5"/>
-                            <polyline points="21 15 16 10 5 21"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
                         </svg>
                     </div>
-                    <span class="bento-value" id="captureVal">0</span>
+                    <span class="bento-value" id="inOutVal" style="font-size:1.35rem;">0 / 0</span>
+                </div>
+                <div class="bento-tile">
+                    <div class="bento-head">
+                        <span class="bento-label" id="tLoiterTile">پرسه زدن</span>
+                        <svg class="bento-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                    </div>
+                    <span class="bento-value" id="loiterVal">0</span>
                 </div>
                 <div class="bento-tile">
                     <div class="bento-head">
@@ -891,6 +973,29 @@
                     </div>
                     <span class="bento-value" id="tgVal">0</span>
                 </div>
+            </div>
+
+
+            <!-- Hourly Traffic Analytics -->
+            <div class="glass-card" style="padding:18px 22px;">
+                <div class="section-header" style="justify-content:space-between; width:100%;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="20" x2="18" y2="10"/>
+                            <line x1="12" y1="20" x2="12" y2="4"/>
+                            <line x1="6" y1="20" x2="6" y2="14"/>
+                        </svg>
+                        <span id="tChartTitle">توزیع زمانی تردد امروز (ساعات ۲۴گانه)</span>
+                    </div>
+                    <button class="pill-btn" onclick="requestTelegramSummary()" style="padding:4px 12px; font-size:0.75rem;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                            <polyline points="22,6 12,13 2,6"/>
+                        </svg>
+                        <span id="tSendSummary">ارسال خلاصه روز به تلگرام</span>
+                    </button>
+                </div>
+                <div id="hourlyChart" style="display:flex; align-items:flex-end; gap:5px; height:85px; margin-top:14px; padding-top:10px; border-bottom:1px solid var(--border-subtle);"></div>
             </div>
 
             <!-- Incident Log -->
@@ -996,6 +1101,45 @@
                     <input type="number" id="cooldown" class="apple-input" value="6" min="1" max="60">
                 </div>
 
+                                <div class="form-field">
+                    <label id="tMediaLabel">نوع رسانه هشدار:</label>
+                    <select id="selAlertMedia" class="apple-input">
+                        <option value="photo">📸 ارسال تک‌عکس باکیفیت (Photo)</option>
+                        <option value="video">🎬 ارسال ویدیوی کوتاه ۵ ثانیه‌ای (MP4 Video)</option>
+                    </select>
+                </div>
+                <div class="switch-row">
+                    <span id="tRoiEnable">محدوده امنیتی فعال:</span>
+                    <label class="apple-switch">
+                        <input type="checkbox" id="chkRoi">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="switch-row">
+                    <span id="tTripwireEnable">شمارنده خطی ورود/خروج:</span>
+                    <label class="apple-switch">
+                        <input type="checkbox" id="chkTripwire">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="switch-row">
+                    <span id="tAudioAlarm">آژیر صوتی محلی:</span>
+                    <label class="apple-switch">
+                        <input type="checkbox" id="chkAudioAlarm">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="switch-row">
+                    <span id="tVoiceWarning">اعلان صوتی هوشمند:</span>
+                    <label class="apple-switch">
+                        <input type="checkbox" id="chkVoiceWarning">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="form-field">
+                    <label id="tLoiterLabel">زمان تشخیص پرسه زدن (ثانیه):</label>
+                    <input type="number" id="loiterSec" class="apple-input" value="10" min="3" max="60">
+                </div>
                 <div class="switch-row">
                     <span id="tAutoSend">ارسال خودکار:</span>
                     <label class="apple-switch">
@@ -1039,6 +1183,14 @@
     </main>
 
     <div id="toasts"></div>
+    <!-- Stealth Mode Screensaver Overlay -->
+    <div id="stealthOverlay" ondblclick="toggleStealthMode()">
+        <div style="font-family:var(--font-mono); font-size:6rem; font-weight:700; letter-spacing:-0.05em;" id="stealthClock">00:00:00</div>
+        <div style="font-size:1.2rem; color:#86868b; margin-top:10px;" id="stealthDate">--</div>
+        <div style="position:absolute; bottom:28px; font-size:0.78rem; color:#48484a; letter-spacing:0.02em;">MikoTim Sentinel Pro • برای بازگشت دوبار کلیک کنید یا کلید ESC را بزنید</div>
+        <div style="position:absolute; top:24px; right:24px; width:8px; height:8px; border-radius:50%; background:#30d158; opacity:0.6; animation:breathe 2s infinite alternate;"></div>
+    </div>
+
 
     <script>
         // Localization Dictionary
@@ -1078,7 +1230,20 @@
                 remote: 'دستورات راه دور:',
                 save: 'ذخیره',
                 test: 'تست',
-                unknown: 'ناشناس'
+                unknown: 'ناشناس',
+                stealth: 'استتار',
+                roiBtn: 'محدوده امنیتی',
+                roiInstruct: 'روی ۴ نقطه از تصویر کلیک کنید تا محدوده مشخص شود',
+                mediaLabel: 'نوع رسانه هشدار:',
+                roiEnable: 'محدوده امنیتی فعال:',
+                tripwireEnable: 'شمارنده خطی ورود/خروج:',
+                audioAlarm: 'آژیر صوتی محلی:',
+                voiceWarning: 'اعلان صوتی هوشمند:',
+                loiterLabel: 'زمان تشخیص پرسه زدن (ثانیه):',
+                inOut: 'ورود / خروج',
+                loiter: 'پرسه زدن',
+                chartTitle: 'توزیع زمانی تردد امروز (ساعات ۲۴گانه)',
+                sendSummary: 'ارسال خلاصه روز به تلگرام'
             },
             en: {
                 lang: 'فارسی',
@@ -1115,9 +1280,204 @@
                 remote: 'Remote commands:',
                 save: 'Save',
                 test: 'Test',
-                unknown: 'Unknown'
+                unknown: 'Unknown',
+                stealth: 'Stealth',
+                roiBtn: 'ROI Zone',
+                roiInstruct: 'Click 4 points on feed to define restricted zone',
+                mediaLabel: 'Alert Media Format:',
+                roiEnable: 'Virtual Security Zone:',
+                tripwireEnable: 'In/Out Tripwire Counter:',
+                audioAlarm: 'Local Audio Siren:',
+                voiceWarning: 'Smart Voice Warning:',
+                loiterLabel: 'Loitering Threshold (sec):',
+                inOut: 'In / Out',
+                loiter: 'Loitering',
+                chartTitle: "Today's Hourly Traffic Distribution",
+                sendSummary: 'Send Summary to Telegram'
             }
         };
+
+        // Extra State Variables
+        let isEditingRoi = false;
+        let roiPoints = [];
+        let isStealthActive = false;
+        let stealthTimer = null;
+        let audioCtx = null;
+        let inCount = 0;
+        let outCount = 0;
+        let loiterCount = 0;
+        let hourlyTraffic = new Array(24).fill(0);
+
+        // ==================== Web Audio Siren & Voice Warning ====================
+        function playAlarmSiren() {
+            if (!document.getElementById('chkAudioAlarm').checked) return;
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                const now = audioCtx.currentTime;
+                osc.frequency.setValueAtTime(750, now);
+                osc.frequency.linearRampToValueAtTime(1250, now + 0.35);
+                osc.frequency.linearRampToValueAtTime(750, now + 0.7);
+                osc.frequency.linearRampToValueAtTime(1250, now + 1.05);
+                gain.gain.setValueAtTime(0.18, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 1.35);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 1.4);
+            } catch(e) {}
+        }
+
+        function playVoiceWarning(text) {
+            if (!document.getElementById('chkVoiceWarning').checked) return;
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const u = new SpeechSynthesisUtterance(text);
+                u.lang = currentLang === 'fa' ? 'fa-IR' : 'en-US';
+                u.rate = 1.0;
+                window.speechSynthesis.speak(u);
+            }
+        }
+
+        // ==================== Stealth Mode ====================
+        function toggleStealthMode() {
+            isStealthActive = !isStealthActive;
+            const overlay = document.getElementById('stealthOverlay');
+            overlay.style.display = isStealthActive ? 'flex' : 'none';
+
+            if (isStealthActive) {
+                updateStealthClock();
+                stealthTimer = setInterval(updateStealthClock, 1000);
+            } else {
+                if (stealthTimer) clearInterval(stealthTimer);
+            }
+        }
+
+        function updateStealthClock() {
+            const now = new Date();
+            document.getElementById('stealthClock').innerText = now.toTimeString().split(' ')[0];
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('stealthDate').innerText = now.toLocaleDateString(currentLang === 'fa' ? 'fa-IR' : 'en-US', options);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && isStealthActive) {
+                toggleStealthMode();
+            }
+        });
+
+        // ==================== Interactive ROI Zone Editor ====================
+        function startRoiEditor() {
+            isEditingRoi = true;
+            document.getElementById('roiEditorBanner').style.display = 'flex';
+            updateRoiBanner();
+            notify(currentLang === 'fa' ? 'حالت تنظیم محدوده فعال شد؛ روی تصویر کلیک کنید' : 'ROI editor active; click points on screen');
+        }
+
+        function updateRoiBanner() {
+            const count = roiPoints.length;
+            document.getElementById('tRoiInstruct').innerText = currentLang === 'fa'
+                ? `روی تصویر کلیک کنید تا ۴ گوشه محدوده مشخص شود (${count}/4)`
+                : `Click on feed to place 4 corners (${count}/4)`;
+        }
+
+        function clearRoiZone() {
+            roiPoints = [];
+            updateRoiBanner();
+        }
+
+        function saveRoiZone() {
+            if (roiPoints.length < 3) {
+                notify(currentLang === 'fa' ? 'حداقل ۳ یا ۴ نقطه نیاز است' : 'At least 3-4 points required');
+                return;
+            }
+            isEditingRoi = false;
+            document.getElementById('roiEditorBanner').style.display = 'none';
+            document.getElementById('chkRoi').checked = true;
+            saveConfig();
+            notify(currentLang === 'fa' ? 'محدوده امنیتی ذخیره و فعال شد' : 'Security zone saved & activated');
+        }
+
+        function cancelRoiEditor() {
+            isEditingRoi = false;
+            document.getElementById('roiEditorBanner').style.display = 'none';
+        }
+
+        // Click on overlay canvas to place points
+        document.addEventListener('DOMContentLoaded', () => {
+            const c = document.getElementById('overlayCanvas');
+            if (c) {
+                c.addEventListener('click', (e) => {
+                    if (!isEditingRoi) return;
+                    const rect = c.getBoundingClientRect();
+                    const nx = (e.clientX - rect.left) / rect.width;
+                    const ny = (e.clientY - rect.top) / rect.height;
+                    if (roiPoints.length < 4) {
+                        roiPoints.push([Math.max(0, Math.min(1, nx)), Math.max(0, Math.min(1, ny))]);
+                        updateRoiBanner();
+                    }
+                });
+            }
+        });
+
+        function isPointInPoly(pt, poly) {
+            let inside = false;
+            for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+                const xi = poly[i][0], yi = poly[i][1];
+                const xj = poly[j][0], yj = poly[j][1];
+                const intersect = ((yi > pt[1]) !== (yj > pt[1])) &&
+                    (pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        // ==================== Hourly Chart & Summary ====================
+        function renderHourlyChart(traffic) {
+            const container = document.getElementById('hourlyChart');
+            if (!container) return;
+            container.innerHTML = '';
+            const maxVal = Math.max(1, ...traffic);
+
+            for (let h = 0; h < 24; h++) {
+                const count = traffic[h] || 0;
+                const pct = Math.max(6, Math.min(100, (count / maxVal) * 100));
+
+                const wrap = document.createElement('div');
+                wrap.className = 'chart-bar-wrap';
+                wrap.title = `ساعت ${h}:00 - ${count} رویداد`;
+
+                const bar = document.createElement('div');
+                bar.className = 'chart-bar';
+                bar.style.height = pct + '%';
+
+                const lbl = document.createElement('span');
+                lbl.className = 'chart-label';
+                lbl.innerText = (h % 3 === 0) ? (h < 10 ? '0' + h : h) : '';
+
+                wrap.appendChild(bar);
+                wrap.appendChild(lbl);
+                container.appendChild(wrap);
+            }
+        }
+
+        async function requestTelegramSummary() {
+            try {
+                const res = await fetch('/api/summary', { method: 'POST' });
+                const d = await res.json();
+                if (d.ok) {
+                    notify(currentLang === 'fa' ? 'گزارش آماری به تلگرام ارسال شد' : 'Summary dispatched to Telegram');
+                } else {
+                    notify(currentLang === 'fa' ? 'خطا در ارسال خلاصه روز' : 'Summary dispatch failed');
+                }
+            } catch (e) {
+                notify(currentLang === 'fa' ? 'سرور متصل نیست' : 'Server offline');
+            }
+        }
+
 
         let currentLang = 'fa';
         let isStreaming = false;
@@ -1198,6 +1558,18 @@
             document.getElementById('tCaptionLabel').innerText = d.captionLabel;
             document.getElementById('tCooldownLabel').innerText = d.cooldownLabel;
             document.getElementById('tAutoSend').innerText = d.autoSend;
+            if (document.getElementById('tStealth')) document.getElementById('tStealth').innerText = d.stealth;
+            if (document.getElementById('tRoiBtn')) document.getElementById('tRoiBtn').innerText = d.roiBtn;
+            if (document.getElementById('tMediaLabel')) document.getElementById('tMediaLabel').innerText = d.mediaLabel;
+            if (document.getElementById('tRoiEnable')) document.getElementById('tRoiEnable').innerText = d.roiEnable;
+            if (document.getElementById('tTripwireEnable')) document.getElementById('tTripwireEnable').innerText = d.tripwireEnable;
+            if (document.getElementById('tAudioAlarm')) document.getElementById('tAudioAlarm').innerText = d.audioAlarm;
+            if (document.getElementById('tVoiceWarning')) document.getElementById('tVoiceWarning').innerText = d.voiceWarning;
+            if (document.getElementById('tLoiterLabel')) document.getElementById('tLoiterLabel').innerText = d.loiterLabel;
+            if (document.getElementById('tInOut')) document.getElementById('tInOut').innerText = d.inOut;
+            if (document.getElementById('tLoiterTile')) document.getElementById('tLoiterTile').innerText = d.loiter;
+            if (document.getElementById('tChartTitle')) document.getElementById('tChartTitle').innerText = d.chartTitle;
+            if (document.getElementById('tSendSummary')) document.getElementById('tSendSummary').innerText = d.sendSummary;
             document.getElementById('tOnlyNew').innerText = d.onlyNew;
             document.getElementById('tRemote').innerText = d.remote;
             document.getElementById('tSave').innerText = d.save;
@@ -1331,6 +1703,64 @@
             const h = overlayCanvas.height;
             ctx.clearRect(0, 0, w, h);
 
+            // Draw ROI Security Polygon
+            const roiEnabled = document.getElementById('chkRoi') && document.getElementById('chkRoi').checked;
+            if (roiPoints.length >= 3 && (roiEnabled || isEditingRoi)) {
+                ctx.save();
+                ctx.fillStyle = 'rgba(255, 69, 58, 0.16)';
+                ctx.strokeStyle = '#ff453a';
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.moveTo(roiPoints[0][0] * w, roiPoints[0][1] * h);
+                for (let i = 1; i < roiPoints.length; i++) {
+                    ctx.lineTo(roiPoints[i][0] * w, roiPoints[i][1] * h);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#ff453a';
+                ctx.font = '600 12px -apple-system, sans-serif';
+                ctx.fillText('RESTRICTED SECURITY ZONE', roiPoints[0][0] * w + 8, roiPoints[0][1] * h - 8);
+                ctx.restore();
+            }
+
+            // Draw points currently being placed in editor
+            if (isEditingRoi) {
+                ctx.save();
+                for (let i = 0; i < roiPoints.length; i++) {
+                    const px = roiPoints[i][0] * w;
+                    const py = roiPoints[i][1] * h;
+                    ctx.fillStyle = '#ff453a';
+                    ctx.beginPath();
+                    ctx.arc(px, py, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+
+            // Draw Tripwire Line
+            const tripwireEnabled = document.getElementById('chkTripwire') && document.getElementById('chkTripwire').checked;
+            if (tripwireEnabled) {
+                const lineY = h * 0.55;
+                ctx.save();
+                ctx.strokeStyle = '#00d7ff';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([8, 6]);
+                ctx.beginPath();
+                ctx.moveTo(0, lineY);
+                ctx.lineTo(w, lineY);
+                ctx.stroke();
+                ctx.fillStyle = '#00d7ff';
+                ctx.font = '600 12px -apple-system, sans-serif';
+                ctx.fillText('TRIPWIRE LINE [ IN / OUT ]', 24, lineY - 8);
+                ctx.restore();
+            }
+
+
             // Downsample to procCanvas for rapid motion diff
             procCtx.drawImage(video, 0, 0, procW, procH);
             const currImg = procCtx.getImageData(0, 0, procW, procH);
@@ -1379,11 +1809,22 @@
 
                 if (bw > 60 && bh > 80) {
                     const matchedName = matchFace(bx, by, bw, bh);
-                    detectedPersons.push({
-                        bbox: [bx, by, bw, bh],
-                        score: Math.min(0.96, 0.65 + motionRatio * 3),
-                        name: matchedName
-                    });
+                    const feetPt = [(bx + bw / 2) / w, (by + bh) / h];
+                    const inRoi = (roiPoints.length >= 3 && roiEnabled) ? isPointInPoly(feetPt, roiPoints) : true;
+                    
+                    if (inRoi) {
+                        detectedPersons.push({
+                            bbox: [bx, by, bw, bh],
+                            score: Math.min(0.96, 0.65 + motionRatio * 3),
+                            name: matchedName,
+                            inRoi: true
+                        });
+                        // Play local siren / speech if unknown in restricted area
+                        if (!matchedName && (document.getElementById('chkAudioAlarm').checked || document.getElementById('chkVoiceWarning').checked)) {
+                            playAlarmSiren();
+                            playVoiceWarning(currentLang === 'fa' ? 'هشدار ورود غیرمجاز' : 'Warning: Unauthorized intrusion');
+                        }
+                    }
                 }
             }
 
@@ -1728,8 +2169,28 @@
                 cooldown: document.getElementById('cooldown').value,
                 auto: document.getElementById('chkAuto').checked,
                 onlyNew: document.getElementById('chkNew').checked,
-                remote: document.getElementById('chkRemote').checked
+                remote: document.getElementById('chkRemote').checked,
+                alertMedia: document.getElementById('selAlertMedia').value,
+                roiEnabled: document.getElementById('chkRoi').checked,
+                tripwireEnabled: document.getElementById('chkTripwire').checked,
+                audioAlarm: document.getElementById('chkAudioAlarm').checked,
+                voiceWarning: document.getElementById('chkVoiceWarning').checked,
+                loiterSec: document.getElementById('loiterSec').value,
+                roiPoints: roiPoints
             };
+            // Sync with Python backend if available
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    alert_media: cfg.alertMedia,
+                    roi_enabled: cfg.roiEnabled,
+                    tripwire_enabled: cfg.tripwireEnabled,
+                    audio_alarm: cfg.audioAlarm,
+                    loiter_sec: parseInt(cfg.loiterSec) || 10,
+                    roi_polygon: roiPoints
+                })
+            }).catch(() => {});
             try {
                 localStorage.setItem('mikotim_cfg', JSON.stringify(cfg));
                 notify(currentLang === 'fa' ? 'تنظیمات ذخیره شد' : 'Settings saved');
@@ -1748,6 +2209,13 @@
                     if (cfg.auto !== undefined) document.getElementById('chkAuto').checked = cfg.auto;
                     if (cfg.onlyNew !== undefined) document.getElementById('chkNew').checked = cfg.onlyNew;
                     if (cfg.remote !== undefined) document.getElementById('chkRemote').checked = cfg.remote;
+                    if (cfg.alertMedia) document.getElementById('selAlertMedia').value = cfg.alertMedia;
+                    if (cfg.roiEnabled !== undefined) document.getElementById('chkRoi').checked = cfg.roiEnabled;
+                    if (cfg.tripwireEnabled !== undefined) document.getElementById('chkTripwire').checked = cfg.tripwireEnabled;
+                    if (cfg.audioAlarm !== undefined) document.getElementById('chkAudioAlarm').checked = cfg.audioAlarm;
+                    if (cfg.voiceWarning !== undefined) document.getElementById('chkVoiceWarning').checked = cfg.voiceWarning;
+                    if (cfg.loiterSec) document.getElementById('loiterSec').value = cfg.loiterSec;
+                    if (cfg.roiPoints && Array.isArray(cfg.roiPoints)) roiPoints = cfg.roiPoints;
                 }
             } catch (e) {}
         }
@@ -1809,6 +2277,29 @@
             setLang('fa');
             loadConfig();
             loadProfiles();
+
+        // Periodic sync with Python Server (if server.py is running)
+        setInterval(async () => {
+            try {
+                const res = await fetch('/api/status');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.in_count !== undefined && data.out_count !== undefined) {
+                        document.getElementById('inOutVal').innerText = `${data.in_count} / ${data.out_count}`;
+                    }
+                    if (data.loitering_count !== undefined) {
+                        document.getElementById('loiterVal').innerText = data.loitering_count;
+                    }
+                    if (data.hourly_traffic && Array.isArray(data.hourly_traffic)) {
+                        hourlyTraffic = data.hourly_traffic;
+                        renderHourlyChart(hourlyTraffic);
+                    }
+                }
+            } catch (e) {}
+        }, 2500);
+
+        // Initial chart render
+        renderHourlyChart(hourlyTraffic);
         });
     </script>
 </body>
