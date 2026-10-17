@@ -1,17 +1,17 @@
 # MikoTim Sentinel Pro
 
-سامانه متن‌باز نظارت تصویری هوشمند با هسته عصبی پیشرفته **MikoVo RaRa 11 Neural Core** (توسعه‌یافته بر پایه معماری YOLO)  
-**Open-source intelligent vision surveillance powered by MikoVo RaRa 11 Neural Core (Derived from YOLO)**
+سامانه متن‌باز نظارت تصویری هوشمند با موتور پیشرفته **MikoVo RaRa 11** (توسعه‌یافته بر پایه معماری YOLO)  
+**Open-source intelligent vision surveillance powered by MikoVo RaRa 11 (Derived from YOLO)**
 
 ---
 
-## هسته عصبی MikoVo RaRa 11 Neural Core | Architecture & Deep Biometrics
+## موتور هوش مصنوعی MikoVo RaRa 11 | Architecture & Deep Biometrics
 
 > [!NOTE]  
-> **درباره MikoVo RaRa 11:** این نسخه از هوش مصنوعی پروژه با نام **MikoVo RaRa 11 Neural Core** نام‌گذاری شده و هسته پردازش پایه‌ای آن **برگرفته و توسعه‌یافته از معماری شبکه عصبی YOLO (نسخه YOLOv8)** است که با الگوریتم‌های پیشرفته بیومتریک و بینایی ماشین (بدون نیاز به پکیج‌های سنگین، ۱۰۰٪ برداری با سرعت بالای **۲۰۰ فریم بر ثانیه روی پردازنده**) مهندسی شده است.  
-> **About MikoVo RaRa 11:** The project's neural vision core, named **MikoVo RaRa 11**, is **derived and evolved directly from the YOLO architecture (YOLOv8)**, enhanced with advanced pure-NumPy/OpenCV biometrics delivering >200 FPS on CPU.
+> **درباره MikoVo RaRa 11:** این نسخه از هوش مصنوعی پروژه با نام اختصاصی **MikoVo RaRa 11** نام‌گذاری شده و هسته پردازش پایه‌ای آن **برگرفته و توسعه‌یافته از معماری شبکه عصبی YOLO (نسخه YOLOv8)** است که با الگوریتم‌های پیشرفته بیومتریک و بینایی ماشین (بدون نیاز به پکیج‌های سنگین، ۱۰۰٪ برداری با سرعت بالای **۲۰۰ فریم بر ثانیه روی پردازنده**) مهندسی شده است.  
+> **About MikoVo RaRa 11:** The project's vision engine, named **MikoVo RaRa 11**, is **derived and evolved directly from the YOLO architecture (YOLOv8)**, enhanced with advanced pure-NumPy/OpenCV biometrics delivering >200 FPS on CPU.
 
-### ارکان مهندسی و بیومتریک هسته MikoVo RaRa 11:
+### ارکان مهندسی و بیومتریک MikoVo RaRa 11:
 1. **هم‌ترازی سه‌بعدی چهره با تبدیل تشابه اومیاما (Weighted Umeyama Similarity Transform via SVD):**  
    نگاشت بهینه‌سازی‌شده کمترین مربعات برای انتقال ۵ نقطه کلیدی چهره YOLO (بینی، چشم‌ها، گوش‌ها) به مختصات استاندارد ۱۱۲×۱۱۲ با تفکیک چرخش، مقیاس و انتقال.
 2. **متعادل‌کننده نوری تطبیقی پیشرفته (Adaptive LAB CLAHE + Dynamic Exponential Gamma):**  
@@ -56,7 +56,7 @@ mikotim-sentinel-pro/
 ├── requirements.txt    # لیست وابستگی‌ها و کتابخانه‌های پایتون
 ├── README.md           # مستندات و راهنمای جامع فارسی و انگلیسی
 ├── LICENSE             # پروانه انتشار متن‌باز MIT
-└── mikovo_rara11.pt    # وزن‌ها و مدل شبکه عصبی MikoVo RaRa 11
+└── mikovo_rara11.pt    # وزن‌ها و مدل اختصاصی MikoVo RaRa 11
 ```
 
 ---
