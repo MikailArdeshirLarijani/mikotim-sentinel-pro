@@ -70,6 +70,11 @@ DEFAULT_CONFIG = {
     "loitering_enabled": True,       # Loitering detection flag
     "loitering_sec": 10,             # Loitering time threshold in seconds
     "audio_alarm": False,            # Local sound/speech alert toggle
+    "alert_trigger": "stranger_only",# "stranger_only", "all", "roi_only", "known_only"
+    "schedule_enabled": False,       # Time window scheduler
+    "schedule_start": "22:00",       # Start time (HH:MM)
+    "schedule_end": "07:00",         # End time (HH:MM)
+    "mirror_mode": False,            # Horizontal mirror flip toggle
 }
 
 def load_config():
@@ -779,6 +784,25 @@ class MikiVoVisionEngine:
         self.latest_frame = None
         self.latest_annotated_mat = None
 
+    def _is_within_schedule(self):
+        if not config.get("schedule_enabled", False):
+            return True
+        try:
+            start_str = config.get("schedule_start", "22:00")
+            end_str = config.get("schedule_end", "07:00")
+            now_dt = datetime.datetime.now()
+            cur_min = now_dt.hour * 60 + now_dt.minute
+            sh, sm = map(int, start_str.split(":"))
+            eh, em = map(int, end_str.split(":"))
+            start_min = sh * 60 + sm
+            end_min = eh * 60 + em
+            if start_min <= end_min:
+                return start_min <= cur_min <= end_min
+            else:
+                return cur_min >= start_min or cur_min <= end_min
+        except Exception:
+            return True
+
     def _is_in_roi(self, smooth_box, frame_shape):
         if not config.get("roi_enabled"):
             return True
@@ -845,11 +869,30 @@ class MikiVoVisionEngine:
                     track_ids = [d.get("track_id") for d in active_detections]
                     should_alert = True
 
-                    if config.get("only_new_person"):
+                    # 1. Active Hours Schedule Check
+                    if not self._is_within_schedule():
+                        should_alert = False
+
+                    # 2. Alert Trigger Filter
+                    if should_alert:
+                        trigger_mode = config.get("alert_trigger", "stranger_only")
                         has_unknown = any(not d.get("name") for d in active_detections)
-                        has_unreported_track = any(t not in self.reported_tracks for t in track_ids)
+                        has_known = any(bool(d.get("name")) for d in active_detections)
+                        has_roi = any(d.get("in_roi") for d in active_detections)
                         has_loitering = any(d.get("is_loitering") for d in active_detections)
-                        should_alert = has_unknown or has_unreported_track or has_loitering
+                        has_unreported_track = any(t not in self.reported_tracks for t in track_ids)
+
+                        if trigger_mode == "stranger_only":
+                            should_alert = has_unknown or has_loitering
+                        elif trigger_mode == "roi_only":
+                            should_alert = has_roi
+                        elif trigger_mode == "known_only":
+                            should_alert = has_known
+                        else:
+                            if config.get("only_new_person"):
+                                should_alert = has_unknown or has_unreported_track or has_loitering
+                            else:
+                                should_alert = True
 
                     if should_alert:
                         self.last_alert_time = now
