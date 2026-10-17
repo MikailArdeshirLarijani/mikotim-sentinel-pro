@@ -717,6 +717,559 @@ class FaceDatabase:
             return [{k: v for k, v in r.items() if k != "embedding"} for r in self.records]
 
 
+# ===================================================================
+# 2.B MikoVo RaRa 11 Liveness & Attention Sentinel (Anti-Spoofing & 3D Pose)
+# ===================================================================
+# =============================================================================
+# 0. TUNABLE CONSTANTS (calibrate against your deployment camera/dataset)
+# =============================================================================
+
+LIVENESS_PASS_THRESHOLD: float = 0.65
+
+# FFT spectral band boundaries (fraction of max radius)
+_FFT_LOW_BAND_FRAC: float = 0.10
+_FFT_HIGH_BAND_FRAC: float = 0.35
+_FFT_HIGH_RATIO_SPOOF_CEIL: float = 0.55   # ratio at/above which fft_score -> 0
+_FFT_PEAK_SCREEN_THRESHOLD: float = 9.0    # peak/mean in high band -> moire grid
+
+# Chrominance / specular constants
+_SPECULAR_V_THRESH: int = 245
+_SPECULAR_S_THRESH: int = 25
+_SPECULAR_RATIO_SPOOF_CEIL: float = 0.15
+_CHROMA_STD_NATURAL_CAP: float = 15.0
+
+# rPPG proxy constants
+_RPPG_WINDOW: int = 24           # ~1 sec @ 24 FPS sliding window
+_RPPG_MIN_FRAMES: int = 10
+_RPPG_IDEAL_STD: float = 1.0
+_RPPG_STD_TOLERANCE: float = 1.2
+
+# Head pose constants
+_POSE_ANGLE_LIMIT_DEG: float = 30.0
+_POSE_ANGLE_FALLOFF_DEG: float = 60.0
+_POSE_ROLL_LIMIT_DEG: float = 45.0
+_POSE_ROLL_FALLOFF_DEG: float = 90.0
+
+# Fusion memory constants
+_FUSION_BASE_ALPHA: float = 0.25
+_FUSION_REJECT_THRESHOLD: float = 0.30
+_FUSION_DESCRIPTOR_DIM: int = 512
+
+# Sharpness (Laplacian variance) calibration for a 112x112 crop
+_SHARPNESS_VAR_SCALE: float = 500.0
+
+# Standard anthropometric 3D canonical head model (mm), ordered as
+# [nose, left_eye, right_eye, left_ear, right_ear].
+_HEAD_MODEL_3D: np.ndarray = np.array(
+    [
+        [0.0, 0.0, 0.0],        # nose tip
+        [-35.0, 32.0, -25.0],   # left eye
+        [35.0, 32.0, -25.0],    # right eye
+        [-70.0, -10.0, -65.0],  # left ear / cheek
+        [70.0, -10.0, -65.0],   # right ear / cheek
+    ],
+    dtype=np.float64,
+)
+
+
+# =============================================================================
+# 1. RESULT DATACLASSES
+# =============================================================================
+
+@dataclass
+class LivenessResult:
+    """Detailed breakdown of the passive liveness/anti-spoofing analysis."""
+    score: float
+    is_real: bool
+    attack_type: Optional[str]           # "SCREEN_REPLAY" | "PRINT_PHOTO" | None
+    fft_score: float
+    chroma_specular_score: float
+    rppg_score: float
+    rppg_available: bool
+
+
+@dataclass
+class HeadPoseResult:
+    """3D head-pose solution and frontal-attention quality."""
+    pitch_deg: float
+    yaw_deg: float
+    roll_deg: float
+    pose_quality: float
+    success: bool
+
+
+@dataclass
+class SentinelReport:
+    """
+    Unified output of `evaluate_face_sentinel`.
+
+    Core contract fields (as specified):
+        is_live, liveness_score, is_spoof_attack, attack_type,
+        euler_angles (pitch, yaw, roll), pose_quality,
+        fused_descriptor_ready.
+
+    Additional integration-friendly fields are included for convenience
+    when wiring this module together with `mikivo_neural_core.py`.
+    """
+    is_live: bool
+    liveness_score: float
+    is_spoof_attack: bool
+    attack_type: Optional[str]
+    euler_angles: Tuple[float, float, float]
+    pose_quality: float
+    fused_descriptor_ready: bool
+    # --- bonus integration fields ---
+    sharpness_score: float = 0.0
+    quality_weight: float = 0.0
+    descriptor_fused: bool = False
+
+
+# =============================================================================
+# 2. SHARED LOW-LEVEL VECTORIZED HELPERS
+# =============================================================================
+
+@lru_cache(maxsize=4)
+def _radial_distance_grid(h: int, w: int) -> np.ndarray:
+    """
+    Precompute (and cache) a normalized radial-distance grid centered at the
+    FFT zero-frequency origin, used to build low/high frequency band masks
+    without any per-pixel Python loops.
+    """
+    cy, cx = h / 2.0, w / 2.0
+    yy, xx = np.mgrid[0:h, 0:w]
+    dist = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
+    max_r = math.hypot(cy, cx) + 1e-9
+    return dist / max_r
+
+
+def _laplacian_sharpness_score(gray: np.ndarray) -> float:
+    """Normalized [0,1] focus/sharpness score via Laplacian variance."""
+    lap = cv2.Laplacian(gray, cv2.CV_64F, ksize=3)
+    var = float(lap.var())
+    return float(np.clip(var / _SHARPNESS_VAR_SCALE, 0.0, 1.0))
+
+
+def _angle_penalty(angle_deg: float, limit: float, falloff: float) -> float:
+    """Linear penalty: 1.0 within `limit`, decaying to 0.0 over `falloff`."""
+    excess = max(0.0, abs(angle_deg) - limit)
+    return float(max(0.0, 1.0 - excess / falloff))
+
+
+# =============================================================================
+# 3. MIKOVO LIVENESS DETECTOR
+# =============================================================================
+
+class MikoVoLivenessDetector:
+    """
+    Passive, multi-spectral face anti-spoofing engine operating on a single
+    112x112 (or similarly sized) aligned BGR face crop, optionally enriched
+    with short-term temporal history per track ID for an rPPG proxy signal.
+
+    No active IR/depth sensing is required — all signals are derived
+    passively from a standard RGB/BGR camera frame.
+    """
+
+    def __init__(self, rppg_window: int = _RPPG_WINDOW) -> None:
+        self._rppg_window = rppg_window
+        self._green_history: Dict[Any, Deque[float]] = {}
+
+    # ------------------------------------------------------------------ #
+    # 3.1 Fourier Spectral Analysis
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _fft_spectral_analysis(gray: np.ndarray) -> Tuple[float, float, float]:
+        """
+        Compute the high/low radial frequency energy ratio and the spectral
+        peakiness of the high-frequency band (periodic subpixel/moire grid
+        signature), fully vectorized via `cv2.dft` + boolean band masks.
+
+        Returns
+        -------
+        (fft_score, energy_ratio, peak_ratio)
+        """
+        h, w = gray.shape
+        win = cv2.createHanningWindow((w, h), cv2.CV_32F)
+        windowed = gray.astype(np.float32) * win
+
+        dft = cv2.dft(windowed, flags=cv2.DFT_COMPLEX_OUTPUT)
+        dft_shift = np.fft.fftshift(dft, axes=(0, 1))
+        magnitude = cv2.magnitude(dft_shift[:, :, 0], dft_shift[:, :, 1])
+
+        radial = _radial_distance_grid(h, w)
+        low_mask = radial <= _FFT_LOW_BAND_FRAC
+        high_mask = radial >= _FFT_HIGH_BAND_FRAC
+
+        low_energy = float(np.sum(magnitude[low_mask] ** 2)) + 1e-9
+        high_vals = magnitude[high_mask]
+        high_energy = float(np.sum(high_vals ** 2))
+
+        energy_ratio = high_energy / low_energy
+        peak_ratio = float(high_vals.max() / (high_vals.mean() + 1e-9))
+
+        fft_score = 1.0 - np.clip(energy_ratio / _FFT_HIGH_RATIO_SPOOF_CEIL, 0.0, 1.0)
+        return float(fft_score), energy_ratio, peak_ratio
+
+    # ------------------------------------------------------------------ #
+    # 3.2 Chrominance & Specular Dispersion
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _chroma_specular_analysis(face_bgr: np.ndarray) -> Tuple[float, float]:
+        """
+        Combine YCbCr chrominance diversity (natural skin subsurface
+        scattering produces richer local color variance than flat
+        print/screen reproduction) with HSV specular-highlight dispersion
+        (large uniform bright/desaturated regions indicate glare off glass
+        or glossy paper rather than skin).
+
+        Returns
+        -------
+        (chroma_specular_score, specular_ratio)
+        """
+        ycrcb = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2YCrCb)
+        cr, cb = ycrcb[:, :, 1].astype(np.float32), ycrcb[:, :, 2].astype(np.float32)
+        chroma_std = (float(np.std(cr)) + float(np.std(cb))) / 2.0
+        chroma_score = float(np.clip(chroma_std / _CHROMA_STD_NATURAL_CAP, 0.0, 1.0))
+
+        hsv = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2HSV)
+        s_ch, v_ch = hsv[:, :, 1], hsv[:, :, 2]
+        specular_mask = (v_ch >= _SPECULAR_V_THRESH) & (s_ch <= _SPECULAR_S_THRESH)
+        specular_ratio = float(np.mean(specular_mask))
+        specular_score = 1.0 - np.clip(specular_ratio / _SPECULAR_RATIO_SPOOF_CEIL, 0.0, 1.0)
+
+        combined = 0.5 * chroma_score + 0.5 * specular_score
+        return float(combined), specular_ratio
+
+    # ------------------------------------------------------------------ #
+    # 3.3 Temporal rPPG Proxy
+    # ------------------------------------------------------------------ #
+    def _rppg_proxy_score(self, face_bgr: np.ndarray, track_id: Optional[Any]) -> Tuple[float, bool]:
+        """
+        Maintain a short rolling buffer of mean-green intensity sampled from
+        the central facial ROI (forehead/cheek region, rich in capillary
+        blood flow) and score its detrended micro-variance. A genuine live
+        face exhibits a subtle, non-zero biological pulse jitter; a static
+        photo or frozen replay frame yields near-zero variance.
+        """
+        if track_id is None:
+            return 0.5, False  # neutral — no temporal context available
+
+        h, w = face_bgr.shape[:2]
+        roi = face_bgr[int(h * 0.15):int(h * 0.55), int(w * 0.25):int(w * 0.75), 1]
+        green_mean = float(np.mean(roi))
+
+        history = self._green_history.setdefault(track_id, deque(maxlen=self._rppg_window))
+        history.append(green_mean)
+
+        if len(history) < _RPPG_MIN_FRAMES:
+            return 0.5, False
+
+        signal = np.asarray(history, dtype=np.float32)
+        detrended = signal - np.convolve(signal, np.ones(3) / 3.0, mode="same")
+        sig_std = float(np.std(detrended))
+
+        score = math.exp(-((sig_std - _RPPG_IDEAL_STD) / _RPPG_STD_TOLERANCE) ** 2)
+        return float(np.clip(score, 0.0, 1.0)), True
+
+    # ------------------------------------------------------------------ #
+    def reset_track(self, track_id: Any) -> None:
+        """Clear the rPPG temporal buffer for a track (e.g. on track loss)."""
+        self._green_history.pop(track_id, None)
+
+    def analyze(self, face_bgr: np.ndarray, track_id: Optional[Any] = None) -> LivenessResult:
+        """
+        Run the full multi-spectral liveness pipeline on a single aligned
+        face crop and return a detailed `LivenessResult`.
+        """
+        gray = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2GRAY)
+
+        fft_score, energy_ratio, peak_ratio = self._fft_spectral_analysis(gray)
+        chroma_score, specular_ratio = self._chroma_specular_analysis(face_bgr)
+        rppg_score, rppg_available = self._rppg_proxy_score(face_bgr, track_id)
+
+        if rppg_available:
+            weights = (0.40, 0.30, 0.30)
+        else:
+            weights = (0.55, 0.45, 0.0)
+
+        total_score = (
+            weights[0] * fft_score + weights[1] * chroma_score + weights[2] * rppg_score
+        )
+        total_score = float(np.clip(total_score, 0.0, 1.0))
+        is_real = total_score >= LIVENESS_PASS_THRESHOLD
+
+        attack_type: Optional[str] = None
+        if not is_real:
+            if peak_ratio >= _FFT_PEAK_SCREEN_THRESHOLD or specular_ratio >= _SPECULAR_RATIO_SPOOF_CEIL:
+                attack_type = "SCREEN_REPLAY"
+            elif energy_ratio >= _FFT_HIGH_RATIO_SPOOF_CEIL * 0.6:
+                attack_type = "PRINT_PHOTO"
+
+        return LivenessResult(
+            score=total_score,
+            is_real=is_real,
+            attack_type=attack_type,
+            fft_score=fft_score,
+            chroma_specular_score=chroma_score,
+            rppg_score=rppg_score,
+            rppg_available=rppg_available,
+        )
+
+
+# =============================================================================
+# 4. MIKOVO HEAD POSE ESTIMATOR
+# =============================================================================
+
+class MikoVoHeadPoseEstimator:
+    """
+    Solves 3D head pose (pitch, yaw, roll) from the 5 YOLOv8-pose keypoints
+    using `cv2.solvePnP`, and derives a frontal-attention quality score that
+    penalizes poses known to degrade downstream face-recognition accuracy.
+    """
+
+    def __init__(self, image_size: int = 112) -> None:
+        self.image_size = image_size
+        self._camera_matrix = np.array(
+            [
+                [image_size, 0.0, image_size / 2.0],
+                [0.0, image_size, image_size / 2.0],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float64,
+        )
+        self._dist_coeffs = np.zeros((4, 1), dtype=np.float64)
+
+    @staticmethod
+    def _rotation_matrix_to_euler(r_mat: np.ndarray) -> Tuple[float, float, float]:
+        """Decompose a rotation matrix into pitch/yaw/roll (degrees), gimbal-lock safe."""
+        sy = math.sqrt(r_mat[0, 0] ** 2 + r_mat[1, 0] ** 2)
+        singular = sy < 1e-6
+
+        if not singular:
+            pitch = math.atan2(r_mat[2, 1], r_mat[2, 2])
+            yaw = math.atan2(-r_mat[2, 0], sy)
+            roll = math.atan2(r_mat[1, 0], r_mat[0, 0])
+        else:
+            pitch = math.atan2(-r_mat[1, 2], r_mat[1, 1])
+            yaw = math.atan2(-r_mat[2, 0], sy)
+            roll = 0.0
+
+        return math.degrees(pitch), math.degrees(yaw), math.degrees(roll)
+
+    def estimate(self, kpts_5x2: np.ndarray, confs_5: Optional[np.ndarray] = None) -> HeadPoseResult:
+        """
+        Parameters
+        ----------
+        kpts_5x2 : (5, 2) keypoints in the *aligned 112x112 crop* coordinate
+                   space, ordered [nose, left_eye, right_eye, left_ear, right_ear].
+        confs_5  : optional (5,) confidences (currently used only to guard
+                   against degenerate all-zero input).
+
+        Returns
+        -------
+        HeadPoseResult
+        """
+        image_points = np.asarray(kpts_5x2, dtype=np.float64).reshape(5, 1, 2)
+
+        if confs_5 is not None and np.all(np.asarray(confs_5) < 0.05):
+            return HeadPoseResult(0.0, 0.0, 0.0, 0.0, success=False)
+
+        success, rvec, tvec = cv2.solvePnP(
+            _HEAD_MODEL_3D.reshape(5, 1, 3),
+            image_points,
+            self._camera_matrix,
+            self._dist_coeffs,
+            flags=cv2.SOLVEPNP_EPNP,
+        )
+
+        if not success:
+            success, rvec, tvec = cv2.solvePnP(
+                _HEAD_MODEL_3D.reshape(5, 1, 3),
+                image_points,
+                self._camera_matrix,
+                self._dist_coeffs,
+                flags=cv2.SOLVEPNP_ITERATIVE,
+            )
+
+        if not success:
+            return HeadPoseResult(0.0, 0.0, 0.0, 0.0, success=False)
+
+        r_mat, _ = cv2.Rodrigues(rvec)
+        pitch, yaw, roll = self._rotation_matrix_to_euler(r_mat)
+
+        yaw_penalty = _angle_penalty(yaw, _POSE_ANGLE_LIMIT_DEG, _POSE_ANGLE_FALLOFF_DEG)
+        pitch_penalty = _angle_penalty(pitch, _POSE_ANGLE_LIMIT_DEG, _POSE_ANGLE_FALLOFF_DEG)
+        roll_penalty = _angle_penalty(roll, _POSE_ROLL_LIMIT_DEG, _POSE_ROLL_FALLOFF_DEG)
+
+        pose_quality = float(np.clip(yaw_penalty * pitch_penalty * (0.85 + 0.15 * roll_penalty), 0.0, 1.0))
+
+        return HeadPoseResult(
+            pitch_deg=float(pitch),
+            yaw_deg=float(yaw),
+            roll_deg=float(roll),
+            pose_quality=pose_quality,
+            success=True,
+        )
+
+
+# =============================================================================
+# 5. MIKOVO TRACK FUSION MEMORY
+# =============================================================================
+
+class MikoVoTrackFusionMemory:
+    """
+    Maintains a quality-weighted Exponential Moving Average (EMA) of the
+    512-D identity descriptor for each active track ID, re-normalized to
+    the unit hypersphere after every update.
+
+    Low-quality observations (spoofed, blurry, extreme-pose crops) are
+    rejected outright rather than being allowed to corrupt the EMA, and
+    high-quality observations are blended in proportionally faster.
+    """
+
+    def __init__(
+        self,
+        base_alpha: float = _FUSION_BASE_ALPHA,
+        reject_threshold: float = _FUSION_REJECT_THRESHOLD,
+        descriptor_dim: int = _FUSION_DESCRIPTOR_DIM,
+    ) -> None:
+        self.base_alpha = base_alpha
+        self.reject_threshold = reject_threshold
+        self.descriptor_dim = descriptor_dim
+        self._memory: Dict[Any, np.ndarray] = {}
+        self._observation_count: Dict[Any, int] = {}
+
+    @staticmethod
+    def compute_quality_weight(
+        liveness_score: float, pose_quality: float, sharpness_score: float
+    ) -> float:
+        """Combined acceptance weight in [0,1] used to gate/scale EMA updates."""
+        return float(np.clip(liveness_score * pose_quality * sharpness_score, 0.0, 1.0))
+
+    def update(self, track_id: Any, descriptor_512d: np.ndarray, quality_weight: float) -> bool:
+        """
+        Fuse a new descriptor observation into the track's identity memory.
+
+        Returns
+        -------
+        bool — True if the observation was accepted and fused, False if it
+        was rejected (quality below `reject_threshold`, e.g. a spoof attempt
+        or a blurred/extreme-pose crop).
+        """
+        descriptor_512d = np.asarray(descriptor_512d, dtype=np.float32)
+        if descriptor_512d.shape[-1] != self.descriptor_dim:
+            raise ValueError(
+                f"Expected a {self.descriptor_dim}-D descriptor, got {descriptor_512d.shape[-1]}."
+            )
+
+        if quality_weight < self.reject_threshold:
+            return False
+
+        norm = np.linalg.norm(descriptor_512d) + 1e-9
+        descriptor_512d = descriptor_512d / norm
+
+        if track_id not in self._memory:
+            self._memory[track_id] = descriptor_512d.copy()
+            self._observation_count[track_id] = 1
+            return True
+
+        effective_alpha = float(np.clip(self.base_alpha * quality_weight, 0.0, 1.0))
+        fused = (1.0 - effective_alpha) * self._memory[track_id] + effective_alpha * descriptor_512d
+        fused_norm = np.linalg.norm(fused) + 1e-9
+        self._memory[track_id] = (fused / fused_norm).astype(np.float32)
+        self._observation_count[track_id] += 1
+        return True
+
+    def get(self, track_id: Any) -> Optional[np.ndarray]:
+        """Return the current fused unit-norm descriptor for a track, if any."""
+        return self._memory.get(track_id)
+
+    def observation_count(self, track_id: Any) -> int:
+        """Number of accepted (non-rejected) observations fused for a track."""
+        return self._observation_count.get(track_id, 0)
+
+    def reset(self, track_id: Any) -> None:
+        """Drop a track's identity memory (e.g. on track termination)."""
+        self._memory.pop(track_id, None)
+        self._observation_count.pop(track_id, None)
+
+
+# =============================================================================
+# 6. TOP-LEVEL FACADE
+# =============================================================================
+
+_DEFAULT_LIVENESS_DETECTOR = MikoVoLivenessDetector()
+_DEFAULT_POSE_ESTIMATOR = MikoVoHeadPoseEstimator(image_size=112)
+_DEFAULT_FUSION_MEMORY = MikoVoTrackFusionMemory()
+
+
+def evaluate_face_sentinel(
+    aligned_112x112_bgr: np.ndarray,
+    kpts_5x2: np.ndarray,
+    confs_5: np.ndarray,
+    track_id: Optional[Any] = None,
+    descriptor_512d: Optional[np.ndarray] = None,
+    liveness_detector: MikoVoLivenessDetector = _DEFAULT_LIVENESS_DETECTOR,
+    pose_estimator: MikoVoHeadPoseEstimator = _DEFAULT_POSE_ESTIMATOR,
+    fusion_memory: MikoVoTrackFusionMemory = _DEFAULT_FUSION_MEMORY,
+) -> SentinelReport:
+    """
+    Clean top-level facade: run liveness analysis, 3D head-pose profiling,
+    and (optionally) quality-weighted descriptor fusion, in a single call.
+
+    Parameters
+    ----------
+    aligned_112x112_bgr : (112, 112, 3) BGR aligned face crop.
+    kpts_5x2            : (5, 2) keypoints [nose, left_eye, right_eye,
+                           left_ear, right_ear] in the aligned-crop space.
+    confs_5             : (5,) keypoint confidences.
+    track_id            : optional tracker identity, enabling temporal
+                           rPPG analysis and descriptor fusion continuity.
+    descriptor_512d     : optional 512-D face descriptor (e.g. produced by
+                           `mikivo_neural_core.MikiVoFeatureExtractor`). If
+                           provided, it is fused into `fusion_memory` under
+                           `track_id`, gated by the computed quality weight.
+
+    Returns
+    -------
+    SentinelReport
+    """
+    gray = cv2.cvtColor(aligned_112x112_bgr, cv2.COLOR_BGR2GRAY)
+
+    liveness = liveness_detector.analyze(aligned_112x112_bgr, track_id=track_id)
+    pose = pose_estimator.estimate(kpts_5x2, confs_5)
+    sharpness = _laplacian_sharpness_score(gray)
+
+    quality_weight = MikoVoTrackFusionMemory.compute_quality_weight(
+        liveness.score, pose.pose_quality, sharpness
+    )
+
+    fused_descriptor_ready = (
+        liveness.is_real and pose.success and quality_weight >= fusion_memory.reject_threshold
+    )
+
+    descriptor_fused = False
+    if descriptor_512d is not None and track_id is not None:
+        descriptor_fused = fusion_memory.update(track_id, descriptor_512d, quality_weight)
+
+    return SentinelReport(
+        is_live=liveness.is_real,
+        liveness_score=liveness.score,
+        is_spoof_attack=not liveness.is_real,
+        attack_type=liveness.attack_type,
+        euler_angles=(pose.pitch_deg, pose.yaw_deg, pose.roll_deg),
+        pose_quality=pose.pose_quality,
+        fused_descriptor_ready=fused_descriptor_ready,
+        sharpness_score=sharpness,
+        quality_weight=quality_weight,
+        descriptor_fused=descriptor_fused,
+    )
+
+
+# =============================================================================
+# 7. SELF-TEST / BENCHMARK
+# =============================================================================
+
+
 class MikoVoRaRa11VisionEngine:
     """
     MikoVo RaRa 11 Autonomous AI Vision Core:
@@ -933,7 +1486,22 @@ class MikoVoRaRa11VisionEngine:
                     aligned_face, emb, align_res = mikovo_rara11_extract_face_descriptor(
                         frame, (x1, y1, bw, bh), kp_pts, kp_conf
                     )
-                    name, match_score = self.db.find_match(emb)
+
+                    # MikoVo RaRa 11 Liveness & Head Pose Sentinel
+                    sentinel = evaluate_face_sentinel(
+                        aligned_face,
+                        align_res.canonical_keypoints,
+                        kp_conf if kp_conf is not None else np.ones(5),
+                        liveness_detector=self.liveness_detector,
+                        pose_estimator=self.pose_estimator,
+                        fusion_memory=self.fusion_memory
+                    )
+
+                    # If spoof attack detected, reject authentication!
+                    if sentinel.is_spoof_attack:
+                        name, match_score = None, 0.0
+                    else:
+                        name, match_score = self.db.find_match(emb)
 
                     detections.append({
                         "bbox": [x1, y1, bw, bh],
@@ -943,6 +1511,13 @@ class MikoVoRaRa11VisionEngine:
                         "embedding": emb,
                         "face_crop": aligned_face,
                         "kpts": kp_pts,
+                        "sentinel": sentinel,
+                        "is_live": sentinel.is_live,
+                        "liveness_score": sentinel.liveness_score,
+                        "is_spoof": sentinel.is_spoof_attack,
+                        "attack_type": sentinel.attack_type,
+                        "euler_angles": sentinel.euler_angles,
+                        "pose_quality": sentinel.pose_quality,
                     })
         return detections
 
@@ -979,7 +1554,11 @@ class MikoVoRaRa11VisionEngine:
             is_loiter = det.get("is_loitering", False)
             in_roi = det.get("in_roi", True)
 
-            if is_loiter:
+            is_spoof = det.get("is_spoof", False)
+            attack_type = det.get("attack_type")
+            if is_spoof:
+                color = (0, 0, 255) # Alert Red for Spoof Attacks
+            elif is_loiter:
                 color = (0, 0, 255) # Warning Red
             elif not in_roi:
                 color = (120, 120, 120) # Outside Zone Grey
@@ -1007,9 +1586,16 @@ class MikoVoRaRa11VisionEngine:
                 cv2.circle(frame, (nx, ny), 3, color, -1)
 
             # Label pill
-            prefix = "LOITERING! " if is_loiter else ""
+            if is_spoof:
+                prefix = f"SPOOF ALERT! ({attack_type or 'Fake Face'}) "
+            elif is_loiter:
+                prefix = "LOITERING! "
+            else:
+                prefix = ""
+            live_pct = int(det.get("liveness_score", 1.0) * 100)
+            live_txt = f" [Live: {live_pct}%]" if not is_spoof else " [FAKE]"
             id_txt = f"{name} ({det.get('match_score', 0.94)*100:.0f}%)" if name else f"Unknown ({det['score']*100:.0f}%)"
-            label = f"MikoVo RaRa 11 #{tid} | {prefix}{id_txt}"
+            label = f"MikoVo RaRa 11 #{tid} | {prefix}{id_txt}{live_txt}"
 
             (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1)
             ly = max(24, y - 8)
@@ -1045,11 +1631,20 @@ class MikoVoRaRa11VisionEngine:
         custom_cap = config.get("custom_caption", "هشدار تردد MikoVo RaRa 11")
 
         state["stats"]["total_captures"] += 1
+        has_spoof = any(d.get("is_spoof") for d in detections)
+        if has_spoof:
+            spoof_types = [d.get("attack_type") or "تصویر جعلی" for d in detections if d.get("is_spoof")]
+            custom_cap = f"🚨 هشدار ضدتقلب MikoVo RaRa 11: تلاش برای دور زدن بیومتریک با {', '.join(spoof_types)} شناسایی و دفع شد!"
+
+        names_str = ", ".join(identified) if identified else "ناشناس"
+        if has_spoof:
+            names_str = f"🚨 جعل چهره ({', '.join(spoof_types)})"
+
         log_entry = {
             "id": int(time.time() * 1000),
             "time": datetime.now().strftime("%H:%M:%S"),
             "persons": count,
-            "names": ", ".join(identified) if identified else "ناشناس",
+            "names": names_str,
             "type": "ویدیو MP4" if config.get("alert_media") == "video" else "عکس JPG",
             "telegram": "در حال ارسال...",
         }
@@ -1082,6 +1677,8 @@ class MikoVoRaRa11VisionEngine:
         if not self.latest_frame or not self.last_detections:
             return False, "شخصی در کادر تصویر تشخیص داده نشد"
         det = self.last_detections[0]
+        if det.get("is_spoof"):
+            return False, "خطای امنیتی: تصویر زنده نیست (تلاش برای ثبت عکس چاپی یا صفحه نمایش)!"
         crop = det.get("face_crop")
         if crop is None or crop.size == 0:
             return False, "برش چهره معتبر نیست"
@@ -1283,20 +1880,27 @@ def video_feed():
     return Response(gen(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 @app.route("/api/mikivo/info")
+@app.route("/api/mikovo/info")
 def api_mikivo_info():
     return jsonify(
         engine="MikoVo RaRa 11 AI Neural Vision Core",
         origin="Derived & Evolved from YOLOv8 Architecture",
-        version="3.5.0-edge-pro",
+        version="4.0.0-sentinel-pro",
         descriptor_dim=512,
         alignment="SVD Weighted Umeyama Similarity Transform",
         illumination="LAB CLAHE + Dynamic Exponential Gamma Compensator",
+        liveness="Multi-Spectral Passive Anti-Spoofing (2D FFT + YCrCb/HSV + rPPG)",
+        head_pose="3D-to-2D PnP Euler Solver (Pitch/Yaw/Roll Attention Profiling)",
+        fusion="Quality-Weighted EMA Track Hypersphere Memory",
         tracker="8-State Constant-Velocity Kalman with Mahalanobis Outlier Gating",
         features=[
             "Canonical 112x112 3D-Aware Facial Rectification",
             "512-D L2-Normalized Metric Hypersphere Embeddings",
             "Multi-Scale Scharr Orientation Histograms",
             "Multi-Radius Uniform Local Binary Patterns (ULBP)",
+            "Multi-Spectral Passive Face Anti-Spoofing (Screen/Print Attack Detection)",
+            "3D Head Pose & Attention Profiling (PnP Euler Angles)",
+            "Quality-Weighted EMA Track Descriptor Fusion",
             "8-State Kalman Filter Tracking with Mahalanobis Gating",
             "Sliding-Window Identity Majority Voting",
             "Virtual Restricted Zone (ROI) & Directional Tripwire",
