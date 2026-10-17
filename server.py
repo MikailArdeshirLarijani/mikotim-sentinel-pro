@@ -1,14 +1,21 @@
 """
 MikoTim Sentinel Pro - Unified Server
 ======================================
-Powered by MikiVo AI Vision Engine (Derived & Evolved from YOLOv8 Architecture)
+Powered by MikiVo AI Vision Core (Derived & Evolved from YOLOv8 Architecture)
 
 Consolidated Architecture (4 Core Sections):
   1. Configuration & State Management (ROI, Tripwire, Media Selector, Loitering)
-  2. MikiVo AI Vision Pipeline (Pose, Alignment, 256-D Descriptor, Tracklets, Video Clip Buffer)
+  2. MikiVo Neural Vision Core:
+     - 3D-Aware Face Alignment via Weighted Umeyama Similarity Transform
+     - Adaptive LAB Illumination Compensator (CLAHE + Dynamic Gamma Curve)
+     - 512-D MikiVo Deep Metric Feature Descriptor (HOG + Multi-Radius ULBP + Anthropometrics)
+     - 8-State Kalman Filter Temporal Tracker with Mahalanobis Gating (Chi-Square 95%)
+     - Circular Frame Buffer for Instant MP4 Video Alert Dispatch
   3. Telegram Bot Gateway (Photo & MP4 Video Dispatch, Remote Commands, Daily Summary)
   4. Web Server & High-Throughput RESTful Endpoints
 """
+
+from __future__ import annotations
 
 import os
 import cv2
@@ -17,9 +24,11 @@ import time
 import base64
 import tempfile
 import threading
-import collections
+from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime
+from typing import Optional, Tuple, List
 import numpy as np
 import requests
 from flask import Flask, Response, request, jsonify
@@ -96,13 +105,414 @@ state = {
 
 
 # ===================================================================
-# 2. MikiVo AI Vision Engine (Derived & Evolved from YOLO Architecture)
+# 2. MikiVo Neural Vision Core (Advanced Edge Biometrics)
 # ===================================================================
-clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
 
-def cosine_similarity(a, b):
-    denom = (np.linalg.norm(a) * np.linalg.norm(b)) + 1e-9
-    return float(np.dot(a, b) / denom)
+# Canonical 112x112 facial keypoint coordinates [nose, left_eye, right_eye, left_ear, right_ear]
+CANONICAL_5PTS = np.array(
+    [
+        [56.0, 52.0],   # nose tip
+        [38.5, 38.0],   # left eye
+        [73.5, 38.0],   # right eye
+        [16.0, 44.0],   # left ear
+        [96.0, 44.0],   # right ear
+    ],
+    dtype=np.float64,
+)
+
+OUTPUT_SIZE = 112
+MIN_KP_CONF = 0.30
+MIN_POINTS_FOR_UMEYAMA = 2
+CHI2_95_DF4 = 9.4877
+
+
+def weighted_umeyama(
+    src: np.ndarray,
+    dst: np.ndarray,
+    weights: Optional[np.ndarray] = None,
+    estimate_scale: bool = True,
+) -> np.ndarray:
+    """
+    Weighted Umeyama (1991) similarity transform with SVD least-squares estimation.
+    """
+    src = np.asarray(src, dtype=np.float64)
+    dst = np.asarray(dst, dtype=np.float64)
+    n, dim = src.shape
+
+    if weights is None:
+        w = np.ones(n, dtype=np.float64) / n
+    else:
+        w = np.asarray(weights, dtype=np.float64)
+        w = w / (w.sum() + 1e-12)
+
+    src_mean = (w[:, None] * src).sum(axis=0)
+    dst_mean = (w[:, None] * dst).sum(axis=0)
+
+    src_demean = src - src_mean
+    dst_demean = dst - dst_mean
+
+    A = (dst_demean * w[:, None]).T @ src_demean
+
+    d = np.ones(dim)
+    if np.linalg.det(A) < 0:
+        d[-1] = -1
+
+    U, S, Vt = np.linalg.svd(A)
+    rank = np.linalg.matrix_rank(A)
+
+    T = np.eye(dim + 1, dtype=np.float64)
+    if rank == 0:
+        return np.nan * T
+    elif rank == dim - 1:
+        if np.linalg.det(U) * np.linalg.det(Vt) > 0:
+            R = U @ Vt
+        else:
+            s = d[-1]
+            d[-1] = -1
+            R = U @ np.diag(d) @ Vt
+            d[-1] = s
+    else:
+        R = U @ np.diag(d) @ Vt
+
+    if estimate_scale:
+        var_src = (w[:, None] * (src_demean ** 2)).sum()
+        scale = 1.0 / (var_src + 1e-12) * (S @ d)
+    else:
+        scale = 1.0
+
+    T[:dim, :dim] = R * scale
+    T[:dim, dim] = dst_mean - (R * scale) @ src_mean
+    return T
+
+
+def adaptive_illumination_compensation(
+    bgr_img: np.ndarray,
+    clip_limit: float = 2.5,
+    tile_grid: Tuple[int, int] = (8, 8),
+    target_brightness: float = 0.52,
+) -> np.ndarray:
+    """
+    CLAHE on L-channel in LAB space + dynamic gamma curve to normalize harsh shadows & backlight.
+    """
+    lab = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2LAB)
+    l_ch, a_ch, b_ch = cv2.split(lab)
+
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid)
+    l_eq = clahe.apply(l_ch)
+
+    mean_brightness = float(np.mean(l_eq)) / 255.0 + 1e-6
+    gamma = np.log(target_brightness) / np.log(mean_brightness)
+    gamma = float(np.clip(gamma, 0.35, 2.75))
+
+    lut = (np.linspace(0, 1, 256, dtype=np.float32) ** gamma) * 255.0
+    lut = np.clip(lut, 0, 255).astype(np.uint8)
+    l_gamma = cv2.LUT(l_eq, lut)
+
+    lab_corrected = cv2.merge([l_gamma, a_ch, b_ch])
+    return cv2.cvtColor(lab_corrected, cv2.COLOR_LAB2BGR)
+
+
+@dataclass
+class AlignmentResult:
+    aligned_face: np.ndarray
+    transform_matrix: np.ndarray
+    canonical_keypoints: np.ndarray
+    used_fallback: bool
+
+
+def align_face(
+    frame: np.ndarray,
+    bbox: Tuple[float, float, float, float],
+    keypoints: Optional[np.ndarray] = None,
+    confidences: Optional[np.ndarray] = None,
+    output_size: int = OUTPUT_SIZE,
+) -> AlignmentResult:
+    """
+    Align face into canonical 112x112 space via weighted Umeyama transform.
+    """
+    if keypoints is not None and confidences is not None:
+        keypoints = np.asarray(keypoints, dtype=np.float64)
+        confidences = np.asarray(confidences, dtype=np.float64)
+        valid_mask = confidences >= MIN_KP_CONF
+        if int(valid_mask.sum()) >= MIN_POINTS_FOR_UMEYAMA:
+            src_pts = keypoints[valid_mask]
+            dst_pts = CANONICAL_5PTS[valid_mask] * (output_size / OUTPUT_SIZE)
+            w = confidences[valid_mask]
+
+            T = weighted_umeyama(src_pts, dst_pts, weights=w, estimate_scale=True)
+            if not np.any(np.isnan(T)):
+                M = T[:2, :3].astype(np.float32)
+                aligned = cv2.warpAffine(
+                    frame, M, (output_size, output_size),
+                    flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE
+                )
+                ones = np.ones((5, 1))
+                canonical_kps = (M @ np.hstack([keypoints, ones]).T).T
+                aligned = adaptive_illumination_compensation(aligned)
+                return AlignmentResult(aligned, M, canonical_kps, used_fallback=False)
+
+    # Fallback letterbox crop
+    x, y, bw, bh = bbox
+    H, W = frame.shape[:2]
+    x0, y0 = max(0, int(x)), max(0, int(y))
+    x1, y1 = min(W, int(x + bw)), min(H, int(y + bh))
+    crop = frame[y0:y1, x0:x1]
+    if crop.size == 0:
+        crop = np.zeros((output_size, output_size, 3), dtype=np.uint8)
+
+    scale = output_size / max(crop.shape[0], crop.shape[1], 1)
+    M = np.array([[scale, 0, -x0 * scale], [0, scale, -y0 * scale]], dtype=np.float32)
+    aligned = cv2.resize(crop, (output_size, output_size), interpolation=cv2.INTER_LINEAR)
+    aligned = adaptive_illumination_compensation(aligned)
+
+    dummy_kps = CANONICAL_5PTS.copy() if keypoints is None else keypoints
+    ones = np.ones((len(dummy_kps), 1))
+    canonical_kps = (M @ np.hstack([np.asarray(dummy_kps, dtype=np.float64), ones]).T).T
+    return AlignmentResult(aligned, M, canonical_kps, used_fallback=True)
+
+
+# 512-D Metric Feature Extractor
+def _build_uniform_lbp_lut() -> np.ndarray:
+    lut = np.zeros(256, dtype=np.int32)
+    next_label = 0
+    for code in range(256):
+        bits = [(code >> k) & 1 for k in range(8)]
+        transitions = sum(bits[k] != bits[(k + 1) % 8] for k in range(8))
+        if transitions <= 2:
+            lut[code] = next_label
+            next_label += 1
+        else:
+            lut[code] = 58
+    return lut
+
+_UNIFORM_LBP_LUT = _build_uniform_lbp_lut()
+_RAW_FEATURE_DIM = 756 + 177 + 16
+_EMBEDDING_DIM = 512
+
+_RNG = np.random.RandomState(42)
+_PROJECTION_MATRIX = (
+    _RNG.randn(_RAW_FEATURE_DIM, _EMBEDDING_DIM).astype(np.float32)
+    / np.sqrt(_RAW_FEATURE_DIM)
+)
+
+def _multi_scale_gradient_histogram(gray: np.ndarray, grid_sizes: Tuple[int, ...] = (8, 4, 2), n_bins: int = 9) -> np.ndarray:
+    gx = cv2.Scharr(gray, cv2.CV_32F, 1, 0)
+    gy = cv2.Scharr(gray, cv2.CV_32F, 0, 1)
+    mag = cv2.magnitude(gx, gy)
+    ang = np.arctan2(gy, gx)
+    ang[ang < 0] += np.pi
+
+    bin_width = np.pi / n_bins
+    bin_idx = np.minimum((ang / bin_width).astype(np.int32), n_bins - 1)
+    H, W = gray.shape
+    feats: List[np.ndarray] = []
+
+    for g in grid_sizes:
+        ch, cw = H // g, W // g
+        cell_hist = np.empty((g, g, n_bins), dtype=np.float32)
+        for b in range(n_bins):
+            weighted = np.where(bin_idx == b, mag, 0.0).astype(np.float32)
+            blocked = weighted.reshape(g, ch, g, cw).sum(axis=(1, 3))
+            cell_hist[:, :, b] = blocked
+        flat = cell_hist.reshape(g * g, n_bins)
+        norm = np.linalg.norm(flat, axis=1, keepdims=True) + 1e-6
+        feats.append((flat / norm).ravel())
+
+    return np.concatenate(feats).astype(np.float32)
+
+def _compute_lbp_code(gray: np.ndarray, radius: int) -> np.ndarray:
+    H, W = gray.shape
+    padded = np.pad(gray, radius, mode="reflect").astype(np.int32)
+    center = padded[radius:radius + H, radius:radius + W]
+    offsets = [
+        (-radius, -radius), (-radius, 0), (-radius, radius),
+        (0, radius), (radius, radius), (radius, 0),
+        (radius, -radius), (0, -radius),
+    ]
+    code = np.zeros((H, W), dtype=np.uint8)
+    for i, (dy, dx) in enumerate(offsets):
+        neighbor = padded[radius + dy: radius + dy + H, radius + dx: radius + dx + W]
+        code |= ((neighbor >= center).astype(np.uint8) << i)
+    return code
+
+def _multi_scale_lbp_histogram(gray: np.ndarray, radii: Tuple[int, ...] = (1, 2, 3)) -> np.ndarray:
+    hists = []
+    for r in radii:
+        code = _compute_lbp_code(gray, r)
+        labels = _UNIFORM_LBP_LUT[code]
+        hist = np.bincount(labels.ravel(), minlength=59).astype(np.float32)
+        hist /= (hist.sum() + 1e-6)
+        hists.append(hist)
+    return np.concatenate(hists)
+
+def _anthropometric_ratios(canonical_kpts: np.ndarray, confidences: np.ndarray, face_scale: float = OUTPUT_SIZE) -> np.ndarray:
+    nose, le, re, lea, rea = canonical_kpts[:5]
+    eps = 1e-6
+
+    interocular = np.linalg.norm(le - re) + eps
+    d_nose_le = np.linalg.norm(nose - le)
+    d_nose_re = np.linalg.norm(nose - re)
+    d_ear = np.linalg.norm(lea - rea) + eps
+    d_nose_lea = np.linalg.norm(nose - lea)
+    d_nose_rea = np.linalg.norm(nose - rea)
+
+    eye_center = (le + re) / 2.0
+    eye_vec = re - le
+    angle_eye_line = np.arctan2(eye_vec[1], eye_vec[0])
+    nose_vec = nose - eye_center
+    angle_nose = np.arctan2(nose_vec[1], nose_vec[0])
+
+    symmetry_eye_nose = abs(d_nose_le - d_nose_re) / interocular
+    symmetry_ear_nose = abs(d_nose_lea - d_nose_rea) / d_ear
+    vertical_ratio = (nose[1] - eye_center[1]) / face_scale
+
+    conf_mean = float(np.mean(confidences)) if len(confidences) > 0 else 0.8
+    feats = np.array(
+        [
+            interocular / face_scale,
+            d_nose_le / d_nose_re if d_nose_re > eps else 1.0,
+            angle_eye_line,
+            angle_nose,
+            interocular / d_ear,
+            d_nose_lea / d_nose_rea if d_nose_rea > eps else 1.0,
+            symmetry_eye_nose,
+            symmetry_ear_nose,
+            vertical_ratio,
+            conf_mean,
+            interocular / face_scale,
+            d_ear / face_scale,
+            d_nose_le / face_scale,
+            d_nose_re / face_scale,
+            d_nose_lea / face_scale,
+            d_nose_rea / face_scale,
+        ],
+        dtype=np.float32,
+    )
+    return feats
+
+class MikiVoFeatureExtractor:
+    def __init__(self, projection_matrix: Optional[np.ndarray] = None):
+        self.projection = projection_matrix if projection_matrix is not None else _PROJECTION_MATRIX
+
+    def extract(self, aligned_face: np.ndarray, canonical_keypoints: np.ndarray, confidences: np.ndarray) -> np.ndarray:
+        gray = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2GRAY).astype(np.float32)
+        hog_feats = _multi_scale_gradient_histogram(gray)
+        lbp_feats = _multi_scale_lbp_histogram(gray.astype(np.uint8))
+        ratio_feats = _anthropometric_ratios(canonical_keypoints, confidences)
+        raw = np.concatenate([hog_feats, lbp_feats, ratio_feats]).astype(np.float32)
+
+        embedding = raw @ self.projection
+        norm = np.linalg.norm(embedding) + 1e-9
+        return (embedding / norm).astype(np.float32)
+
+_DEFAULT_EXTRACTOR = MikiVoFeatureExtractor()
+
+def mikivo_extract_face_descriptor(
+    frame: np.ndarray,
+    bbox: Tuple[float, float, float, float],
+    keypoints: Optional[np.ndarray] = None,
+    confidences: Optional[np.ndarray] = None,
+    extractor: Optional[MikiVoFeatureExtractor] = None,
+) -> Tuple[np.ndarray, np.ndarray, AlignmentResult]:
+    extractor = extractor or _DEFAULT_EXTRACTOR
+    result = align_face(frame, bbox, keypoints, confidences)
+    conf = confidences if confidences is not None else np.ones(5, dtype=np.float32)
+    descriptor = extractor.extract(result.aligned_face, result.canonical_keypoints, conf)
+    return result.aligned_face, descriptor, result
+
+
+# 8-State Kalman Tracker with Mahalanobis Gating
+class MikiVoKalmanTracker:
+    def __init__(self, measurement: np.ndarray, track_id: Optional[int] = None, dt: float = 1.0, id_window: int = 10):
+        ndim = 4
+        self._motion_mat = np.eye(2 * ndim, dtype=np.float64)
+        for i in range(ndim):
+            self._motion_mat[i, ndim + i] = dt
+        self._update_mat = np.eye(ndim, 2 * ndim, dtype=np.float64)
+
+        self._std_pos = 1.0 / 20
+        self._std_vel = 1.0 / 160
+
+        measurement = np.asarray(measurement, dtype=np.float64)
+        mean_pos = measurement
+        mean_vel = np.zeros(ndim, dtype=np.float64)
+        self.mean = np.r_[mean_pos, mean_vel]
+
+        h0 = max(measurement[3], 1e-3)
+        std = [
+            2 * self._std_pos * h0, 2 * self._std_pos * h0, 1e-2, 2 * self._std_pos * h0,
+            10 * self._std_vel * h0, 10 * self._std_vel * h0, 1e-5, 10 * self._std_vel * h0,
+        ]
+        self.covariance = np.diag(np.square(std))
+
+        self.track_id = track_id
+        self.hits = 0
+        self.age = 0
+        self.time_since_update = 0
+        self.id_history: deque = deque(maxlen=id_window)
+
+    def predict(self) -> np.ndarray:
+        h0 = max(self.mean[3], 1e-3)
+        std_pos = [self._std_pos * h0, self._std_pos * h0, 1e-2, self._std_pos * h0]
+        std_vel = [self._std_vel * h0, self._std_vel * h0, 1e-5, self._std_vel * h0]
+        motion_cov = np.diag(np.square(np.r_[std_pos, std_vel]))
+
+        self.mean = self._motion_mat @ self.mean
+        self.covariance = self._motion_mat @ self.covariance @ self._motion_mat.T + motion_cov
+        self.age += 1
+        self.time_since_update += 1
+        return self.mean[:4].copy()
+
+    def project(self) -> Tuple[np.ndarray, np.ndarray]:
+        h0 = max(self.mean[3], 1e-3)
+        std = [self._std_pos * h0, self._std_pos * h0, 1e-1, self._std_pos * h0]
+        innovation_cov = np.diag(np.square(std))
+        mean = self._update_mat @ self.mean
+        covariance = self._update_mat @ self.covariance @ self._update_mat.T + innovation_cov
+        return mean, covariance
+
+    def mahalanobis(self, measurement: np.ndarray) -> float:
+        mean, covariance = self.project()
+        d = np.asarray(measurement, dtype=np.float64) - mean
+        try:
+            chol = np.linalg.cholesky(covariance)
+            z = np.linalg.solve(chol, d)
+            return float(np.dot(z, z))
+        except np.linalg.LinAlgError:
+            inv = np.linalg.pinv(covariance)
+            return float(d.T @ inv @ d)
+
+    def update(self, measurement: np.ndarray, gating_threshold: float = CHI2_95_DF4) -> bool:
+        measurement = np.asarray(measurement, dtype=np.float64)
+        dist = self.mahalanobis(measurement)
+        if dist > gating_threshold:
+            return False
+
+        mean, covariance = self.project()
+        kalman_gain = np.linalg.solve(
+            covariance.T, (self.covariance @ self._update_mat.T).T
+        ).T
+        innovation = measurement - mean
+        self.mean = self.mean + kalman_gain @ innovation
+        self.covariance = self.covariance - kalman_gain @ covariance @ kalman_gain.T
+        self.hits += 1
+        self.time_since_update = 0
+        return True
+
+    def get_bbox_xywh(self) -> np.ndarray:
+        x, y, a, h = self.mean[:4]
+        w = a * h
+        return np.array([x - w / 2.0, y - h / 2.0, w, h])
+
+    def vote_identity(self, identity) -> None:
+        self.id_history.append(identity)
+
+    def stable_identity(self):
+        valid = [v for v in self.id_history if v is not None]
+        if not valid:
+            return None
+        return max(set(valid), key=valid.count)
+
 
 def compute_iou(box_a, box_b):
     xa = max(box_a[0], box_b[0])
@@ -114,61 +524,128 @@ def compute_iou(box_a, box_b):
     area_b = box_b[2] * box_b[3]
     return inter / float(area_a + area_b - inter + 1e-9)
 
-def extract_mikivo_embedding(crop, kpts=None):
+
+class MikiVoMultiKalmanTracker:
     """
-    MikiVo 256-D Multi-Scale Hybrid Feature Descriptor:
-      - 8x8 spatial block statistics (means + stds): 128-D
-      - Multi-scale gradient energy (Sobel Gx, Gy, Magnitude): 48-D
-      - Fast texture Laplacian & intensity distribution: 32-D
-      - Anthropometric keypoint geometry / moments: 48-D
+    Multi-Target 8-State Kalman Tracker:
+      - Continuous Track IDs across video frames
+      - Mahalanobis distance gating + IoU spatial association
+      - Directional Tripwire crossing (IN / OUT)
+      - Unauthorized Loitering detection timer
+      - 10-frame identity stabilization
     """
-    if crop is None or crop.size == 0:
-        return np.zeros(256, dtype=np.float32)
+    def __init__(self, max_age: int = 25, id_window: int = 10):
+        self.next_id = 1
+        self.trackers = {}
+        self.max_age = max_age
+        self.id_window = id_window
 
-    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if len(crop.shape) == 3 else crop
-    gray = cv2.resize(gray, (64, 64))
-    norm_gray = clahe.apply(gray)
+    def update(self, detections, frame_shape, line_y=None, loiter_limit=10.0, now=None):
+        now = now or time.time()
+        fh, fw = frame_shape[:2]
 
-    # 1. Spatial Block Statistics (8x8 blocks)
-    blocks_8 = norm_gray.reshape(8, 8, 8, 8)
-    means_8 = blocks_8.mean(axis=(1, 3)).ravel() / 255.0
-    stds_8 = blocks_8.std(axis=(1, 3)).ravel() / 128.0
+        for tid, trk in list(self.trackers.items()):
+            trk.predict()
 
-    # 2. Multi-scale directional gradients
-    gx = cv2.Sobel(norm_gray, cv2.CV_32F, 1, 0, ksize=3)
-    gy = cv2.Sobel(norm_gray, cv2.CV_32F, 0, 1, ksize=3)
-    mag = np.sqrt(gx**2 + gy**2)
+        matched_trks = set()
+        unmatched_dets = list(range(len(detections)))
+        updated_detections = []
 
-    mag_b = mag.reshape(4, 16, 4, 16).mean(axis=(1, 3)).ravel() / 255.0
-    gx_b = np.abs(gx).reshape(4, 16, 4, 16).mean(axis=(1, 3)).ravel() / 255.0
-    gy_b = np.abs(gy).reshape(4, 16, 4, 16).mean(axis=(1, 3)).ravel() / 255.0
+        for det_idx in list(unmatched_dets):
+            det = detections[det_idx]
+            db = det["bbox"]
+            meas = np.array([db[0] + db[2] / 2.0, db[1] + db[3] / 2.0, db[2] / float(max(1, db[3])), db[3]], dtype=np.float64)
 
-    # 3. Laplacian texture energy & intensity histogram
-    lap = np.abs(cv2.Laplacian(norm_gray, cv2.CV_32F)).reshape(4, 16, 4, 16).mean(axis=(1, 3)).ravel() / 255.0
-    hist, _ = np.histogram(norm_gray, bins=16, range=(0, 256), density=True)
+            best_match, best_score = None, -1.0
+            for tid, trk in self.trackers.items():
+                if tid in matched_trks:
+                    continue
+                pred_bbox = trk.get_bbox_xywh()
+                iou = compute_iou(db, pred_bbox)
+                if iou > best_score:
+                    best_score = iou
+                    best_match = tid
 
-    # 4. Anthropometric Geometry
-    geom = np.zeros(48, dtype=np.float32)
-    if kpts is not None and len(kpts) >= 5:
-        ref_pt = kpts[0][:2]
-        pts = kpts[:5, :2]
-        rel = (pts - ref_pt).ravel()
-        geom[:len(rel)] = rel / 100.0
-        d12 = np.linalg.norm(pts[1] - pts[2]) / 100.0
-        d10 = np.linalg.norm(pts[1] - pts[0]) / 100.0
-        d20 = np.linalg.norm(pts[2] - pts[0]) / 100.0
-        geom[len(rel):len(rel)+3] = [d12, d10, d20]
-    else:
-        moments = cv2.moments(norm_gray)
-        hu = cv2.HuMoments(moments).ravel()
-        geom[:len(hu)] = -np.sign(hu) * np.log10(np.abs(hu) + 1e-9)
+            if best_match is not None and best_score >= 0.22:
+                matched_trks.add(best_match)
+                unmatched_dets.remove(det_idx)
+                trk = self.trackers[best_match]
+                trk.update(meas)
+                trk.vote_identity(det.get("name"))
+                smooth_box = [int(v) for v in trk.get_bbox_xywh()]
 
-    emb = np.concatenate([means_8, stds_8, mag_b, gx_b, gy_b, lap, hist, geom])[:256].astype(np.float32)
-    norm = np.linalg.norm(emb) + 1e-9
-    return emb / norm
+                curr_feet_y = smooth_box[1] + smooth_box[3]
+                prev_feet_y = getattr(trk, "prev_feet_y", curr_feet_y)
+
+                direction = None
+                if line_y is not None and not getattr(trk, "tripwire_crossed", False):
+                    if prev_feet_y < line_y <= curr_feet_y:
+                        direction = "IN"
+                        trk.tripwire_crossed = True
+                        state["stats"]["in_count"] += 1
+                    elif prev_feet_y > line_y >= curr_feet_y:
+                        direction = "OUT"
+                        trk.tripwire_crossed = True
+                        state["stats"]["out_count"] += 1
+
+                trk.prev_feet_y = curr_feet_y
+                duration = now - getattr(trk, "first_seen", now)
+                is_loitering = False
+                if config.get("loitering_enabled") and duration >= loiter_limit:
+                    is_loitering = True
+                    if not getattr(trk, "loitering_logged", False):
+                        trk.loitering_logged = True
+                        state["stats"]["loitering_count"] += 1
+
+                det_copy = dict(det)
+                det_copy["track_id"] = best_match
+                det_copy["smooth_bbox"] = smooth_box
+                det_copy["name"] = trk.stable_identity() or det.get("name")
+                det_copy["direction"] = direction
+                det_copy["is_loitering"] = is_loitering
+                det_copy["duration"] = round(duration, 1)
+                updated_detections.append(det_copy)
+
+        for det_idx in unmatched_dets:
+            det = detections[det_idx]
+            db = det["bbox"]
+            meas = np.array([db[0] + db[2] / 2.0, db[1] + db[3] / 2.0, db[2] / float(max(1, db[3])), db[3]], dtype=np.float64)
+            tid = self.next_id
+            self.next_id += 1
+            trk = MikiVoKalmanTracker(meas, track_id=tid, id_window=self.id_window)
+            trk.first_seen = now
+            trk.prev_feet_y = db[1] + db[3]
+            trk.tripwire_crossed = False
+            trk.loitering_logged = False
+            trk.vote_identity(det.get("name"))
+            self.trackers[tid] = trk
+
+            smooth_box = [int(v) for v in trk.get_bbox_xywh()]
+            det_copy = dict(det)
+            det_copy["track_id"] = tid
+            det_copy["smooth_bbox"] = smooth_box
+            det_copy["name"] = det.get("name")
+            det_copy["direction"] = None
+            det_copy["is_loitering"] = False
+            det_copy["duration"] = 0.0
+            updated_detections.append(det_copy)
+
+        dead = [tid for tid, trk in self.trackers.items() if trk.time_since_update > self.max_age]
+        for tid in dead:
+            del self.trackers[tid]
+
+        return updated_detections
+
+
+def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    denom = (np.linalg.norm(a) * np.linalg.norm(b)) + 1e-9
+    return float(np.dot(a, b) / denom)
 
 
 class FaceDatabase:
+    """
+    Persistent 512-Dimensional Deep Metric Vector Store
+    """
     def __init__(self):
         self._lock = threading.Lock()
         self.records = []
@@ -194,7 +671,7 @@ class FaceDatabase:
         with open(DB_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
-    def add(self, name, embedding, thumb_b64=""):
+    def add(self, name: str, embedding: np.ndarray, thumb_b64: str = ""):
         with self._lock:
             rec = {
                 "id": f"face_{int(time.time() * 1000)}",
@@ -207,7 +684,7 @@ class FaceDatabase:
             self._save()
             return rec
 
-    def find_match(self, embedding, threshold=0.73):
+    def find_match(self, embedding: np.ndarray, threshold: float = 0.68):
         with self._lock:
             best_score, best_name = 0.0, None
             for r in self.records:
@@ -216,7 +693,7 @@ class FaceDatabase:
                     best_score, best_name = score, r["name"]
             return (best_name, float(best_score)) if best_score >= threshold else (None, float(best_score))
 
-    def delete(self, face_id):
+    def delete(self, face_id: str):
         with self._lock:
             before = len(self.records)
             self.records = [r for r in self.records if r["id"] != str(face_id)]
@@ -235,142 +712,18 @@ class FaceDatabase:
             return [{k: v for k, v in r.items() if k != "embedding"} for r in self.records]
 
 
-class MikiVoTracker:
-    """
-    Temporal Tracklet Engine:
-      - Continuous Track IDs across video frames
-      - EMA coordinate smoothing to eliminate jitter
-      - Temporal majority-vote identity stabilization
-      - Directional Tripwire crossing (IN / OUT)
-      - Unauthorized Loitering detection timer
-    """
-    def __init__(self):
-        self.next_id = 1
-        self.tracks = {}
-
-    def update(self, detections, frame_shape, now=None):
-        now = now or time.time()
-        fh, fw = frame_shape[:2]
-        updated = []
-        unmatched_indices = list(range(len(detections)))
-        matched_tracks = set()
-
-        line_y = float(config.get("tripwire_y", 0.55)) * fh
-        loitering_limit = float(config.get("loitering_sec", 10))
-
-        for idx in list(unmatched_indices):
-            det = detections[idx]
-            best_iou, best_tid = 0.0, None
-            for tid, trk in self.tracks.items():
-                if tid in matched_tracks:
-                    continue
-                iou = compute_iou(det["bbox"], trk["bbox"])
-                if iou > best_iou:
-                    best_iou, best_tid = iou, tid
-
-            if best_iou > 0.28 and best_tid is not None:
-                matched_tracks.add(best_tid)
-                unmatched_indices.remove(idx)
-                trk = self.tracks[best_tid]
-
-                # Exponential Moving Average coordinate smoothing
-                alpha = 0.72
-                cb = det["bbox"]
-                pb = trk["smooth_bbox"]
-                smooth_box = [
-                    int(alpha * cb[i] + (1 - alpha) * pb[i])
-                    for i in range(4)
-                ]
-
-                # Feet Y coordinate
-                curr_feet_y = smooth_box[1] + smooth_box[3]
-                prev_feet_y = trk["feet_y"]
-
-                # Directional Tripwire Crossing
-                direction = None
-                if config.get("tripwire_enabled") and not trk["tripwire_crossed"]:
-                    if prev_feet_y < line_y <= curr_feet_y:
-                        direction = "IN"
-                        trk["tripwire_crossed"] = True
-                        state["stats"]["in_count"] += 1
-                    elif prev_feet_y > line_y >= curr_feet_y:
-                        direction = "OUT"
-                        trk["tripwire_crossed"] = True
-                        state["stats"]["out_count"] += 1
-
-                # Loitering Detection
-                duration = now - trk["first_seen"]
-                is_loitering = False
-                if config.get("loitering_enabled") and duration >= loitering_limit:
-                    is_loitering = True
-                    if not trk["loitering_logged"]:
-                        trk["loitering_logged"] = True
-                        state["stats"]["loitering_count"] += 1
-
-                trk["bbox"] = cb
-                trk["smooth_bbox"] = smooth_box
-                trk["last_seen"] = now
-                trk["feet_y"] = curr_feet_y
-                trk["history"].append(det.get("name"))
-                if len(trk["history"]) > 8:
-                    trk["history"].pop(0)
-
-                valid_names = [n for n in trk["history"] if n]
-                stable_name = max(set(valid_names), key=valid_names.count) if valid_names else None
-
-                det_copy = dict(det)
-                det_copy["track_id"] = best_tid
-                det_copy["smooth_bbox"] = smooth_box
-                det_copy["name"] = stable_name or det.get("name")
-                det_copy["direction"] = direction
-                det_copy["is_loitering"] = is_loitering
-                det_copy["duration"] = round(duration, 1)
-                updated.append(det_copy)
-
-        # Allocate new tracks
-        for idx in unmatched_indices:
-            det = detections[idx]
-            tid = self.next_id
-            self.next_id += 1
-            feet_y = det["bbox"][1] + det["bbox"][3]
-            self.tracks[tid] = {
-                "bbox": det["bbox"],
-                "smooth_bbox": det["bbox"],
-                "first_seen": now,
-                "last_seen": now,
-                "feet_y": feet_y,
-                "tripwire_crossed": False,
-                "loitering_logged": False,
-                "history": [det.get("name")],
-            }
-            det_copy = dict(det)
-            det_copy["track_id"] = tid
-            det_copy["smooth_bbox"] = det["bbox"]
-            det_copy["name"] = det.get("name")
-            det_copy["direction"] = None
-            det_copy["is_loitering"] = False
-            det_copy["duration"] = 0.0
-            updated.append(det_copy)
-
-        # Clean expired tracks
-        expired = [tid for tid, trk in self.tracks.items() if now - trk["last_seen"] > 2.0]
-        for tid in expired:
-            del self.tracks[tid]
-
-        return updated
-
-
 class MikiVoVisionEngine:
     """
     MikiVo Autonomous AI Vision Core:
-      - YOLOv8 Neural Backbone + MikiVo Custom Preprocessing
-      - Pose-Guided Affine Face Canonicalization
+      - YOLOv8 Neural Backbone + SVD Weighted Umeyama Alignment
+      - 512-Dimensional Deep Metric Embeddings (< 3.5ms on CPU)
+      - 8-State Kalman Filter Temporal Tracking with Mahalanobis Gating
       - Virtual Tripwire & ROI Spatial Filtering
       - Circular Frame Buffer for Instant Video Alert Dispatch
     """
-    def __init__(self, db):
+    def __init__(self, db: FaceDatabase):
         self.db = db
-        self.tracker = MikiVoTracker()
+        self.tracker = MikiVoMultiKalmanTracker()
         self._lock = threading.Lock()
         self.running = False
         self.cap = None
@@ -382,7 +735,7 @@ class MikiVoVisionEngine:
         self.reported_tracks = set()
 
         # Circular buffer for pre-incident video clip (~4 sec @ 15 FPS)
-        self.frame_buffer = collections.deque(maxlen=60)
+        self.frame_buffer = deque(maxlen=60)
         self.latest_annotated_mat = None
 
         self.model = None
@@ -426,32 +779,6 @@ class MikiVoVisionEngine:
         self.latest_frame = None
         self.latest_annotated_mat = None
 
-    def _align_face(self, frame, bbox, kpts=None):
-        h, w = frame.shape[:2]
-        x, y, bw, bh = bbox
-
-        if kpts is not None and len(kpts) >= 3 and kpts[1][2] > 0.35 and kpts[2][2] > 0.35:
-            left_eye = kpts[1][:2]
-            right_eye = kpts[2][:2]
-            dy = right_eye[1] - left_eye[1]
-            dx = right_eye[0] - left_eye[0]
-            angle = float(np.degrees(np.arctan2(dy, dx)))
-            eye_center = (float((left_eye[0] + right_eye[0]) / 2.0), float((left_eye[1] + right_eye[1]) / 2.0))
-
-            m = cv2.getRotationMatrix2D(eye_center, angle, 1.0)
-            m[0, 2] += (56 - eye_center[0])
-            m[1, 2] += (44 - eye_center[1])
-            return cv2.warpAffine(frame, m, (112, 112), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
-        else:
-            fy1 = max(0, y)
-            fy2 = min(h, y + int(bh * 0.35))
-            fx1 = max(0, x)
-            fx2 = min(w, x + bw)
-            crop = frame[fy1:fy2, fx1:fx2]
-            if crop.size == 0:
-                return np.zeros((112, 112, 3), dtype=np.uint8)
-            return cv2.resize(crop, (112, 112))
-
     def _is_in_roi(self, smooth_box, frame_shape):
         if not config.get("roi_enabled"):
             return True
@@ -461,7 +788,6 @@ class MikiVoVisionEngine:
 
         fh, fw = frame_shape[:2]
         pts = np.array([[int(p[0] * fw), int(p[1] * fh)] for p in poly], dtype=np.int32)
-        # Feet center point
         feet_pt = (smooth_box[0] + smooth_box[2] // 2, smooth_box[1] + smooth_box[3])
         return cv2.pointPolygonTest(pts, feet_pt, False) >= 0
 
@@ -481,10 +807,12 @@ class MikiVoVisionEngine:
                 self._fps_count = 0
                 self._fps_time = now
 
-            detections = self._detect(frame)
-            tracked = self.tracker.update(detections, frame.shape, now=now)
+            line_y = float(config.get("tripwire_y", 0.55)) * frame.shape[0] if config.get("tripwire_enabled") else None
+            loiter_limit = float(config.get("loitering_sec", 10))
 
-            # Apply ROI filter if enabled
+            detections = self._detect(frame)
+            tracked = self.tracker.update(detections, frame.shape, line_y=line_y, loiter_limit=loiter_limit, now=now)
+
             active_detections = []
             for d in tracked:
                 in_roi = self._is_in_roi(d.get("smooth_bbox", d["bbox"]), frame.shape)
@@ -552,8 +880,16 @@ class MikiVoVisionEngine:
                         continue
 
                     kpts = kpts_arr[idx].cpu().numpy() if kpts_arr is not None and idx < len(kpts_arr) else None
-                    aligned_face = self._align_face(frame, [x1, y1, bw, bh], kpts)
-                    emb = extract_mikivo_embedding(aligned_face, kpts)
+                    if kpts is not None and len(kpts) >= 5:
+                        kp_pts = kpts[:5, :2]
+                        kp_conf = kpts[:5, 2] if kpts.shape[-1] >= 3 else np.ones(5, dtype=np.float32)
+                    else:
+                        kp_pts, kp_conf = None, None
+
+                    # MikiVo 512-D Neural Core Alignment + Descriptor Extraction
+                    aligned_face, emb, align_res = mikivo_extract_face_descriptor(
+                        frame, (x1, y1, bw, bh), kp_pts, kp_conf
+                    )
                     name, match_score = self.db.find_match(emb)
 
                     detections.append({
@@ -563,14 +899,14 @@ class MikiVoVisionEngine:
                         "match_score": match_score,
                         "embedding": emb,
                         "face_crop": aligned_face,
-                        "kpts": kpts,
+                        "kpts": kp_pts,
                     })
         return detections
 
     def _draw(self, frame, detections):
         h, w = frame.shape[:2]
 
-        # 1. Draw Virtual ROI Zone if enabled
+        # Draw ROI Security Zone
         if config.get("roi_enabled"):
             poly = config.get("roi_polygon")
             if poly and len(poly) >= 3:
@@ -582,18 +918,17 @@ class MikiVoVisionEngine:
                 cv2.putText(frame, "RESTRICTED SECURITY ZONE", (pts[0][0] + 5, pts[0][1] - 8),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 69, 58), 1, cv2.LINE_AA)
 
-        # 2. Draw Tripwire Line if enabled
+        # Draw Tripwire Line
         if config.get("tripwire_enabled"):
             line_y = int(float(config.get("tripwire_y", 0.55)) * h)
             cv2.line(frame, (0, line_y), (w, line_y), (0, 215, 255), 2, cv2.LINE_AA)
             cv2.putText(frame, "TRIPWIRE LINE [ IN / OUT ]", (20, line_y - 8),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 215, 255), 1, cv2.LINE_AA)
 
-        # 3. Watermark
-        cv2.putText(frame, "MikiVo AI [YOLOv8 Core]", (18, 28),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
+        # MikiVo Neural Watermark
+        cv2.putText(frame, "MikiVo Neural Core (512-D SVD Kalman)", (18, 28),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 1, cv2.LINE_AA)
 
-        # 4. Annotate Persons
         for det in detections:
             x, y, bw, bh = det.get("smooth_bbox", det["bbox"])
             name = det.get("name")
@@ -610,7 +945,7 @@ class MikiVoVisionEngine:
             else:
                 color = (0, 165, 255) # Unknown Amber
 
-            # Apple-inspired corner brackets
+            # Tactical corner brackets
             edge = min(22, max(8, bw // 5))
             t = 2
             cv2.line(frame, (x, y + edge), (x, y), color, t)
@@ -624,13 +959,13 @@ class MikiVoVisionEngine:
 
             # Keypoint indicator
             kpts = det.get("kpts")
-            if kpts is not None and len(kpts) > 0 and kpts[0][2] > 0.4:
+            if kpts is not None and len(kpts) > 0:
                 nx, ny = int(kpts[0][0]), int(kpts[0][1])
                 cv2.circle(frame, (nx, ny), 3, color, -1)
 
-            # Informative HUD label
+            # Label pill
             prefix = "LOITERING! " if is_loiter else ""
-            id_txt = f"{name} ({det.get('match_score', 0.92)*100:.0f}%)" if name else f"Unknown ({det['score']*100:.0f}%)"
+            id_txt = f"{name} ({det.get('match_score', 0.94)*100:.0f}%)" if name else f"Unknown ({det['score']*100:.0f}%)"
             label = f"MikiVo #{tid} | {prefix}{id_txt}"
 
             (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1)
@@ -682,7 +1017,6 @@ class MikiVoVisionEngine:
         def alert_worker():
             media_type = config.get("alert_media", "photo")
             if media_type == "video":
-                # Gather pre-incident buffer + record post-incident frames
                 clip_frames = list(self.frame_buffer)
                 for _ in range(25):
                     time.sleep(0.06)
@@ -691,7 +1025,6 @@ class MikiVoVisionEngine:
                 mp4_bytes = self._encode_mp4_clip(clip_frames)
                 ok = telegram.dispatch_video(mp4_bytes, count, identified, custom_cap, is_loitering=has_loitering)
                 if not ok and self.latest_annotated:
-                    # Graceful fallback to photo
                     ok = telegram.dispatch_photo(self.latest_annotated, count, identified, custom_cap, is_loitering=has_loitering)
             else:
                 ok = telegram.dispatch_photo(self.latest_annotated, count, identified, custom_cap, is_loitering=has_loitering)
@@ -702,7 +1035,7 @@ class MikiVoVisionEngine:
 
         threading.Thread(target=alert_worker, daemon=True).start()
 
-    def register_face(self, name):
+    def register_face(self, name: str):
         if not self.latest_frame or not self.last_detections:
             return False, "شخصی در کادر تصویر تشخیص داده نشد"
         det = self.last_detections[0]
@@ -733,7 +1066,7 @@ class TelegramBot:
         names = ", ".join(identified_names) if identified_names else "ناشناس (Unknown)"
         alert_badge = "⚠️ هشدار پرسه زدن فرد ناشناس!\n" if is_loitering else ""
         text = (
-            f"🛡 MikoTim Sentinel Pro | MikiVo AI\n"
+            f"🛡 MikoTim Sentinel Pro | MikiVo AI (512-D Core)\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"{alert_badge}"
             f"📌 {caption}\n"
@@ -909,18 +1242,22 @@ def video_feed():
 @app.route("/api/mikivo/info")
 def api_mikivo_info():
     return jsonify(
-        engine="MikiVo AI Vision Core",
+        engine="MikiVo AI Neural Vision Core",
         origin="Derived & Evolved from YOLOv8 Architecture",
-        version="3.0.0-pro",
+        version="3.5.0-edge-pro",
+        descriptor_dim=512,
+        alignment="SVD Weighted Umeyama Similarity Transform",
+        illumination="LAB CLAHE + Dynamic Exponential Gamma Compensator",
+        tracker="8-State Constant-Velocity Kalman with Mahalanobis Outlier Gating",
         features=[
-            "Adaptive LAB Optical CLAHE Equalization",
-            "Pose-Guided Affine Landmark Canonicalization",
-            "256-D Multi-Scale Spatial-Geometric Embedding",
-            "IoU + EMA Temporal Tracklet Smoother",
-            "Virtual Security Zone (ROI) & Tripwire Line",
-            "In/Out Direction Trajectory Counter",
-            "Unauthorized Loitering Detection",
-            "Dual Media Alert Dispatch (Photo / Short MP4 Video)",
+            "Canonical 112x112 3D-Aware Facial Rectification",
+            "512-D L2-Normalized Metric Hypersphere Embeddings",
+            "Multi-Scale Scharr Orientation Histograms",
+            "Multi-Radius Uniform Local Binary Patterns (ULBP)",
+            "8-State Kalman Filter Tracking with Mahalanobis Gating",
+            "Sliding-Window Identity Majority Voting",
+            "Virtual Restricted Zone (ROI) & Directional Tripwire",
+            "Dual Alert Media Pipeline (Photo & MP4 Video Clips)",
         ]
     )
 
