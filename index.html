@@ -719,10 +719,21 @@
         }
 
         .dropdown-icon {
-            font-size: 1.15rem;
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
+            transition: var(--transition-smooth);
+        }
+
+        .dropdown-svg-icon {
+            display: block;
+            flex-shrink: 0;
         }
 
         .dropdown-label {
@@ -807,10 +818,28 @@
         }
 
         .dropdown-item-icon {
-            font-size: 1.1rem;
+            width: 32px;
+            height: 32px;
+            border-radius: 9px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
+            transition: var(--transition-smooth);
+        }
+
+        .custom-dropdown-item:hover .dropdown-item-icon {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: scale(1.08);
+        }
+
+        .custom-dropdown-item.active .dropdown-item-icon {
+            background: rgba(10, 132, 255, 0.25);
+            border-color: rgba(10, 132, 255, 0.5);
+            box-shadow: 0 0 12px rgba(10, 132, 255, 0.35);
         }
 
         .dropdown-item-text {
@@ -1269,7 +1298,12 @@
                         <div class="custom-dropdown" id="dropdownAlertMedia">
                             <div class="custom-dropdown-btn" onclick="toggleDropdown('dropdownAlertMedia')">
                                 <div class="dropdown-selected-content">
-                                    <span class="dropdown-icon" id="mediaSelectedIcon">📸</span>
+                                    <span class="dropdown-icon" id="mediaSelectedIcon">
+                                        <svg class="dropdown-svg-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00d7ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                            <circle cx="12" cy="13" r="4"/>
+                                        </svg>
+                                    </span>
                                     <span class="dropdown-label" id="mediaSelectedText">ارسال تک‌عکس باکیفیت (Single Photo)</span>
                                 </div>
                                 <svg class="dropdown-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -1277,18 +1311,28 @@
                                 </svg>
                             </div>
                             <div class="custom-dropdown-menu">
-                                <div class="custom-dropdown-item active" data-value="photo" onclick="selectDropdownOption('selAlertMedia', 'dropdownAlertMedia', 'photo', 'ارسال تک‌عکس باکیفیت (Single Photo)', '📸')">
+                                <div class="custom-dropdown-item active" data-value="photo" onclick="selectDropdownOption('selAlertMedia', 'dropdownAlertMedia', 'photo')">
                                     <div class="dropdown-item-left">
-                                        <span class="dropdown-item-icon">📸</span>
+                                        <span class="dropdown-item-icon">
+                                            <svg class="dropdown-svg-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00d7ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                                <circle cx="12" cy="13" r="4"/>
+                                            </svg>
+                                        </span>
                                         <span class="dropdown-item-text">ارسال تک‌عکس باکیفیت (Single Photo)</span>
                                     </div>
                                     <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                         <polyline points="20 6 9 17 4 12"></polyline>
                                     </svg>
                                 </div>
-                                <div class="custom-dropdown-item" data-value="video" onclick="selectDropdownOption('selAlertMedia', 'dropdownAlertMedia', 'video', 'ارسال کلیپ ویدیویی MP4 (5-Sec Clip)', '🎬')">
+                                <div class="custom-dropdown-item" data-value="video" onclick="selectDropdownOption('selAlertMedia', 'dropdownAlertMedia', 'video')">
                                     <div class="dropdown-item-left">
-                                        <span class="dropdown-item-icon">🎬</span>
+                                        <span class="dropdown-item-icon">
+                                            <svg class="dropdown-svg-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff375f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <polygon points="23 7 16 12 23 17 23 7"/>
+                                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                                            </svg>
+                                        </span>
                                         <span class="dropdown-item-text">ارسال کلیپ ویدیویی MP4 (5-Sec Clip)</span>
                                     </div>
                                     <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -1309,7 +1353,12 @@
                         <div class="custom-dropdown" id="dropdownAlertTrigger">
                             <div class="custom-dropdown-btn" onclick="toggleDropdown('dropdownAlertTrigger')">
                                 <div class="dropdown-selected-content">
-                                    <span class="dropdown-icon" id="triggerSelectedIcon">👤</span>
+                                    <span class="dropdown-icon" id="triggerSelectedIcon">
+                                        <svg class="dropdown-svg-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                            <circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                    </span>
                                     <span class="dropdown-label" id="triggerSelectedText">فقط چهره‌های جدید و ناشناس (غریبه)</span>
                                 </div>
                                 <svg class="dropdown-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -1317,36 +1366,56 @@
                                 </svg>
                             </div>
                             <div class="custom-dropdown-menu">
-                                <div class="custom-dropdown-item active" data-value="stranger_only" onclick="selectDropdownOption('selAlertTrigger', 'dropdownAlertTrigger', 'stranger_only', 'فقط چهره‌های جدید و ناشناس (غریبه)', '👤')">
+                                <div class="custom-dropdown-item active" data-value="stranger_only" onclick="selectDropdownOption('selAlertTrigger', 'dropdownAlertTrigger', 'stranger_only')">
                                     <div class="dropdown-item-left">
-                                        <span class="dropdown-item-icon">👤</span>
+                                        <span class="dropdown-item-icon">
+                                            <svg class="dropdown-svg-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                                <circle cx="12" cy="7" r="4"/>
+                                            </svg>
+                                        </span>
                                         <span class="dropdown-item-text">فقط چهره‌های جدید و ناشناس (غریبه)</span>
                                     </div>
                                     <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                         <polyline points="20 6 9 17 4 12"></polyline>
                                     </svg>
                                 </div>
-                                <div class="custom-dropdown-item" data-value="all" onclick="selectDropdownOption('selAlertTrigger', 'dropdownAlertTrigger', 'all', 'تمام ترددها و حرکات (حساسیت کامل)', '⚡')">
+                                <div class="custom-dropdown-item" data-value="all" onclick="selectDropdownOption('selAlertTrigger', 'dropdownAlertTrigger', 'all')">
                                     <div class="dropdown-item-left">
-                                        <span class="dropdown-item-icon">⚡</span>
+                                        <span class="dropdown-item-icon">
+                                            <svg class="dropdown-svg-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff9f0a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                                            </svg>
+                                        </span>
                                         <span class="dropdown-item-text">تمام ترددها و حرکات (حساسیت کامل)</span>
                                     </div>
                                     <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                         <polyline points="20 6 9 17 4 12"></polyline>
                                     </svg>
                                 </div>
-                                <div class="custom-dropdown-item" data-value="roi_only" onclick="selectDropdownOption('selAlertTrigger', 'dropdownAlertTrigger', 'roi_only', 'فقط نفوذ به محدوده امنیتی (ROI)', '🛡️')">
+                                <div class="custom-dropdown-item" data-value="roi_only" onclick="selectDropdownOption('selAlertTrigger', 'dropdownAlertTrigger', 'roi_only')">
                                     <div class="dropdown-item-left">
-                                        <span class="dropdown-item-icon">🛡️</span>
+                                        <span class="dropdown-item-icon">
+                                            <svg class="dropdown-svg-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00d7ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                            </svg>
+                                        </span>
                                         <span class="dropdown-item-text">فقط نفوذ به محدوده امنیتی (ROI)</span>
                                     </div>
                                     <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                         <polyline points="20 6 9 17 4 12"></polyline>
                                     </svg>
                                 </div>
-                                <div class="custom-dropdown-item" data-value="known_only" onclick="selectDropdownOption('selAlertTrigger', 'dropdownAlertTrigger', 'known_only', 'فقط چهره‌های مجاز و آشنا', '🔑')">
+                                <div class="custom-dropdown-item" data-value="known_only" onclick="selectDropdownOption('selAlertTrigger', 'dropdownAlertTrigger', 'known_only')">
                                     <div class="dropdown-item-left">
-                                        <span class="dropdown-item-icon">🔑</span>
+                                        <span class="dropdown-item-icon">
+                                            <svg class="dropdown-svg-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#30d158" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <circle cx="7.5" cy="15.5" r="5.5"/>
+                                                <path d="M11.5 11.5L21.5 1.5"/>
+                                                <path d="M16 4l3 3"/>
+                                                <path d="M19 7l2-2"/>
+                                            </svg>
+                                        </span>
                                         <span class="dropdown-item-text">فقط چهره‌های مجاز و آشنا</span>
                                     </div>
                                     <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -3295,7 +3364,7 @@
             }
         }
 
-        function selectDropdownOption(selectId, dropdownId, val, label, icon) {
+        function selectDropdownOption(selectId, dropdownId, val) {
             const sel = document.getElementById(selectId);
             if (sel) {
                 sel.value = val;
@@ -3303,17 +3372,17 @@
             }
             const drop = document.getElementById(dropdownId);
             if (drop) {
-                const iconEl = drop.querySelector('.dropdown-icon');
-                const textEl = drop.querySelector('.dropdown-label');
-                if (iconEl && icon) iconEl.innerText = icon;
-                if (textEl && label) textEl.innerText = label;
-                drop.querySelectorAll('.custom-dropdown-item').forEach(item => {
-                    if (item.getAttribute('data-value') === val) {
-                        item.classList.add('active');
-                    } else {
-                        item.classList.remove('active');
-                    }
-                });
+                const targetItem = drop.querySelector(`.custom-dropdown-item[data-value="${val}"]`);
+                if (targetItem) {
+                    drop.querySelectorAll('.custom-dropdown-item').forEach(el => el.classList.remove('active'));
+                    targetItem.classList.add('active');
+                    const iconEl = drop.querySelector('.dropdown-icon');
+                    const textEl = drop.querySelector('.dropdown-label');
+                    const itemIcon = targetItem.querySelector('.dropdown-item-icon');
+                    const itemText = targetItem.querySelector('.dropdown-item-text');
+                    if (iconEl && itemIcon) iconEl.innerHTML = itemIcon.innerHTML;
+                    if (textEl && itemText) textEl.innerText = itemText.innerText;
+                }
                 drop.classList.remove('open');
             }
             saveConfig();
@@ -3333,7 +3402,7 @@
                     const textEl = drop.querySelector('.dropdown-label');
                     const itemIcon = targetItem.querySelector('.dropdown-item-icon');
                     const itemText = targetItem.querySelector('.dropdown-item-text');
-                    if (iconEl && itemIcon) iconEl.innerText = itemIcon.innerText;
+                    if (iconEl && itemIcon) iconEl.innerHTML = itemIcon.innerHTML;
                     if (textEl && itemText) textEl.innerText = itemText.innerText;
                 }
             };
