@@ -7,3 +7,5 @@ data/
 logs/
 .venv/
 env/
+*_dev.py
+server_dev.py
