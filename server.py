@@ -28,7 +28,8 @@ from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Tuple, List
+import math
+from typing import Optional, Tuple, List, Dict, Any, Deque
 import numpy as np
 import requests
 from flask import Flask, Response, request, jsonify
@@ -103,6 +104,7 @@ state = {
         "in_count": 0,
         "out_count": 0,
         "loitering_count": 0,
+        "threat_count": 0,
     },
     "hourly_traffic": [0] * 24,
     "logs": [],
@@ -609,6 +611,7 @@ class MikoVoRaRa11MultiKalmanTracker:
                 det_copy["direction"] = direction
                 det_copy["is_loitering"] = is_loitering
                 det_copy["duration"] = round(duration, 1)
+                det_copy["kalman_state"] = trk.mean.copy()
                 updated_detections.append(det_copy)
 
         for det_idx in unmatched_dets:
@@ -633,6 +636,7 @@ class MikoVoRaRa11MultiKalmanTracker:
             det_copy["direction"] = None
             det_copy["is_loitering"] = False
             det_copy["duration"] = 0.0
+            det_copy["kalman_state"] = trk.mean.copy()
             updated_detections.append(det_copy)
 
         dead = [tid for tid, trk in self.trackers.items() if trk.time_since_update > self.max_age]
@@ -1266,7 +1270,506 @@ def evaluate_face_sentinel(
 
 
 # =============================================================================
-# 7. SELF-TEST / BENCHMARK
+# 7. MIKOVO RARA 11 BEHAVIORAL & KINETIC THREAT PROFILER
+# =============================================================================
+
+DEFAULT_FPS: float = 30.0
+
+# Subsystem 1: Facial Occlusion & Concealment
+OCCLUSION_CONCEALED_THRESHOLD: float = 0.45
+_KP_VIS_THRESHOLD: float = 0.45
+_LOWER_GRAD_RATIO_MASK_CEIL: float = 0.52
+_MASK_SAT_DIFF_THRESH: float = 28.0
+_DARK_FABRIC_V_THRESH: float = 65.0
+_SURGICAL_BLUE_H_RANGE: Tuple[int, int] = (85, 130)
+_SURGICAL_WHITE_S_MAX: int = 38
+_SURGICAL_WHITE_V_MIN: int = 165
+
+# Subsystem 2: Kinetic Threat & Fall Detection
+_DASH_VELOCITY_PX_SEC: float = 420.0        # Rapid sprinting threshold (px/s)
+_DASH_ACCEL_PX_SEC2: float = 650.0          # Sudden burst acceleration (px/s^2)
+_APPROACH_VH_RATIO_SEC: float = 0.35        # Relative bbox height expansion rate (vh/h per sec)
+_FALL_VY_PX_SEC: float = 220.0              # Downward vertical velocity spike (px/s)
+_FALL_WINDOW_FRAMES: int = 12               # ~0.40s @ 30 FPS
+_FALL_UPRIGHT_H_OVER_W: float = 2.0         # Standing aspect ratio h/w > 2.0
+_FALL_COLLAPSED_H_OVER_W: float = 0.90      # Collapsed aspect ratio h/w < 0.9
+
+# Subsystem 3: Trajectory Entropy & Prowler Detection
+PROWLING_SCORE_THRESHOLD: float = 0.68
+_TRAJECTORY_WINDOW: int = 45                # Sliding window length (frames)
+_MIN_PROWL_FRAMES: int = 18                 # Minimum history before scoring
+_MIN_TOTAL_PATH_PX: float = 65.0            # Ignore stationary micro-jitter
+_TORTUOSITY_SATURATION: float = 6.5         # Path length / net displacement ceiling
+_ANGULAR_BINS: int = 8                      # 8 compass octants for Shannon entropy
+
+
+@dataclass
+class OcclusionResult:
+    """Output of `MikoVoOcclusionDetector.analyze`."""
+    occlusion_ratio: float
+    is_face_concealed: bool
+    concealment_type: Optional[str]
+
+
+@dataclass
+class KineticResult:
+    """Output of `MikoVoKineticThreatAnalyzer.analyze`."""
+    velocity_px_sec: float
+    acceleration_px_sec2: float
+    is_rapid_dash: bool
+    is_rapid_approach: bool
+    is_fallen: bool
+    kinetic_event: Optional[str]
+
+
+@dataclass
+class TrajectoryEntropyResult:
+    """Output of `MikoVoTrajectoryEntropyAnalyzer.analyze`."""
+    prowling_score: float
+    is_prowling: bool
+    tortuosity: float
+    directional_entropy: float
+
+
+@dataclass
+class ThreatReport:
+    """
+    Unified behavioral & kinetic threat assessment returned by
+    `evaluate_behavioral_threat`.
+    """
+    is_threat: bool
+    threat_level: str                       # "CLEAR" | "ELEVATED" | "CRITICAL"
+    threat_category: Optional[str]          # "RAPID_DASH" | "CONCEALED_FACE" | "PROWLER_PACING" | "PERSON_FALLEN" | None
+    occlusion_ratio: float
+    is_concealed: bool
+    velocity_px_sec: float
+    prowling_score: float
+    is_fallen: bool
+    summary_text: str
+    concealment_type: Optional[str] = None
+    acceleration_px_sec2: float = 0.0
+    is_rapid_approach: bool = False
+    tortuosity: float = 1.0
+
+
+class MikoVoOcclusionDetector:
+    """
+    Vectorized facial occlusion and concealment classifier.
+    Combines keypoint confidence & bilateral symmetry analysis
+    fused with vectorized HSV / Sobel gradient micro-texture comparison
+    between upper and lower facial zones to detect surgical masks,
+    bandanas, sunglasses, and heavy balaclavas.
+    """
+    def __init__(self, threshold: float = OCCLUSION_CONCEALED_THRESHOLD) -> None:
+        self.threshold = threshold
+
+    @staticmethod
+    def _symmetry_deficit(kpts_5x2: np.ndarray, confs_5: np.ndarray) -> float:
+        nose, le, re, lea, rea = kpts_5x2
+        eps = 1e-6
+
+        d_le = float(np.linalg.norm(le - nose))
+        d_re = float(np.linalg.norm(re - nose))
+        eye_asym = abs(d_le - d_re) / (max(d_le, d_re) + eps)
+
+        d_lea = float(np.linalg.norm(lea - nose))
+        d_rea = float(np.linalg.norm(rea - nose))
+        ear_asym = abs(d_lea - d_rea) / (max(d_lea, d_rea) + eps)
+
+        eye_w = float(min(confs_5[1], confs_5[2]))
+        ear_w = float(min(confs_5[3], confs_5[4]))
+        score = 0.65 * (eye_asym * eye_w) + 0.35 * (ear_asym * ear_w)
+        return float(np.clip(score, 0.0, 1.0))
+
+    @staticmethod
+    def _crop_zone_metrics(face_crop: np.ndarray) -> Tuple[float, Optional[str], float, float]:
+        h, w = face_crop.shape[:2]
+        if h < 16 or w < 16:
+            return 0.0, None, 128.0, 128.0
+
+        x0, x1 = int(w * 0.18), int(w * 0.82)
+        upper_bgr = face_crop[int(h * 0.18):int(h * 0.48), x0:x1]
+        lower_bgr = face_crop[int(h * 0.54):int(h * 0.92), x0:x1]
+
+        hsv_up = cv2.cvtColor(upper_bgr, cv2.COLOR_BGR2HSV).astype(np.float32)
+        hsv_lo = cv2.cvtColor(lower_bgr, cv2.COLOR_BGR2HSV).astype(np.float32)
+
+        gray_up = cv2.cvtColor(upper_bgr, cv2.COLOR_BGR2GRAY)
+        gray_lo = cv2.cvtColor(lower_bgr, cv2.COLOR_BGR2GRAY)
+
+        gx_up = cv2.Sobel(gray_up, cv2.CV_32F, 1, 0, ksize=3)
+        gy_up = cv2.Sobel(gray_up, cv2.CV_32F, 0, 1, ksize=3)
+        grad_var_up = float(np.var(cv2.magnitude(gx_up, gy_up))) + 1.0
+
+        gx_lo = cv2.Sobel(gray_lo, cv2.CV_32F, 1, 0, ksize=3)
+        gy_lo = cv2.Sobel(gray_lo, cv2.CV_32F, 0, 1, ksize=3)
+        grad_var_lo = float(np.var(cv2.magnitude(gx_lo, gy_lo))) + 1.0
+
+        h_lo_mean = float(np.mean(hsv_lo[:, :, 0]))
+        s_up_mean, s_lo_mean = float(np.mean(hsv_up[:, :, 1])), float(np.mean(hsv_lo[:, :, 1]))
+        v_up_mean, v_lo_mean = float(np.mean(hsv_up[:, :, 2])), float(np.mean(hsv_lo[:, :, 2]))
+        h_up_mean = float(np.mean(hsv_up[:, :, 0]))
+
+        hue_diff = min(abs(h_up_mean - h_lo_mean), 180.0 - abs(h_up_mean - h_lo_mean))
+        sat_diff = abs(s_up_mean - s_lo_mean)
+        val_diff = abs(v_up_mean - v_lo_mean)
+
+        color_discontinuity = float(
+            np.clip((hue_diff / 45.0) * 0.45 + (sat_diff / 70.0) * 0.30 + (val_diff / 85.0) * 0.25, 0.0, 1.0)
+        )
+
+        grad_ratio = grad_var_lo / (grad_var_up + 120.0)
+        smooth_lower_score = float(np.clip(1.0 - (grad_ratio / _LOWER_GRAD_RATIO_MASK_CEIL), 0.0, 1.0))
+
+        is_surgical_blue = (_SURGICAL_BLUE_H_RANGE[0] <= h_lo_mean <= _SURGICAL_BLUE_H_RANGE[1]) and (s_lo_mean > 35.0)
+        is_surgical_white = (s_lo_mean <= _SURGICAL_WHITE_S_MAX) and (v_lo_mean >= _SURGICAL_WHITE_V_MIN) and (sat_diff > 18.0)
+
+        fabric_hint: Optional[str] = None
+        if v_up_mean < _DARK_FABRIC_V_THRESH and v_lo_mean < _DARK_FABRIC_V_THRESH and s_lo_mean < 55.0:
+            fabric_hint = "HEAVY_BALACLAVA"
+            crop_score = 0.88
+        elif is_surgical_blue or is_surgical_white:
+            fabric_hint = "SURGICAL_MASK"
+            crop_score = max(0.65, 0.55 * color_discontinuity + 0.45 * smooth_lower_score)
+        elif v_lo_mean < _DARK_FABRIC_V_THRESH and val_diff > 35.0:
+            fabric_hint = "FABRIC_BANDANA"
+            crop_score = max(0.62, 0.55 * color_discontinuity + 0.45 * smooth_lower_score)
+        elif v_up_mean < _DARK_FABRIC_V_THRESH and v_lo_mean > v_up_mean + 35.0:
+            fabric_hint = "UPPER_SUNGLASSES"
+            crop_score = 0.58
+        else:
+            crop_score = 0.55 * color_discontinuity + 0.45 * smooth_lower_score
+            if crop_score > 0.52:
+                fabric_hint = "FABRIC_BANDANA"
+
+        return float(np.clip(crop_score, 0.0, 1.0)), fabric_hint, v_up_mean, v_lo_mean
+
+    def analyze(
+        self,
+        kpts_5x2: np.ndarray,
+        confs_5: np.ndarray,
+        face_crop: Optional[np.ndarray] = None,
+    ) -> OcclusionResult:
+        kpts = np.asarray(kpts_5x2, dtype=np.float64)
+        confs = np.clip(np.asarray(confs_5, dtype=np.float64), 0.0, 1.0)
+
+        nose_conf = float(confs[0])
+        eyes_conf = float(np.mean(confs[1:3]))
+        ears_conf = float(np.mean(confs[3:5]))
+
+        weighted_vis = 0.40 * nose_conf + 0.40 * eyes_conf + 0.20 * ears_conf
+        kp_deficit = float(np.clip(1.0 - weighted_vis, 0.0, 1.0))
+        sym_deficit = self._symmetry_deficit(kpts, confs)
+
+        crop_score = 0.0
+        fabric_hint: Optional[str] = None
+        if face_crop is not None and face_crop.size > 0:
+            crop_score, fabric_hint, _, _ = self._crop_zone_metrics(face_crop)
+            occlusion_ratio = float(
+                np.clip(0.45 * kp_deficit + 0.42 * crop_score + 0.13 * sym_deficit, 0.0, 1.0)
+            )
+            if fabric_hint in ("SURGICAL_MASK", "FABRIC_BANDANA", "HEAVY_BALACLAVA"):
+                occlusion_ratio = max(occlusion_ratio, 0.72 * crop_score + 0.28 * kp_deficit)
+        else:
+            occlusion_ratio = float(np.clip(0.82 * kp_deficit + 0.18 * sym_deficit, 0.0, 1.0))
+
+        is_concealed = occlusion_ratio > self.threshold
+        concealment_type: Optional[str] = None
+
+        if is_concealed:
+            if nose_conf < _KP_VIS_THRESHOLD and eyes_conf < _KP_VIS_THRESHOLD and ears_conf < _KP_VIS_THRESHOLD:
+                concealment_type = "HEAVY_BALACLAVA"
+            elif fabric_hint == "HEAVY_BALACLAVA":
+                concealment_type = "HEAVY_BALACLAVA"
+            elif eyes_conf < _KP_VIS_THRESHOLD and nose_conf >= _KP_VIS_THRESHOLD:
+                concealment_type = "UPPER_SUNGLASSES"
+            elif fabric_hint is not None:
+                concealment_type = fabric_hint
+            elif nose_conf < _KP_VIS_THRESHOLD and eyes_conf >= _KP_VIS_THRESHOLD:
+                concealment_type = "SURGICAL_MASK"
+            else:
+                concealment_type = "FABRIC_BANDANA"
+
+        return OcclusionResult(
+            occlusion_ratio=round(occlusion_ratio, 4),
+            is_face_concealed=bool(is_concealed),
+            concealment_type=concealment_type,
+        )
+
+
+@dataclass
+class _KineticTrackMemory:
+    prev_speed_px_sec: float
+    prev_vy_px_sec: float
+    hw_ratio_history: Deque[float]
+
+
+class MikoVoKineticThreatAnalyzer:
+    """
+    Analyzes 8-state Kalman filter velocity and posture:
+      - Rapid sprinting/dash (RAPID_DASH).
+      - Perspective looming approach toward camera (RAPID_APPROACH).
+      - Sudden human collapse/fall (FALL_DETECTED / COLLAPSE).
+    """
+    def __init__(self, fps: float = DEFAULT_FPS) -> None:
+        self.fps = float(max(fps, 1.0))
+        self.dt = 1.0 / self.fps
+        self._window_len = max(4, int(round(0.40 * self.fps)))
+        self._tracks: Dict[Any, _KineticTrackMemory] = {}
+
+    def reset_track(self, track_id: Any) -> None:
+        self._tracks.pop(track_id, None)
+
+    def analyze(
+        self,
+        track_id: Any,
+        kalman_state_8d: np.ndarray,
+        bbox_xywh: Tuple[float, float, float, float],
+        frame_shape: Tuple[int, ...],
+    ) -> KineticResult:
+        state = np.asarray(kalman_state_8d, dtype=np.float64).ravel()
+        if state.size < 8:
+            state = np.pad(state, (0, max(0, 8 - state.size)))
+
+        cx, cy, a_state, h_state, vx_raw, vy_raw, va_raw, vh_raw = state[:8]
+        bx, by, bw, bh = bbox_xywh
+
+        raw_mag = math.hypot(vx_raw, vy_raw)
+        scale = self.fps if raw_mag < 75.0 else 1.0
+
+        vx = vx_raw * scale
+        vy = vy_raw * scale
+        vh = vh_raw * (self.fps if abs(vh_raw) < 40.0 else 1.0)
+
+        speed_px_sec = float(math.hypot(vx, vy))
+
+        w_eff = max(float(bw), float(a_state * h_state), 1.0)
+        h_eff = max(float(bh), float(h_state), 1.0)
+        h_over_w = h_eff / w_eff
+
+        mem = self._tracks.get(track_id)
+        if mem is None:
+            mem = _KineticTrackMemory(
+                prev_speed_px_sec=speed_px_sec,
+                prev_vy_px_sec=vy,
+                hw_ratio_history=deque(maxlen=self._window_len),
+            )
+            self._tracks[track_id] = mem
+            accel_px_sec2 = 0.0
+        else:
+            accel_px_sec2 = (speed_px_sec - mem.prev_speed_px_sec) / self.dt
+            mem.prev_speed_px_sec = speed_px_sec
+            mem.prev_vy_px_sec = vy
+
+        mem.hw_ratio_history.append(h_over_w)
+
+        max_recent_hw = max(mem.hw_ratio_history)
+        aspect_collapsed = (max_recent_hw >= _FALL_UPRIGHT_H_OVER_W) and (
+            h_over_w <= _FALL_COLLAPSED_H_OVER_W
+        )
+        va_spike = va_raw > 0.35 and h_over_w <= _FALL_COLLAPSED_H_OVER_W
+        is_fallen = bool((vy >= _FALL_VY_PX_SEC) and (aspect_collapsed or va_spike))
+
+        frame_h, frame_w = int(frame_shape[0]), int(frame_shape[1])
+        target_x, target_y = frame_w * 0.5, frame_h * 0.95
+        to_cam_x, to_cam_y = target_x - cx, target_y - cy
+        to_cam_norm = math.hypot(to_cam_x, to_cam_y) + 1e-6
+        heading_cos = (vx * to_cam_x + vy * to_cam_y) / ((speed_px_sec + 1e-6) * to_cam_norm)
+
+        rel_expansion_rate = vh / max(h_eff, 20.0)
+        is_rapid_approach = bool(
+            not is_fallen
+            and (
+                (rel_expansion_rate >= _APPROACH_VH_RATIO_SEC and speed_px_sec >= 160.0)
+                or (heading_cos >= 0.65 and speed_px_sec >= _DASH_VELOCITY_PX_SEC * 0.85 and accel_px_sec2 >= 250.0)
+            )
+        )
+
+        is_rapid_dash = bool(
+            not is_fallen
+            and (
+                speed_px_sec >= _DASH_VELOCITY_PX_SEC
+                or (speed_px_sec >= 280.0 and accel_px_sec2 >= _DASH_ACCEL_PX_SEC2)
+                or is_rapid_approach
+            )
+        )
+
+        kinetic_event: Optional[str] = None
+        if is_fallen:
+            kinetic_event = "FALL_DETECTED / COLLAPSE"
+        elif is_rapid_approach:
+            kinetic_event = "RAPID_APPROACH"
+        elif is_rapid_dash:
+            kinetic_event = "RAPID_DASH"
+
+        return KineticResult(
+            velocity_px_sec=round(speed_px_sec, 2),
+            acceleration_px_sec2=round(float(accel_px_sec2), 2),
+            is_rapid_dash=is_rapid_dash,
+            is_rapid_approach=is_rapid_approach,
+            is_fallen=is_fallen,
+            kinetic_event=kinetic_event,
+        )
+
+
+class MikoVoTrajectoryEntropyAnalyzer:
+    """
+    Maintains 45-frame sliding window of track positions:
+      1. Path Tortuosity (total_path_distance / net_displacement)
+      2. Directional Shannon Entropy across 8 compass octants
+    """
+    def __init__(
+        self,
+        window_size: int = _TRAJECTORY_WINDOW,
+        prowling_threshold: float = PROWLING_SCORE_THRESHOLD,
+    ) -> None:
+        self.window_size = window_size
+        self.prowling_threshold = prowling_threshold
+        self._trajectories: Dict[Any, Deque[Tuple[float, float]]] = {}
+
+    def reset_track(self, track_id: Any) -> None:
+        self._trajectories.pop(track_id, None)
+
+    def analyze(self, track_id: Any, center_xy: Tuple[float, float]) -> TrajectoryEntropyResult:
+        buf = self._trajectories.setdefault(track_id, deque(maxlen=self.window_size))
+        buf.append((float(center_xy[0]), float(center_xy[1])))
+
+        n_pts = len(buf)
+        if n_pts < _MIN_PROWL_FRAMES:
+            return TrajectoryEntropyResult(0.0, False, 1.0, 0.0)
+
+        pts = np.asarray(buf, dtype=np.float64)
+        deltas = np.diff(pts, axis=0)
+        step_lengths = np.hypot(deltas[:, 0], deltas[:, 1])
+        total_distance = float(np.sum(step_lengths))
+
+        if total_distance < _MIN_TOTAL_PATH_PX:
+            return TrajectoryEntropyResult(0.0, False, 1.0, 0.0)
+
+        net_displacement = float(np.hypot(pts[-1, 0] - pts[0, 0], pts[-1, 1] - pts[0, 1]))
+        tortuosity = total_distance / (net_displacement + 6.0)
+        tortuosity_score = float(
+            np.clip((tortuosity - 1.25) / (_TORTUOSITY_SATURATION - 1.25), 0.0, 1.0)
+        )
+
+        active_mask = step_lengths > 1.2
+        if int(np.sum(active_mask)) < 6:
+            return TrajectoryEntropyResult(0.0, False, round(tortuosity, 3), 0.0)
+
+        active_deltas = deltas[active_mask]
+        angles = np.arctan2(active_deltas[:, 1], active_deltas[:, 0])
+
+        bins = np.floor(((angles + math.pi) / (2.0 * math.pi)) * _ANGULAR_BINS).astype(np.int32)
+        bins = np.clip(bins, 0, _ANGULAR_BINS - 1)
+        counts = np.bincount(bins, minlength=_ANGULAR_BINS).astype(np.float64)
+        probs = counts[counts > 0] / float(angles.size)
+        shannon_entropy = float(-np.sum(probs * np.log2(probs))) / math.log2(_ANGULAR_BINS)
+
+        angle_diffs = np.diff(angles)
+        angle_diffs = (angle_diffs + math.pi) % (2.0 * math.pi) - math.pi
+        turn_var_score = float(np.clip(np.std(angle_diffs) / 1.45, 0.0, 1.0))
+        reversal_rate = float(np.mean(np.abs(angle_diffs) > 1.85))
+        reversal_score = float(np.clip(reversal_rate / 0.22, 0.0, 1.0))
+
+        directional_chaos = float(
+            np.clip(0.40 * shannon_entropy + 0.35 * turn_var_score + 0.25 * reversal_score, 0.0, 1.0)
+        )
+
+        prowling_score = float(np.clip(0.62 * tortuosity_score + 0.38 * directional_chaos, 0.0, 1.0))
+        is_prowling = prowling_score > self.prowling_threshold
+
+        return TrajectoryEntropyResult(
+            prowling_score=round(prowling_score, 4),
+            is_prowling=bool(is_prowling),
+            tortuosity=round(tortuosity, 3),
+            directional_entropy=round(directional_chaos, 4),
+        )
+
+
+_DEFAULT_OCCLUSION_DETECTOR = MikoVoOcclusionDetector()
+_DEFAULT_KINETIC_ANALYZER = MikoVoKineticThreatAnalyzer()
+_DEFAULT_ENTROPY_ANALYZER = MikoVoTrajectoryEntropyAnalyzer()
+
+
+def evaluate_behavioral_threat(
+    track_id: Any,
+    kalman_state_8d: np.ndarray,
+    bbox_xywh: Tuple[float, float, float, float],
+    kpts_5x2: np.ndarray,
+    confs_5: np.ndarray,
+    frame_shape: Tuple[int, ...],
+    face_crop: Optional[np.ndarray] = None,
+    occlusion_detector: MikoVoOcclusionDetector = _DEFAULT_OCCLUSION_DETECTOR,
+    kinetic_analyzer: MikoVoKineticThreatAnalyzer = _DEFAULT_KINETIC_ANALYZER,
+    entropy_analyzer: MikoVoTrajectoryEntropyAnalyzer = _DEFAULT_ENTROPY_ANALYZER,
+) -> ThreatReport:
+    state = np.asarray(kalman_state_8d, dtype=np.float64).ravel()
+    cx, cy = float(state[0]), float(state[1])
+
+    occ = occlusion_detector.analyze(kpts_5x2, confs_5, face_crop=face_crop)
+    kin = kinetic_analyzer.analyze(track_id, state, bbox_xywh, frame_shape)
+    ent = entropy_analyzer.analyze(track_id, (cx, cy))
+
+    threat_category: Optional[str] = None
+    threat_level: str = "CLEAR"
+
+    if kin.is_fallen:
+        threat_category = "PERSON_FALLEN"
+        threat_level = "CRITICAL"
+    elif kin.is_rapid_dash:
+        threat_category = "RAPID_DASH"
+        threat_level = "CRITICAL" if (occ.is_face_concealed or kin.is_rapid_approach) else "ELEVATED"
+    elif occ.is_face_concealed and ent.is_prowling:
+        threat_category = "CONCEALED_FACE"
+        threat_level = "CRITICAL"
+    elif occ.is_face_concealed:
+        threat_category = "CONCEALED_FACE"
+        threat_level = "CRITICAL" if occ.concealment_type == "HEAVY_BALACLAVA" else "ELEVATED"
+    elif ent.is_prowling:
+        threat_category = "PROWLER_PACING"
+        threat_level = "ELEVATED"
+
+    is_threat = threat_level != "CLEAR"
+
+    if not is_threat:
+        summary_text = (
+            f"[CLEAR] Track #{track_id}: Normal transit "
+            f"(v={kin.velocity_px_sec:.0f} px/s, occ={occ.occlusion_ratio:.2f}, prowl={ent.prowling_score:.2f})."
+        )
+    else:
+        tags = []
+        if kin.is_fallen:
+            tags.append("FALL_DETECTED/COLLAPSE")
+        if kin.is_rapid_approach:
+            tags.append(f"RAPID_APPROACH ({kin.velocity_px_sec:.0f} px/s)")
+        elif kin.is_rapid_dash:
+            tags.append(f"RAPID_DASH ({kin.velocity_px_sec:.0f} px/s)")
+        if occ.is_face_concealed:
+            tags.append(f"CONCEALED:{occ.concealment_type} (occ={occ.occlusion_ratio:.2f})")
+        if ent.is_prowling:
+            tags.append(f"PROWLING (score={ent.prowling_score:.2f}, tort={ent.tortuosity:.1f}x)")
+
+        summary_text = f"[{threat_level}] Track #{track_id} ({threat_category}): " + " | ".join(tags)
+
+    return ThreatReport(
+        is_threat=is_threat,
+        threat_level=threat_level,
+        threat_category=threat_category,
+        occlusion_ratio=occ.occlusion_ratio,
+        is_concealed=occ.is_face_concealed,
+        velocity_px_sec=kin.velocity_px_sec,
+        prowling_score=ent.prowling_score,
+        is_fallen=kin.is_fallen,
+        summary_text=summary_text,
+        concealment_type=occ.concealment_type,
+        acceleration_px_sec2=kin.acceleration_px_sec2,
+        is_rapid_approach=kin.is_rapid_approach,
+        tortuosity=ent.tortuosity,
+    )
+
+
+# =============================================================================
+# 8. MIKOVO RARA 11 VISION & TRACKING ENGINE
 # =============================================================================
 
 
@@ -1291,6 +1794,16 @@ class MikoVoRaRa11VisionEngine:
         self.stats = {"fps": 0.0, "person_count": 0}
         self.last_alert_time = 0.0
         self.reported_tracks = set()
+
+        # MikoVo RaRa 11 Biometrics & Passive Liveness Core
+        self.liveness_detector = MikoVoLivenessDetector()
+        self.pose_estimator = MikoVoHeadPoseEstimator(image_size=112)
+        self.fusion_memory = MikoVoTrackFusionMemory()
+
+        # MikoVo RaRa 11 Behavioral Threat Profilers
+        self.occlusion_detector = MikoVoOcclusionDetector()
+        self.kinetic_analyzer = MikoVoKineticThreatAnalyzer()
+        self.entropy_analyzer = MikoVoTrajectoryEntropyAnalyzer()
 
         # Circular buffer for pre-incident video clip (~4 sec @ 15 FPS)
         self.frame_buffer = deque(maxlen=60)
@@ -1390,6 +1903,33 @@ class MikoVoRaRa11VisionEngine:
             detections = self._detect(frame)
             tracked = self.tracker.update(detections, frame.shape, line_y=line_y, loiter_limit=loiter_limit, now=now)
 
+            # Evaluate MikoVo RaRa 11 Behavioral & Kinetic Threats
+            for d in tracked:
+                kalman_state = d.get("kalman_state")
+                kpts = d.get("kpts")
+                confs = d.get("kp_conf")
+                face_crop = d.get("face_crop")
+                tid = d.get("track_id", 1)
+                bbox = d.get("smooth_bbox", d["bbox"])
+
+                kpts_5x2 = kpts if (kpts is not None and len(kpts) >= 5) else np.zeros((5, 2))
+                confs_5 = confs if confs is not None else np.ones(5, dtype=np.float64) * 0.8
+                k_state_8d = kalman_state if kalman_state is not None else np.array([bbox[0] + bbox[2]/2.0, bbox[1] + bbox[3]/2.0, bbox[2]/float(max(1, bbox[3])), float(bbox[3]), 0.0, 0.0, 0.0, 0.0])
+
+                threat_report = evaluate_behavioral_threat(
+                    track_id=tid,
+                    kalman_state_8d=k_state_8d,
+                    bbox_xywh=tuple(bbox),
+                    kpts_5x2=kpts_5x2,
+                    confs_5=confs_5,
+                    frame_shape=frame.shape,
+                    face_crop=face_crop,
+                    occlusion_detector=self.occlusion_detector,
+                    kinetic_analyzer=self.kinetic_analyzer,
+                    entropy_analyzer=self.entropy_analyzer,
+                )
+                d["threat"] = threat_report
+
             active_detections = []
             for d in tracked:
                 in_roi = self._is_in_roi(d.get("smooth_bbox", d["bbox"]), frame.shape)
@@ -1434,16 +1974,17 @@ class MikoVoRaRa11VisionEngine:
                         has_roi = any(d.get("in_roi") for d in active_detections)
                         has_loitering = any(d.get("is_loitering") for d in active_detections)
                         has_unreported_track = any(t not in self.reported_tracks for t in track_ids)
+                        has_threat = any(d.get("threat") and d["threat"].threat_level in ("ELEVATED", "CRITICAL") for d in active_detections)
 
                         if trigger_mode == "stranger_only":
-                            should_alert = has_unknown or has_loitering
+                            should_alert = has_unknown or has_loitering or has_threat
                         elif trigger_mode == "roi_only":
                             should_alert = has_roi
                         elif trigger_mode == "known_only":
-                            should_alert = has_known
+                            should_alert = has_known or has_threat
                         else:
                             if config.get("only_new_person"):
-                                should_alert = has_unknown or has_unreported_track or has_loitering
+                                should_alert = has_unknown or has_unreported_track or has_loitering or has_threat
                             else:
                                 should_alert = True
 
@@ -1511,6 +2052,7 @@ class MikoVoRaRa11VisionEngine:
                         "embedding": emb,
                         "face_crop": aligned_face,
                         "kpts": kp_pts,
+                        "kp_conf": kp_conf,
                         "sentinel": sentinel,
                         "is_live": sentinel.is_live,
                         "liveness_score": sentinel.liveness_score,
@@ -1556,8 +2098,14 @@ class MikoVoRaRa11VisionEngine:
 
             is_spoof = det.get("is_spoof", False)
             attack_type = det.get("attack_type")
-            if is_spoof:
+            threat = det.get("threat")
+
+            if threat and threat.threat_level == "CRITICAL":
+                color = (0, 0, 255) # Alert Red for Critical Threat
+            elif is_spoof:
                 color = (0, 0, 255) # Alert Red for Spoof Attacks
+            elif threat and threat.threat_level == "ELEVATED":
+                color = (0, 140, 255) # Intense Orange for Elevated Threat
             elif is_loiter:
                 color = (0, 0, 255) # Warning Red
             elif not in_roi:
@@ -1586,12 +2134,24 @@ class MikoVoRaRa11VisionEngine:
                 cv2.circle(frame, (nx, ny), 3, color, -1)
 
             # Label pill
-            if is_spoof:
+            if threat and threat.is_threat:
+                if threat.is_fallen:
+                    prefix = "EMERGENCY: FALL DETECTED! "
+                elif threat.threat_category == "CONCEALED_FACE":
+                    prefix = f"ALERT: CONCEALED ({threat.concealment_type or 'MASK'}) "
+                elif threat.threat_category == "RAPID_DASH":
+                    prefix = f"ALERT: DASH ({threat.velocity_px_sec:.0f}px/s) "
+                elif threat.threat_category == "PROWLER_PACING":
+                    prefix = f"ALERT: PROWLER (score={threat.prowling_score:.2f}) "
+                else:
+                    prefix = f"THREAT: {threat.threat_category} "
+            elif is_spoof:
                 prefix = f"SPOOF ALERT! ({attack_type or 'Fake Face'}) "
             elif is_loiter:
                 prefix = "LOITERING! "
             else:
                 prefix = ""
+
             live_pct = int(det.get("liveness_score", 1.0) * 100)
             live_txt = f" [Live: {live_pct}%]" if not is_spoof else " [FAKE]"
             id_txt = f"{name} ({det.get('match_score', 0.94)*100:.0f}%)" if name else f"Unknown ({det['score']*100:.0f}%)"
@@ -1602,6 +2162,16 @@ class MikoVoRaRa11VisionEngine:
             cv2.rectangle(frame, (x, ly - th - 4), (x + tw + 10, ly + 4), (20, 20, 22), -1)
             cv2.rectangle(frame, (x, ly - th - 4), (x + tw + 10, ly + 4), color, 1)
             cv2.putText(frame, label, (x + 5, ly - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (245, 245, 247), 1, cv2.LINE_AA)
+
+            # Threat diagnostic sub-badge
+            if threat and threat.is_threat:
+                diag = f"Occ: {threat.occlusion_ratio:.2f} | Vel: {threat.velocity_px_sec:.0f} px/s | Prowl: {threat.prowling_score:.2f}"
+                (dtw, dth), _ = cv2.getTextSize(diag, cv2.FONT_HERSHEY_SIMPLEX, 0.38, 1)
+                dly = y + bh + 16
+                if dly < h - 5:
+                    cv2.rectangle(frame, (x, dly - dth - 3), (x + dtw + 8, dly + 3), (20, 20, 22), -1)
+                    cv2.rectangle(frame, (x, dly - dth - 3), (x + dtw + 8, dly + 3), color, 1)
+                    cv2.putText(frame, diag, (x + 4, dly - 1), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (240, 240, 245), 1, cv2.LINE_AA)
 
         return frame
 
@@ -1636,8 +2206,36 @@ class MikoVoRaRa11VisionEngine:
             spoof_types = [d.get("attack_type") or "تصویر جعلی" for d in detections if d.get("is_spoof")]
             custom_cap = f"🚨 هشدار ضدتقلب MikoVo RaRa 11: تلاش برای دور زدن بیومتریک با {', '.join(spoof_types)} شناسایی و دفع شد!"
 
+        threat_d = next((d for d in detections if d.get("threat") and d["threat"].threat_level in ("ELEVATED", "CRITICAL")), None)
+        if threat_d:
+            state["stats"]["threat_count"] = state["stats"].get("threat_count", 0) + 1
+            t_report = threat_d["threat"]
+            t_cat = t_report.threat_category
+            if t_cat == "PERSON_FALLEN":
+                custom_cap = "🚨 وضعیت اضطراری MikoVo RaRa 11: سقوط ناگهانی / بیهوشی شخص در صحنه شناسایی شد!"
+            elif t_cat == "CONCEALED_FACE":
+                c_type = t_report.occlusion.concealment_type or "ماسک یا پوشش"
+                custom_cap = f"⚠️ هشدار امنیتی MikoVo RaRa 11: فرد مشکوک با چهره پوشانده شده ({c_type}) شناسایی شد!"
+            elif t_cat == "RAPID_DASH":
+                custom_cap = "⚡ هشدار امنیتی MikoVo RaRa 11: دویدن یا حمله ناگهانی و هجوم پرسرعت فرد ثبت شد!"
+            elif t_cat == "PROWLER_PACING":
+                custom_cap = "👁️ هشدار پایش محیطی MikoVo RaRa 11: پرسه زدن مکرر و مشکوک (Prowler) در محدوده ثبت شد!"
+            else:
+                custom_cap = f"⚠️ هشدار رفتاری MikoVo RaRa 11: تهدید رفتاری ({t_report.threat_level}) ثبت شد!"
+
         names_str = ", ".join(identified) if identified else "ناشناس"
-        if has_spoof:
+        if threat_d and threat_d["threat"].threat_category:
+            t_cat = threat_d["threat"].threat_category
+            if t_cat == "PERSON_FALLEN":
+                names_str = f"🚑 سقوط/بیهوشی ({names_str})"
+            elif t_cat == "CONCEALED_FACE":
+                c_type = threat_d["threat"].occlusion.concealment_type or "ماسک"
+                names_str = f"🎭 چهره پوشانده ({c_type})"
+            elif t_cat == "RAPID_DASH":
+                names_str = f"⚡ هجوم سریع ({names_str})"
+            elif t_cat == "PROWLER_PACING":
+                names_str = f"🔄 پرسه زنی ({names_str})"
+        elif has_spoof:
             names_str = f"🚨 جعل چهره ({', '.join(spoof_types)})"
 
         log_entry = {
@@ -1706,7 +2304,7 @@ class TelegramBot:
         names = ", ".join(identified_names) if identified_names else "ناشناس (Unknown)"
         alert_badge = "⚠️ هشدار پرسه زدن فرد ناشناس!\n" if is_loitering else ""
         text = (
-            f"🛡 MikoTim Sentinel Pro | MikoVo RaRa 11 AI (512-D Core)\n"
+            f"🛡 MikoTim Sentinel Pro | MikoVo RaRa 11 AI\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"{alert_badge}"
             f"📌 {caption}\n"
@@ -1893,6 +2491,7 @@ def api_mikivo_info():
         head_pose="3D-to-2D PnP Euler Solver (Pitch/Yaw/Roll Attention Profiling)",
         fusion="Quality-Weighted EMA Track Hypersphere Memory",
         tracker="8-State Constant-Velocity Kalman with Mahalanobis Outlier Gating",
+        threat_profiler="Behavioral & Kinetic Threat Profiler (Face Occlusion, Looming Dash, Sudden Fall, Trajectory Entropy Prowler)",
         features=[
             "Canonical 112x112 3D-Aware Facial Rectification",
             "512-D L2-Normalized Metric Hypersphere Embeddings",
@@ -1905,6 +2504,10 @@ def api_mikivo_info():
             "Sliding-Window Identity Majority Voting",
             "Virtual Restricted Zone (ROI) & Directional Tripwire",
             "Dual Alert Media Pipeline (Photo & MP4 Video Clips)",
+            "Facial Occlusion & Concealment Detection (Mask / Bandana / Balaclava)",
+            "Kinetic Looming Dash & Rapid Approach Velocity Analyzer",
+            "Sudden Fall & Medical Emergency Aspect-Ratio Collapse Detector",
+            "Trajectory Tortuosity & Shannon Directional-Entropy Prowler Profiler",
         ]
     )
 
@@ -1933,6 +2536,7 @@ def api_status():
         in_count=state["stats"]["in_count"],
         out_count=state["stats"]["out_count"],
         loitering_count=state["stats"]["loitering_count"],
+        threat_count=state["stats"].get("threat_count", 0),
         hourly_traffic=state["hourly_traffic"],
         alert_media=config.get("alert_media", "photo"),
         logs=state["logs"][:35],
