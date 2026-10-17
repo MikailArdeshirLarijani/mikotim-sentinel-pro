@@ -667,6 +667,167 @@
             background: var(--bg-surface-hover);
         }
 
+        .settings-group {
+            overflow: visible !important;
+        }
+
+        /* ==================== Custom Glassmorphic Dropdowns ==================== */
+        .custom-dropdown {
+            position: relative;
+            width: 100%;
+            user-select: none;
+        }
+
+        .custom-dropdown-btn {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-hairline);
+            color: var(--text-primary);
+            padding: 11px 15px;
+            border-radius: 12px;
+            font-size: 0.88rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            transition: var(--transition-smooth);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+        }
+
+        .custom-dropdown-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.22);
+            transform: translateY(-1px);
+        }
+
+        .custom-dropdown.open .custom-dropdown-btn {
+            border-color: var(--apple-blue);
+            box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25), 0 8px 20px rgba(0, 0, 0, 0.35);
+        }
+
+        .dropdown-selected-content {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .dropdown-icon {
+            font-size: 1.15rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dropdown-label {
+            font-size: 0.88rem;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .dropdown-chevron {
+            color: var(--text-tertiary);
+            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            flex-shrink: 0;
+        }
+
+        .custom-dropdown.open .dropdown-chevron {
+            transform: rotate(180deg);
+            color: var(--apple-blue);
+        }
+
+        .custom-dropdown-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            background: rgba(22, 26, 40, 0.96);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 14px;
+            padding: 6px;
+            box-shadow: 0 20px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-6px) scale(0.98);
+            transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.22s;
+            pointer-events: none;
+        }
+
+        .custom-dropdown.open .custom-dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+        }
+
+        .custom-dropdown-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.86rem;
+            color: var(--text-secondary);
+            transition: all 0.18s ease;
+            gap: 10px;
+            margin-bottom: 2px;
+        }
+
+        .custom-dropdown-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .custom-dropdown-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+            transform: translateX(-2px);
+        }
+
+        .custom-dropdown-item.active {
+            background: linear-gradient(135deg, rgba(10, 132, 255, 0.32), rgba(0, 215, 255, 0.18));
+            border: 1px solid rgba(10, 132, 255, 0.45);
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        .dropdown-item-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dropdown-item-icon {
+            font-size: 1.1rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dropdown-item-text {
+            line-height: 1.4;
+        }
+
+        .dropdown-check {
+            opacity: 0;
+            color: #00d7ff;
+            transition: opacity 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .custom-dropdown-item.active .dropdown-check {
+            opacity: 1;
+        }
+
         .switch-row {
             display: flex;
             align-items: center;
@@ -1101,19 +1262,99 @@
                     </div>
                     <div class="form-field">
                         <label id="tMediaLabel">نوع رسانه هشدار:</label>
-                        <select id="selAlertMedia" class="apple-input">
+                        <select id="selAlertMedia" class="apple-input" style="display:none;">
                             <option value="photo">ارسال تک‌عکس باکیفیت (Single Photo)</option>
                             <option value="video">ارسال کلیپ ویدیویی MP4 (5-Sec Clip)</option>
                         </select>
+                        <div class="custom-dropdown" id="dropdownAlertMedia">
+                            <div class="custom-dropdown-btn" onclick="toggleDropdown('dropdownAlertMedia')">
+                                <div class="dropdown-selected-content">
+                                    <span class="dropdown-icon" id="mediaSelectedIcon">📸</span>
+                                    <span class="dropdown-label" id="mediaSelectedText">ارسال تک‌عکس باکیفیت (Single Photo)</span>
+                                </div>
+                                <svg class="dropdown-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </div>
+                            <div class="custom-dropdown-menu">
+                                <div class="custom-dropdown-item active" data-value="photo" onclick="selectDropdownOption('selAlertMedia', 'dropdownAlertMedia', 'photo', 'ارسال تک‌عکس باکیفیت (Single Photo)', '📸')">
+                                    <div class="dropdown-item-left">
+                                        <span class="dropdown-item-icon">📸</span>
+                                        <span class="dropdown-item-text">ارسال تک‌عکس باکیفیت (Single Photo)</span>
+                                    </div>
+                                    <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </div>
+                                <div class="custom-dropdown-item" data-value="video" onclick="selectDropdownOption('selAlertMedia', 'dropdownAlertMedia', 'video', 'ارسال کلیپ ویدیویی MP4 (5-Sec Clip)', '🎬')">
+                                    <div class="dropdown-item-left">
+                                        <span class="dropdown-item-icon">🎬</span>
+                                        <span class="dropdown-item-text">ارسال کلیپ ویدیویی MP4 (5-Sec Clip)</span>
+                                    </div>
+                                    <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="form-field">
                         <label id="tTriggerLabel">شرط و اولویت ارسال هشدار:</label>
-                        <select id="selAlertTrigger" class="apple-input">
+                        <select id="selAlertTrigger" class="apple-input" style="display:none;">
                             <option value="stranger_only">فقط چهره‌های جدید و ناشناس (غریبه)</option>
                             <option value="all">تمام ترددها و حرکات (حساسیت کامل)</option>
                             <option value="roi_only">فقط نفوذ به محدوده امنیتی (ROI)</option>
                             <option value="known_only">فقط چهره‌های مجاز و آشنا</option>
                         </select>
+                        <div class="custom-dropdown" id="dropdownAlertTrigger">
+                            <div class="custom-dropdown-btn" onclick="toggleDropdown('dropdownAlertTrigger')">
+                                <div class="dropdown-selected-content">
+                                    <span class="dropdown-icon" id="triggerSelectedIcon">👤</span>
+                                    <span class="dropdown-label" id="triggerSelectedText">فقط چهره‌های جدید و ناشناس (غریبه)</span>
+                                </div>
+                                <svg class="dropdown-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </div>
+                            <div class="custom-dropdown-menu">
+                                <div class="custom-dropdown-item active" data-value="stranger_only" onclick="selectDropdownOption('selAlertTrigger', 'dropdownAlertTrigger', 'stranger_only', 'فقط چهره‌های جدید و ناشناس (غریبه)', '👤')">
+                                    <div class="dropdown-item-left">
+                                        <span class="dropdown-item-icon">👤</span>
+                                        <span class="dropdown-item-text">فقط چهره‌های جدید و ناشناس (غریبه)</span>
+                                    </div>
+                                    <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </div>
+                                <div class="custom-dropdown-item" data-value="all" onclick="selectDropdownOption('selAlertTrigger', 'dropdownAlertTrigger', 'all', 'تمام ترددها و حرکات (حساسیت کامل)', '⚡')">
+                                    <div class="dropdown-item-left">
+                                        <span class="dropdown-item-icon">⚡</span>
+                                        <span class="dropdown-item-text">تمام ترددها و حرکات (حساسیت کامل)</span>
+                                    </div>
+                                    <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </div>
+                                <div class="custom-dropdown-item" data-value="roi_only" onclick="selectDropdownOption('selAlertTrigger', 'dropdownAlertTrigger', 'roi_only', 'فقط نفوذ به محدوده امنیتی (ROI)', '🛡️')">
+                                    <div class="dropdown-item-left">
+                                        <span class="dropdown-item-icon">🛡️</span>
+                                        <span class="dropdown-item-text">فقط نفوذ به محدوده امنیتی (ROI)</span>
+                                    </div>
+                                    <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </div>
+                                <div class="custom-dropdown-item" data-value="known_only" onclick="selectDropdownOption('selAlertTrigger', 'dropdownAlertTrigger', 'known_only', 'فقط چهره‌های مجاز و آشنا', '🔑')">
+                                    <div class="dropdown-item-left">
+                                        <span class="dropdown-item-icon">🔑</span>
+                                        <span class="dropdown-item-text">فقط چهره‌های مجاز و آشنا</span>
+                                    </div>
+                                    <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="switch-row">
                         <span id="tAutoSend">ارسال خودکار به تلگرام:</span>
@@ -2799,6 +3040,69 @@
             }).catch(() => {});
         }
 
+        // ==================== Custom Glassmorphic Dropdowns ====================
+        function toggleDropdown(id) {
+            const target = document.getElementById(id);
+            if (!target) return;
+            const wasOpen = target.classList.contains('open');
+            document.querySelectorAll('.custom-dropdown.open').forEach(el => el.classList.remove('open'));
+            if (!wasOpen) {
+                target.classList.add('open');
+            }
+        }
+
+        function selectDropdownOption(selectId, dropdownId, val, label, icon) {
+            const sel = document.getElementById(selectId);
+            if (sel) {
+                sel.value = val;
+                sel.dispatchEvent(new Event('change'));
+            }
+            const drop = document.getElementById(dropdownId);
+            if (drop) {
+                const iconEl = drop.querySelector('.dropdown-icon');
+                const textEl = drop.querySelector('.dropdown-label');
+                if (iconEl && icon) iconEl.innerText = icon;
+                if (textEl && label) textEl.innerText = label;
+                drop.querySelectorAll('.custom-dropdown-item').forEach(item => {
+                    if (item.getAttribute('data-value') === val) {
+                        item.classList.add('active');
+                    } else {
+                        item.classList.remove('active');
+                    }
+                });
+                drop.classList.remove('open');
+            }
+            saveConfig();
+        }
+
+        function syncCustomDropdowns() {
+            const syncOne = (selectId, dropdownId) => {
+                const sel = document.getElementById(selectId);
+                const drop = document.getElementById(dropdownId);
+                if (!sel || !drop) return;
+                const currentVal = sel.value;
+                const targetItem = drop.querySelector(`.custom-dropdown-item[data-value="${currentVal}"]`);
+                if (targetItem) {
+                    drop.querySelectorAll('.custom-dropdown-item').forEach(el => el.classList.remove('active'));
+                    targetItem.classList.add('active');
+                    const iconEl = drop.querySelector('.dropdown-icon');
+                    const textEl = drop.querySelector('.dropdown-label');
+                    const itemIcon = targetItem.querySelector('.dropdown-item-icon');
+                    const itemText = targetItem.querySelector('.dropdown-item-text');
+                    if (iconEl && itemIcon) iconEl.innerText = itemIcon.innerText;
+                    if (textEl && itemText) textEl.innerText = itemText.innerText;
+                }
+            };
+            syncOne('selAlertMedia', 'dropdownAlertMedia');
+            syncOne('selAlertTrigger', 'dropdownAlertTrigger');
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.custom-dropdown')) {
+                document.querySelectorAll('.custom-dropdown.open').forEach(el => el.classList.remove('open'));
+            }
+        });
+
         function loadConfig() {
             try {
                 const raw = localStorage.getItem('mikotim_cfg');
@@ -2825,7 +3129,10 @@
                     if (cfg.roiPoints && Array.isArray(cfg.roiPoints)) roiPoints = cfg.roiPoints;
                     updateScheduleStatusUI();
                 }
-            } catch (e) {}
+                syncCustomDropdowns();
+            } catch (e) {
+                syncCustomDropdowns();
+            }
         }
 
         // ==================== Periodic Sync with Python Server ====================
