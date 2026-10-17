@@ -1,20 +1,10 @@
-# OS generated files
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Temporary and backup files
-*.bak
-*.tmp
-*.log
-*.swp
-
-# IDE and Editor files
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-
-# Node modules / Scratch
-node_modules/
-scratch/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pt
+settings.json
+faces/faces_db.json
+logs/
+.venv/
+env/

@@ -1,99 +1,86 @@
 # MikoTim Sentinel Pro
 
-سامانه سبک پایش وب‌کم، تشخیص حرکت، ثبت چهره و ارسال هشدار به تلگرام  
-Lightweight webcam monitoring system with motion detection, face registration, and Telegram alerts.
+سامانه متن‌باز پایش و نظارت تصویری هوشمند با پایتون، YOLO و تلگرام  
+**Open-source intelligent surveillance & identity monitor using Python, YOLO, and Telegram**
 
 ---
 
-### 🌐 انتخاب زبان / Select Language
-> برای مشاهده یا بستن هر زبان، روی عنوان آن کلیک کنید:  
-> Click on the section title below to expand or collapse:
+## معرفی پروژه | Overview
+
+### فارسی
+**MikoTim Sentinel Pro** یک ابزار محلی و متن‌باز برای نظارت تصویری و هشدار امنیتی است. این سیستم به وسیله وب‌کم یا دوربین متصل به سیستم، محیط را پایش می‌کند و در صورت حضور افراد:
+- تردد فرد را به کمک شبکه عصبی **YOLOv8** به صورت دقیق تشخیص می‌دهد.
+- چهره فرد را با پروفایل‌های ثبت‌شده در پایگاه داده محلی مقایسه می‌کند.
+- تصویر فریم و گزارش رخداد را مستقیماً به چت یا کانال تلگرام ارسال می‌کند.
+- امکان کنترل و دستوردهی از راه دور از طریق تلگرام (مانند دریافت عکس زنده یا توقف موقت) را فراهم می‌سازد.
+- تمام پردازش‌ها ۱۰۰٪ روی سیستم کاربر انجام شده و هیچ داده‌ای به سرورهای خارجی ارسال نمی‌شود.
+
+### English
+**MikoTim Sentinel Pro** is a lightweight, local video surveillance tool. Connected to any standard webcam, it continuously monitors an area and:
+- Detects human presence using an optimized **YOLOv8** model.
+- Matches detected faces against saved profiles using normalized feature embeddings and cosine similarity.
+- Sends instant incident photos and metadata to your Telegram chat.
+- Accepts remote Telegram commands (`/photo`, `/status`, `/pause`, `/resume`).
+- Runs completely offline on your local machine with zero external cloud dependencies.
 
 ---
 
-<details open>
-<summary><h2>🇮🇷 توضیحات فارسی</h2></summary>
+## قابلیت‌های کلیدی | Key Features
 
-### درباره پروژه
-این پروژه یک صفحه وب تک‌فایلی (`index.html`) است که با استفاده از جاوااسکریپت ساده و کانواس (Canvas)، وب‌کم سیستم را به یک دوربین پایش امنیتی تبدیل می‌کند. تمام پردازش‌های تصویر در مرورگر انجام می‌شود و هیچ اطلاعاتی به سرورهای خارجی ارسال نمی‌شود.
-
-### قابلیت‌های واقعی سامانه
-- **پایش تصویر با وب‌کم:** تشخیص حرکت در کادر دوربین با مقایسه فریم‌ها در کانواس مرورگر.
-- **ثبت و تشخیص چهره:**
-  - امکان ثبت چهره افراد به همراه نام آن‌ها در حافظه مرورگر (`localStorage`).
-  - محاسبه یک بردار ویژگی ۴۲ نقطه‌ای (هیستوگرام رنگ و الگوی روشنایی).
-  - مقایسه افراد حاضر در کادر با چهره‌های ثبت‌شده (تشابه کسینوسی).
-  - کادر سبز به همراه نام برای فرد شناسایی‌شده و کادر زرد برای فرد ناشناس.
-- **ارسال عکس به تلگرام:**
-  - ارسال خودکار تصویر با کادر و زمان به چت تلگرام از طریق Bot API رسمی تلگرام.
-  - گزینه «فقط هنگام ورود فرد جدید به کادر عکس بگیر».
-- **کنترل از راه دور با دستورات تلگرام:**
-  - `/photo` یا `عکس`: گرفتن عکس فوری از وب‌کم و ارسال به تلگرام.
-  - `/status` یا `وضعیت`: گزارش وضعیت فعال یا غیرفعال بودن دوربین.
-  - `/pause` یا `توقف`: توقف موقت ثبت رویدادها.
-  - `/resume` یا `ادامه`: ادامه پایش.
-- **رسم محدوده حساس (ROI):** قابلیت کشیدن کادر روی تصویر برای پایش فقط یک بخش خاص.
-- **شیفت زمانی:** تعیین بازه ساعتی مشخص برای فعال بودن سیستم.
-- **خروجی اکسل:** دانلود تاریخچه ترددها در قالب فایل CSV.
-- **پخش صدا:** آلارم صوتی کوتاه هنگام تشخیص حضور فرد.
-- **دوزبانه و تم:** امکان انتخاب زبان فارسی/انگلیسی و تم تیره/روشن.
-
-### نحوه اجرا
-1. فایل `index.html` را در مرورگر (مانند Chrome یا Edge) باز کنید.
-2. دکمه **«شروع پایش»** را بزنید و اجازه دسترسی به وب‌کم را تایید کنید.
-
-### تنظیم اتصال به تلگرام
-1. در تلگرام به ربات `@BotFather` رفته و با دستور `/newbot` یک ربات بسازید و توکن آن را کپی کنید.
-2. شناسه عددی اکانت خود را از ربات `@userinfobot` دریافت کنید.
-3. در تب **تنظیمات** برنامه:
-   - توکن ربات و شناسه چت را وارد کنید.
-   - دکمه **تست اتصال** و سپس **ذخیره تنظیمات** را بزنید.
-
-</details>
+- **تشخیص اشخاص با یادگیری عمیق (Deep Learning):** برخلاف روش‌های سنتی تفاضل فریم که با هر تغییر نوری آلارم خطا می‌دادند، مدل YOLO مستقیماً شکل و ساختار بدن انسان را شناسایی می‌کند.
+- **بانک چهره و احراز هویت محلی:** ثبت سریع پروفایل افراد مجاز از روی تصویر زنده و شناسایی نام آن‌ها روی فریم.
+- **پنل وب دوزبانه (فارسی / انگلیسی):** رابط کاربری واکنش‌گرا با پشتیبانی از تم تاریک و روشن، استریم زنده MJPEG و جدول لاگ وقایع.
+- **یکپارچه‌سازی کامل با تلگرام:** ارسال گزارش هشدار با عکس، تاریخ و ساعت، درصد اطمینان و نام فرد شناسایی‌شده.
+- **تنظیمات ذخیره‌شونده:** مدیریت زمان تاخیر بین هشدارها (Cooldown)، فیلتر عدم تکرار هشدار برای فرد قبلی و تنظیم شیفت‌های کاری.
 
 ---
 
-<details open>
-<summary><h2>🇬🇧 English Documentation</h2></summary>
+## نیازمندی‌ها و نصب | Requirements & Setup
 
-### Overview
-MikoTim Sentinel Pro is a single-file web application (`index.html`) built with vanilla JavaScript and HTML5 Canvas. It turns your webcam into an offline motion and security monitor that can register faces and dispatch photo alerts to Telegram. All video processing runs locally in your browser.
+### نیازمندی‌ها | Prerequisites
+- پایتون نسخه 3.10 یا بالاتر
+- یک وب‌کم یا دوربین USB
 
-### Real Features
-- **Webcam Monitoring:** Real-time motion detection using browser Canvas pixel differencing.
-- **Face Registration & Recognition:**
-  - Register individuals with their name, saved locally in browser `localStorage`.
-  - Extracts a 42-point feature signature (color histogram and spatial grid pattern).
-  - Matches live faces against saved entries using cosine similarity.
-  - Displays a green bracket with the person's name for matches, or an amber bracket for unknown subjects.
-- **Telegram Photo Alerts:**
-  - Automatically dispatches captured photos with bounding box and timestamp to your Telegram chat via official Bot API.
-  - Optional filter: "Capture only when a new person enters".
-- **Remote Telegram Commands:**
-  - `/photo`: Takes an instant camera snapshot and sends it back to Telegram.
-  - `/status`: Returns current camera and monitoring status.
-  - `/pause`: Pauses detection and capture triggers.
-  - `/resume`: Resumes normal monitoring.
-- **Sensitive ROI Zone:** Draw a custom rectangle on the camera stream to monitor only a specific area.
-- **Shift Scheduling:** Set active hours (e.g. night shift) to restrict alerts to specific times.
-- **CSV Export:** Download the incident history as a CSV spreadsheet.
-- **Audio Chime:** Plays a short chime through Web Audio API upon subject detection.
-- **Bilingual & Theme:** Built-in English / Persian language switcher and Dark / Light theme.
+### ۱. کلون کردن مخزن و نصب وابستگی‌ها | Clone & Install
+```bash
+git clone https://github.com/MikailArdeshirLarijani/mikotim-sentinel-pro.git
+cd mikotim-sentinel-pro
+pip install -r requirements.txt
+```
 
-### How to Run
-1. Open `index.html` directly in any modern browser (Chrome, Edge, Firefox, Brave).
-2. Click **Start Monitoring** and grant camera permissions.
-
-### Telegram Setup
-1. Create a bot using `@BotFather` on Telegram and copy the Bot Token.
-2. Get your numeric Chat ID using `@userinfobot`.
-3. In the application's **Settings** tab:
-   - Enter your Bot Token and Chat ID.
-   - Click **Test Connection**, then click **Save Settings**.
-
-</details>
+### ۲. اجرای سامانه | Running the App
+می‌توانید فایل `run.bat` را اجرا کنید یا دستور زیر را در ترمینال بزنید:
+```bash
+python app.py
+```
+سپس مرورگر خود را باز کرده و به آدرس زیر بروید:
+👉 **http://127.0.0.1:5000**
 
 ---
 
-### 📄 مجوز / License
-[MIT License](LICENSE)
+## اجرای تست‌های خودکار | Running Tests
+پروژه شامل یک مجموعه تست واحد برای بررسی عملکرد پایگاه داده چهره، ریاضیات بردارها، درگاه تلگرام و مسیرهای سرور است:
+```bash
+python -m unittest tests/test_suite.py
+```
+
+---
+
+## ساختار فایل‌ها | Directory Structure
+```text
+├── app.py              # سرور اصلی Flask و کنترل‌کننده‌های API
+├── detector.py         # پایپ‌لاین تشخیص YOLO و استخراج ویژگی‌های چهره
+├── telegram_bot.py     # کلاس ارتباط با تلگرام و پولینگ دستورات
+├── templates/
+│   └── index.html      # قالب وب دوزبانه و داشبورد زنده
+├── tests/
+│   └── test_suite.py   # تست‌های خودکار
+├── faces/              # محل ذخیره بردارهای مشخصه چهره‌ها
+├── requirements.txt    # لیست کتابخانه‌های پایتون
+└── run.bat             # اسکریپت اجرای سریع در ویندوز
+```
+
+---
+
+## لایسنس | License
+این پروژه به صورت متن‌باز تحت پروانه [MIT](LICENSE) منتشر شده است.

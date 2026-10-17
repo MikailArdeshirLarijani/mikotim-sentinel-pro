@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MikoTim Sentinel Pro</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0b0f19;
+            --bg-surface: #111827;
+            --bg-elevated: #1f2937;
+            --border: rgba(255, 255, 255, 0.08);
+            --border-hover: #3b82f6;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --emerald: #10b981;
+            --amber: #f59e0b;
+            --rose: #ef4444;
+            --blue: #3b82f6;
+            --radius: 12px;
+            --sans: 'Vazirmatn', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --mono: 'JetBrains Mono', monospace;
+        }
+
+        [data-theme="light"] {
+            --bg-base: #f3f4f6;
+            --bg-surface: #ffffff;
+            --bg-elevated: #e5e7eb;
+            --border: rgba(0, 0, 0, 0.08);
+            --border-hover: #2563eb;
+            --text-main: #111827;
+            --text-muted: #4b5563;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+        }
+
+        body {
+            font-family: var(--sans);
+            background: var(--bg-base);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0.8rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 40;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand-logo {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--blue), var(--emerald));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .brand h1 {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-subtle {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        .btn-subtle:hover {
+            border-color: var(--border-hover);
+        }
+
+        main {
+            flex: 1;
+            padding: 1.25rem;
+            max-width: 1600px;
+            width: 100%;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 1.25rem;
+        }
+
+        @media (max-width: 1024px) {
+            main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .viewport-pane {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .video-box {
+            background: #000;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            position: relative;
+            aspect-ratio: 16 / 9;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .video-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .video-idle {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            gap: 10px;
+            background: var(--bg-surface);
+        }
+
+        .live-tag {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid var(--border);
+            padding: 4px 10px;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--rose);
+        }
+
+        .dot.active {
+            background: var(--emerald);
+            box-shadow: 0 0 8px var(--emerald);
+        }
+
+        .action-bar {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .btn {
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: var(--emerald);
+            color: #fff;
+        }
+
+        .btn-stop {
+            background: var(--rose);
+            color: #fff;
+        }
+
+        .btn-dark {
+            background: var(--bg-elevated);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+        }
+
+        .btn-dark:hover {
+            border-color: var(--border-hover);
+        }
+
+        .stat-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        @media (max-width: 640px) {
+            .stat-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1rem;
+        }
+
+        .card-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .card-num {
+            font-family: var(--mono);
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .table-wrap {
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            text-align: right;
+        }
+
+        [dir="ltr"] table {
+            text-align: left;
+        }
+
+        th {
+            background: var(--bg-elevated);
+            color: var(--text-muted);
+            padding: 8px 12px;
+            position: sticky;
+            top: 0;
+        }
+
+        td {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-pane {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            gap: 4px;
+        }
+
+        .tab-link {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 8px 12px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+
+        .tab-link.active {
+            color: var(--blue);
+            border-bottom-color: var(--blue);
+        }
+
+        .input-row {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 10px;
+        }
+
+        .input-row label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .input-ctrl {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 7px 10px;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            outline: none;
+        }
+
+        .input-ctrl:focus {
+            border-color: var(--border-hover);
+        }
+
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .list-box {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 8px;
+        }
+
+        .profile-chip {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-elevated);
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            font-size: 0.8rem;
+        }
+
+        .btn-trash {
+            background: none;
+            border: none;
+            color: var(--rose);
+            cursor: pointer;
+        }
+
+        #toasts {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            z-index: 100;
+        }
+
+        [dir="ltr"] #toasts {
+            right: auto;
+            left: 20px;
+        }
+
+        .toast-item {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="brand">
+            <div class="brand-logo">M</div>
+            <h1>MikoTim Sentinel Pro</h1>
+        </div>
+        <div class="header-actions">
+            <button class="btn-subtle" onclick="toggleLang()" id="langBtn">English</button>
+            <button class="btn-subtle" onclick="toggleTheme()" id="themeBtn">🌙</button>
+        </div>
+    </header>
+
+    <main>
+        <section class="viewport-pane">
+            <div class="video-box">
+                <img id="camFeed" src="/video_feed" style="display:none;" alt="Camera">
+                <div id="camIdle" class="video-idle">
+                    <p id="tCameraIdle">دوربین در حالت غیرفعال است</p>
+                </div>
+                <div class="live-tag">
+                    <span id="dot" class="dot"></span>
+                    <span id="tStatus">آماده</span>
+                </div>
+            </div>
+
+            <div class="action-bar">
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-primary" id="startBtn" onclick="startStream()">
+                        <span id="tStart">شروع پایش</span>
+                    </button>
+                    <button class="btn btn-stop" id="stopBtn" onclick="stopStream()" style="display:none;">
+                        <span id="tStop">توقف</span>
+                    </button>
+                    <button class="btn btn-dark" onclick="takePhoto()">
+                        <span id="tSnap">عکس دستی</span>
+                    </button>
+                </div>
+                <div>
+                    <button class="btn btn-dark" onclick="calibrate()">
+                        <span id="tCalib">کالیبره پس‌زمینه</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="stat-cards">
+                <div class="card">
+                    <span class="card-label" id="tFps">نرخ فریم</span>
+                    <span class="card-num" id="fpsVal">0.0</span>
+                </div>
+                <div class="card">
+                    <span class="card-label" id="tPersons">اشخاص حاضر</span>
+                    <span class="card-num" id="personVal">0</span>
+                </div>
+                <div class="card">
+                    <span class="card-label" id="tCaptures">تعداد ثبت</span>
+                    <span class="card-num" id="captureVal">0</span>
+                </div>
+                <div class="card">
+                    <span class="card-label" id="tTg">پیام‌های تلگرام</span>
+                    <span class="card-num" id="tgVal">0</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3 style="font-size:0.9rem; margin-bottom:8px;" id="tLogTitle">لاگ آخرین رویدادها</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th id="thTime">زمان</th>
+                                <th id="thCount">تعداد</th>
+                                <th id="thConf">اطمینان</th>
+                                <th id="thWho">هویت</th>
+                                <th id="thTg">وضعیت ارسال</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logRows">
+                            <tr><td colspan="5" style="text-align:center; color:var(--text-muted);" id="tEmptyLog">هنوز رویدادی ثبت نشده</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <aside class="sidebar-pane">
+            <div class="tabs">
+                <button class="tab-link active" id="tab1" onclick="showTab('faces')">
+                    <span id="tTabFaces">پروفایل‌های چهره</span>
+                </button>
+                <button class="tab-link" id="tab2" onclick="showTab('settings')">
+                    <span id="tTabSettings">تنظیمات</span>
+                </button>
+            </div>
+
+            <div class="card" id="paneFaces">
+                <h3 style="font-size:0.85rem; margin-bottom:10px;" id="tRegTitle">ثبت پروفایل جدید</h3>
+                <div class="input-row">
+                    <label id="tNameLabel">نام شخص:</label>
+                    <input type="text" id="nameInput" class="input-ctrl" placeholder="مثال: میکائیل">
+                </div>
+                <button class="btn btn-dark" style="width:100%; margin-bottom:12px;" onclick="registerFace()">
+                    <span id="tBtnReg">ثبت از تصویر دوربین</span>
+                </button>
+
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-size:0.8rem; color:var(--text-muted);" id="tListTitle">لیست چهره‌های ذخیره‌شده</span>
+                    <button class="btn-subtle" style="padding:2px 8px; font-size:0.75rem;" onclick="clearFaces()" id="tBtnClear">حذف همه</button>
+                </div>
+                <div class="list-box" id="faceList"></div>
+            </div>
+
+            <div class="card" id="paneSettings" style="display:none;">
+                <h3 style="font-size:0.85rem; margin-bottom:10px;" id="tTgTitle">تنظیمات ربات تلگرام</h3>
+                <div class="input-row">
+                    <label>Bot Token:</label>
+                    <input type="password" id="tgToken" class="input-ctrl">
+                </div>
+                <div class="input-row">
+                    <label>Chat ID:</label>
+                    <input type="text" id="tgChat" class="input-ctrl">
+                </div>
+                <div class="input-row">
+                    <label id="tCaptionLabel">عنوان هشدار:</label>
+                    <input type="text" id="customCaption" class="input-ctrl" value="هشدار تردد">
+                </div>
+                <div class="input-row">
+                    <label id="tCooldownLabel">فاصله بین ثبت‌ها (ثانیه):</label>
+                    <input type="number" id="cooldown" class="input-ctrl" value="6" min="1" max="60">
+                </div>
+
+                <div class="toggle-row">
+                    <span id="tAutoSend">ارسال خودکار:</span>
+                    <input type="checkbox" id="chkAuto" checked>
+                </div>
+                <div class="toggle-row">
+                    <span id="tOnlyNew">فقط فرد جدید:</span>
+                    <input type="checkbox" id="chkNew" checked>
+                </div>
+                <div class="toggle-row">
+                    <span id="tRemote">دستورات راه دور:</span>
+                    <input type="checkbox" id="chkRemote">
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                    <button class="btn btn-dark" style="flex:1;" onclick="saveConfig()">
+                        <span id="tSave">ذخیره</span>
+                    </button>
+                    <button class="btn btn-dark" onclick="testTg()">
+                        <span id="tTest">تست</span>
+                    </button>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <div id="toasts"></div>
+
+    <script>
+        const dict = {
+            fa: {
+                lang: 'English',
+                idle: 'دوربین در حالت غیرفعال است',
+                standby: 'آماده',
+                active: 'پایش فعال',
+                start: 'شروع پایش',
+                stop: 'توقف',
+                snap: 'عکس دستی',
+                calib: 'کالیبره پس‌زمینه',
+                fps: 'نرخ فریم',
+                persons: 'اشخاص حاضر',
+                captures: 'تعداد ثبت',
+                tg: 'پیام‌های تلگرام',
+                logTitle: 'لاگ آخرین رویدادها',
+                thTime: 'زمان',
+                thCount: 'تعداد',
+                thConf: 'اطمینان',
+                thWho: 'هویت',
+                thTg: 'وضعیت ارسال',
+                emptyLog: 'هنوز رویدادی ثبت نشده',
+                tabFaces: 'پروفایل‌های چهره',
+                tabSettings: 'تنظیمات',
+                regTitle: 'ثبت پروفایل جدید',
+                nameLabel: 'نام شخص:',
+                btnReg: 'ثبت از تصویر دوربین',
+                listTitle: 'لیست چهره‌های ذخیره‌شده',
+                btnClear: 'حذف همه',
+                tgTitle: 'تنظیمات ربات تلگرام',
+                captionLabel: 'عنوان هشدار:',
+                cooldownLabel: 'فاصله بین ثبت‌ها (ثانیه):',
+                autoSend: 'ارسال خودکار:',
+                onlyNew: 'فقط فرد جدید:',
+                remote: 'دستورات راه دور:',
+                save: 'ذخیره',
+                test: 'تست',
+                unknown: 'ناشناس'
+            },
+            en: {
+                lang: 'فارسی',
+                idle: 'Camera is currently inactive',
+                standby: 'Standby',
+                active: 'Monitoring Active',
+                start: 'Start Camera',
+                stop: 'Stop',
+                snap: 'Manual Snapshot',
+                calib: 'Calibrate Background',
+                fps: 'Frame Rate',
+                persons: 'Persons in View',
+                captures: 'Total Captures',
+                tg: 'Telegram Alerts',
+                logTitle: 'Recent Events Log',
+                thTime: 'Time',
+                thCount: 'Count',
+                thConf: 'Confidence',
+                thWho: 'Identity',
+                thTg: 'Telegram Status',
+                emptyLog: 'No events logged yet',
+                tabFaces: 'Face Profiles',
+                tabSettings: 'Settings',
+                regTitle: 'Register New Profile',
+                nameLabel: 'Name:',
+                btnReg: 'Register from Current Frame',
+                listTitle: 'Saved Face Profiles',
+                btnClear: 'Clear All',
+                tgTitle: 'Telegram Bot Settings',
+                captionLabel: 'Alert Title:',
+                cooldownLabel: 'Cooldown (sec):',
+                autoSend: 'Auto-send:',
+                onlyNew: 'New person only:',
+                remote: 'Remote commands:',
+                save: 'Save',
+                test: 'Test',
+                unknown: 'Unknown'
+            }
+        };
+
+        let currentLang = 'fa';
+        let streaming = false;
+
+        function notify(msg) {
+            const wrap = document.getElementById('toasts');
+            const item = document.createElement('div');
+            item.className = 'toast-item';
+            item.innerText = msg;
+            wrap.appendChild(item);
+            setTimeout(() => item.remove(), 3500);
+        }
+
+        function setLang(lang) {
+            currentLang = lang;
+            document.documentElement.lang = lang;
+            document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
+
+            const d = dict[lang];
+            document.getElementById('langBtn').innerText = d.lang;
+            document.getElementById('tCameraIdle').innerText = d.idle;
+            document.getElementById('tStart').innerText = d.start;
+            document.getElementById('tStop').innerText = d.stop;
+            document.getElementById('tSnap').innerText = d.snap;
+            document.getElementById('tCalib').innerText = d.calib;
+            document.getElementById('tFps').innerText = d.fps;
+            document.getElementById('tPersons').innerText = d.persons;
+            document.getElementById('tCaptures').innerText = d.captures;
+            document.getElementById('tTg').innerText = d.tg;
+            document.getElementById('tLogTitle').innerText = d.logTitle;
+            document.getElementById('thTime').innerText = d.thTime;
+            document.getElementById('thCount').innerText = d.thCount;
+            document.getElementById('thConf').innerText = d.thConf;
+            document.getElementById('thWho').innerText = d.thWho;
+            document.getElementById('thTg').innerText = d.thTg;
+            document.getElementById('tTabFaces').innerText = d.tabFaces;
+            document.getElementById('tTabSettings').innerText = d.tabSettings;
+            document.getElementById('tRegTitle').innerText = d.regTitle;
+            document.getElementById('tNameLabel').innerText = d.nameLabel;
+            document.getElementById('tBtnReg').innerText = d.btnReg;
+            document.getElementById('tListTitle').innerText = d.listTitle;
+            document.getElementById('tBtnClear').innerText = d.btnClear;
+            document.getElementById('tTgTitle').innerText = d.tgTitle;
+            document.getElementById('tCaptionLabel').innerText = d.captionLabel;
+            document.getElementById('tCooldownLabel').innerText = d.cooldownLabel;
+            document.getElementById('tAutoSend').innerText = d.autoSend;
+            document.getElementById('tOnlyNew').innerText = d.onlyNew;
+            document.getElementById('tRemote').innerText = d.remote;
+            document.getElementById('tSave').innerText = d.save;
+            document.getElementById('tTest').innerText = d.test;
+
+            updateBadge();
+        }
+
+        function toggleLang() {
+            setLang(currentLang === 'fa' ? 'en' : 'fa');
+        }
+
+        function toggleTheme() {
+            const cur = document.documentElement.getAttribute('data-theme');
+            const target = cur === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', target);
+            document.getElementById('themeBtn').innerText = target === 'light' ? '☀️' : '🌙';
+        }
+
+        function showTab(tab) {
+            document.getElementById('paneFaces').style.display = tab === 'faces' ? 'block' : 'none';
+            document.getElementById('paneSettings').style.display = tab === 'settings' ? 'block' : 'none';
+            document.getElementById('tab1').classList.toggle('active', tab === 'faces');
+            document.getElementById('tab2').classList.toggle('active', tab === 'settings');
+        }
+
+        function updateBadge() {
+            const dot = document.getElementById('dot');
+            const label = document.getElementById('tStatus');
+            const d = dict[currentLang];
+            if (streaming) {
+                dot.classList.add('active');
+                label.innerText = d.active;
+            } else {
+                dot.classList.remove('active');
+                label.innerText = d.standby;
+            }
+        }
+
+        async function startStream() {
+            try {
+                const res = await fetch('/api/start', { method: 'POST' });
+                const data = await res.json();
+                if (data.ok) {
+                    streaming = true;
+                    document.getElementById('camIdle').style.display = 'none';
+                    const feed = document.getElementById('camFeed');
+                    feed.src = '/video_feed?_=' + Date.now();
+                    feed.style.display = 'block';
+                    document.getElementById('startBtn').style.display = 'none';
+                    document.getElementById('stopBtn').style.display = 'inline-flex';
+                    updateBadge();
+                    notify(currentLang === 'fa' ? 'پایش آغاز شد' : 'Surveillance started');
+                } else {
+                    notify(data.error || 'Failed');
+                }
+            } catch (e) {
+                notify(e.message);
+            }
+        }
+
+        async function stopStream() {
+            try {
+                await fetch('/api/stop', { method: 'POST' });
+                streaming = false;
+                document.getElementById('camIdle').style.display = 'flex';
+                document.getElementById('camFeed').style.display = 'none';
+                document.getElementById('startBtn').style.display = 'inline-flex';
+                document.getElementById('stopBtn').style.display = 'none';
+                updateBadge();
+                notify(currentLang === 'fa' ? 'پایش متوقف شد' : 'Monitoring stopped');
+            } catch (e) {
+                notify(e.message);
+            }
+        }
+
+        async function takePhoto() {
+            try {
+                const res = await fetch('/api/snapshot', { method: 'POST' });
+                const d = await res.json();
+                if (d.ok) {
+                    const w = window.open('');
+                    w.document.write('<img src="' + d.image + '" style="max-width:100%;">');
+                }
+            } catch (e) {
+                notify(e.message);
+            }
+        }
+
+        async function calibrate() {
+            try {
+                await fetch('/api/calibrate', { method: 'POST' });
+                notify(currentLang === 'fa' ? 'مدل پس‌زمینه کالیبره شد' : 'Background recalibrated');
+            } catch (e) {
+                notify(e.message);
+            }
+        }
+
+        async function registerFace() {
+            const input = document.getElementById('nameInput');
+            const name = input.value.trim();
+            if (!name) {
+                notify(currentLang === 'fa' ? 'لطفاً نام را وارد کنید' : 'Enter name');
+                return;
+            }
+            try {
+                const res = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                const d = await res.json();
+                if (d.ok) {
+                    notify(currentLang === 'fa' ? `پروفایل ${name} ثبت شد` : `Profile ${name} registered`);
+                    input.value = '';
+                    loadProfiles();
+                } else {
+                    notify(d.message || 'Error');
+                }
+            } catch (e) {
+                notify(e.message);
+            }
+        }
+
+        async function loadProfiles() {
+            try {
+                const res = await fetch('/api/faces');
+                const d = await res.json();
+                const box = document.getElementById('faceList');
+                box.innerHTML = '';
+                if (!d.faces || !d.faces.length) {
+                    box.innerHTML = `<p style="font-size:0.75rem; color:var(--text-muted); text-align:center;">${currentLang === 'fa' ? 'پروفایلی ثبت نشده' : 'No profiles'}</p>`;
+                    return;
+                }
+                d.faces.forEach(f => {
+                    const chip = document.createElement('div');
+                    chip.className = 'profile-chip';
+                    chip.innerHTML = `<span>👤 ${f.name}</span><button class="btn-trash" onclick="removeFace('${f.id}')">✕</button>`;
+                    box.appendChild(chip);
+                });
+            } catch (e) {}
+        }
+
+        async function removeFace(id) {
+            try {
+                await fetch(`/api/faces/${id}`, { method: 'DELETE' });
+                loadProfiles();
+            } catch (e) {}
+        }
+
+        async function clearFaces() {
+            if (!confirm(currentLang === 'fa' ? 'همه پروفایل‌ها حذف شوند؟' : 'Clear all profiles?')) return;
+            try {
+                await fetch('/api/faces/clear', { method: 'POST' });
+                loadProfiles();
+            } catch (e) {}
+        }
+
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/settings');
+                const d = await res.json();
+                if (d.chat_id) document.getElementById('tgChat').value = d.chat_id;
+                if (d.custom_caption) document.getElementById('customCaption').value = d.custom_caption;
+                if (d.cooldown_sec) document.getElementById('cooldown').value = d.cooldown_sec;
+                document.getElementById('chkAuto').checked = !!d.auto_send;
+                document.getElementById('chkNew').checked = !!d.only_new_person;
+                document.getElementById('chkRemote').checked = !!d.remote_control;
+                if (d.has_token) document.getElementById('tgToken').placeholder = '••••••••••••';
+            } catch (e) {}
+        }
+
+        async function saveConfig() {
+            const payload = {
+                chat_id: document.getElementById('tgChat').value.trim(),
+                custom_caption: document.getElementById('customCaption').value.trim(),
+                cooldown_sec: parseInt(document.getElementById('cooldown').value) || 6,
+                auto_send: document.getElementById('chkAuto').checked,
+                only_new_person: document.getElementById('chkNew').checked,
+                remote_control: document.getElementById('chkRemote').checked,
+            };
+            const token = document.getElementById('tgToken').value.trim();
+            if (token) payload.bot_token = token;
+
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const d = await res.json();
+                if (d.ok) notify(currentLang === 'fa' ? 'تنظیمات ذخیره شد' : 'Settings saved');
+            } catch (e) {
+                notify(e.message);
+            }
+        }
+
+        async function testTg() {
+            try {
+                const res = await fetch('/api/test_telegram', { method: 'POST' });
+                const d = await res.json();
+                notify(d.ok ? 'ارتباط برقرار است' : (d.message || 'Error'));
+            } catch (e) {
+                notify(e.message);
+            }
+        }
+
+        async function pollStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const d = await res.json();
+
+                document.getElementById('fpsVal').innerText = d.fps.toFixed(1);
+                document.getElementById('personVal').innerText = d.person_count;
+                document.getElementById('captureVal').innerText = d.total_captures;
+                document.getElementById('tgVal').innerText = d.telegram_sent;
+
+                if (d.streaming !== streaming) {
+                    streaming = d.streaming;
+                    updateBadge();
+                }
+
+                const tbody = document.getElementById('logRows');
+                if (d.logs && d.logs.length) {
+                    tbody.innerHTML = '';
+                    d.logs.slice(0, 15).forEach(item => {
+                        const tr = document.createElement('tr');
+                        const who = (item.names && item.names.length) ? item.names.join(', ') : dict[currentLang].unknown;
+                        tr.innerHTML = `
+                            <td>${item.time.split(' ')[1] || item.time}</td>
+                            <td>${item.count}</td>
+                            <td>${Math.round(item.conf * 100)}%</td>
+                            <td>${who}</td>
+                            <td>${item.sent ? 'Sent' : 'Pending'}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+            } catch (e) {}
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            setLang('fa');
+            loadProfiles();
+            loadConfig();
+            setInterval(pollStatus, 1500);
+        });
+    </script>
+</body>
+</html>
