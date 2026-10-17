@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MikoTim Sentinel Pro | Apple-Grade Surveillance Suite</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>MikoTim Sentinel Pro — MikoVo RaRa 11 Tactical Vision AI (v4.2.0)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
@@ -1002,7 +1005,7 @@
             </div>
             <div class="brand-title">
                 <span>MikoTim Sentinel Pro</span>
-                <span class="brand-tag">MikoVo RaRa 11</span>
+                <span class="brand-tag">v4.2.0 • MikoVo RaRa 11</span>
             </div>
         </div>
 
@@ -2232,6 +2235,43 @@
         let cachedNativeFaces = [];
 
         async function startCamera() {
+            // If in Server Vision mode (Mode B), try starting server capture first
+            if (currentVisionMode === 'server_vision') {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 1400);
+                    const res = await fetch('/api/start', { method: 'POST', signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    const d = await res.json();
+                    if (d.ok) {
+                        isStreaming = true;
+                        const camIdle = document.getElementById('camIdle');
+                        if (camIdle) camIdle.style.display = 'none';
+                        const sFeed = document.getElementById('serverFeed');
+                        if (sFeed) {
+                            sFeed.style.display = 'block';
+                            sFeed.src = '/video_feed?' + Date.now();
+                        }
+                        video.style.display = 'none';
+                        const startBtn = document.getElementById('startBtn');
+                        const stopBtn = document.getElementById('stopBtn');
+                        if (startBtn) startBtn.style.display = 'none';
+                        if (stopBtn) stopBtn.style.display = 'inline-flex';
+                        updateBadge();
+                        notify(currentLang === 'fa' ? 'پایش سرور فعال شد' : 'Server vision active');
+                        return;
+                    }
+                } catch (e) {
+                    console.log("Server vision unavailable, falling back to client browser vision...");
+                }
+                // Server unavailable: seamlessly switch to Mode A (Client-Edge Vision)
+                currentVisionMode = 'client_edge';
+                localStorage.setItem('mikotim_mode', 'client_edge');
+                updateVisionModeUI();
+                notify(currentLang === 'fa' ? 'سوییچ خودکار به پردازش مرورگر (Mode A)...' : 'Switching to Client Edge (Mode A)...');
+            }
+
+            // Mode A (Client-Edge Vision via getUserMedia)
             try {
                 videoStream = await navigator.mediaDevices.getUserMedia({
                     video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
@@ -2245,6 +2285,9 @@
                 const camIdle = document.getElementById('camIdle');
                 if (camIdle) camIdle.style.display = 'none';
                 video.style.display = 'block';
+                const sFeed = document.getElementById('serverFeed');
+                if (sFeed) sFeed.style.display = 'none';
+
                 const startBtn = document.getElementById('startBtn');
                 const stopBtn = document.getElementById('stopBtn');
                 if (startBtn) startBtn.style.display = 'none';
@@ -2266,6 +2309,14 @@
         }
 
         function stopCamera() {
+            if (currentVisionMode === 'server_vision') {
+                fetch('/api/stop', { method: 'POST' }).catch(() => {});
+                const sFeed = document.getElementById('serverFeed');
+                if (sFeed) {
+                    sFeed.style.display = 'none';
+                    sFeed.src = '';
+                }
+            }
             if (videoStream) {
                 videoStream.getTracks().forEach(track => track.stop());
                 videoStream = null;
@@ -3507,7 +3558,19 @@
         }
 
         // ==================== Vision Operating Mode Management ====================
-        let currentVisionMode = localStorage.getItem('mikotim_mode') || 'server_vision';
+        function detectEnvironmentMode() {
+            const isFile = window.location.protocol === 'file:';
+            const isGhPages = window.location.hostname.includes('github.io');
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+            // If running on GitHub Pages or double-clicked as a file, default to Client-Edge (Mode A)
+            if (isFile || isGhPages || !isLocalhost) {
+                return 'client_edge';
+            }
+            return localStorage.getItem('mikotim_mode') || 'server_vision';
+        }
+
+        let currentVisionMode = detectEnvironmentMode();
 
         async function setVisionMode(mode) {
             currentVisionMode = mode;
