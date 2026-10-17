@@ -50,6 +50,7 @@ DATA_DIR.mkdir(exist_ok=True)
 
 CONFIG_PATH = DATA_DIR / "config.json"
 DB_PATH = DATA_DIR / "faces.json"
+MIKOVO_WEIGHTS = BASE_DIR / "mikovo_rara11.pt"
 POSE_WEIGHTS = BASE_DIR / "yolov8n-pose.pt"
 BASE_WEIGHTS = BASE_DIR / "yolov8n.pt"
 
@@ -1811,7 +1812,20 @@ class MikoVoRaRa11VisionEngine:
 
         self.model = None
         if HAS_YOLO:
-            weights = POSE_WEIGHTS if POSE_WEIGHTS.exists() else BASE_WEIGHTS
+            weights = (
+                MIKOVO_WEIGHTS
+                if MIKOVO_WEIGHTS.exists()
+                else (POSE_WEIGHTS if POSE_WEIGHTS.exists() else BASE_WEIGHTS)
+            )
+            if not weights.exists():
+                try:
+                    tmp_m = YOLO("yolov8n-pose.pt")
+                    if POSE_WEIGHTS.exists():
+                        import shutil
+                        shutil.move(str(POSE_WEIGHTS), str(MIKOVO_WEIGHTS))
+                    weights = MIKOVO_WEIGHTS
+                except Exception:
+                    pass
             if weights.exists():
                 try:
                     self.model = YOLO(str(weights))
