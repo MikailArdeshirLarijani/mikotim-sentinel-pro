@@ -1244,10 +1244,10 @@
 
         <!-- ==================== SECTION 4: ANALYTICS & HOURLY METRICS ==================== -->
         <section id="viewAnalytics" class="app-view">
-            <div class="glass-card">
-                <div class="glass-card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
+            <div class="glass-card" style="padding: 24px;">
+                <div class="glass-card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:22px;">
                     <div>
-                        <h2 style="margin:0; font-size:1.15rem; display:flex; align-items:center; gap:8px;">
+                        <h2 style="margin:0; font-size:1.18rem; display:flex; align-items:center; gap:8px;">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--apple-blue)" stroke-width="2">
                                 <line x1="18" y1="20" x2="18" y2="10"/>
                                 <line x1="12" y1="20" x2="12" y2="4"/>
@@ -1255,17 +1255,17 @@
                             </svg>
                             <span id="tAnalyticsTitle">مرکز آمار و تحلیل تردد MikoVo RaRa 11</span>
                         </h2>
-                        <p style="margin:4px 0 0 0; font-size:0.8rem; color:var(--text-secondary);" id="tAnalyticsSubtitle">تحلیل هوشمند ترافیک، الگوهای تردد ساعتی و سطح تهدیدات امنیتی</p>
+                        <p style="margin:5px 0 0 0; font-size:0.82rem; color:var(--text-secondary); line-height:1.5;" id="tAnalyticsSubtitle">تحلیل هوشمند ترافیک، الگوهای تردد ساعتی و سطح تهدیدات امنیتی</p>
                     </div>
-                    <div style="display:flex; gap:8px;">
-                        <button class="apple-btn" onclick="requestTelegramSummary()" style="font-size:0.8rem; padding:6px 12px;">
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <button class="pill-btn" onclick="requestTelegramSummary()" style="font-size:0.82rem; padding:8px 14px;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="22" y1="2" x2="11" y2="13"/>
                                 <polygon points="22 2 15 22 11 13 2 9 22 2"/>
                             </svg>
                             <span id="tDispatchSummary">ارسال خلاصه به تلگرام</span>
                         </button>
-                        <button class="apple-btn apple-btn-primary" onclick="refreshAnalytics()" style="font-size:0.8rem; padding:6px 12px;">
+                        <button class="pill-btn apple-btn-primary" onclick="refreshAnalytics()" style="font-size:0.82rem; padding:8px 14px;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="23 4 23 10 17 10"/>
                                 <polyline points="1 20 1 14 7 14"/>
@@ -1531,7 +1531,7 @@
                         </label>
                     </div>
                     <div style="display:flex; gap:10px; margin-top:10px;">
-                        <button class="apple-btn apple-btn-primary" style="flex:1; justify-content:center;" onclick="saveConfig()">
+                        <button class="apple-btn apple-btn-primary" style="flex:1; justify-content:center;" onclick="saveConfig(true)">
                             <span id="tSave">ذخیره تنظیمات</span>
                         </button>
                         <button class="apple-btn apple-btn-secondary" style="justify-content:center;" onclick="testTelegramConnection()">
@@ -1648,7 +1648,7 @@
                     <div class="switch-row">
                         <span id="tMirrorLabel">حالت آینه‌ای تصویر دوربین:</span>
                         <label class="apple-switch">
-                            <input type="checkbox" id="chkMirror" onchange="applyMirrorState(this.checked)">
+                            <input type="checkbox" id="chkMirror" onchange="applyMirrorState(this.checked, true)">
                             <span class="slider"></span>
                         </label>
                     </div>
@@ -2045,13 +2045,13 @@
             const chk = document.getElementById('chkMirror');
             if (chk) {
                 chk.checked = !chk.checked;
-                applyMirrorState(chk.checked);
+                applyMirrorState(chk.checked, true);
             } else {
-                applyMirrorState(!isMirrored);
+                applyMirrorState(!isMirrored, true);
             }
         }
 
-        function applyMirrorState(mirrored) {
+        function applyMirrorState(mirrored, shouldSave = false) {
             isMirrored = !!mirrored;
             video.style.transform = isMirrored ? 'scaleX(-1)' : 'none';
             const mText = document.getElementById('tMirrorStatus');
@@ -2063,7 +2063,7 @@
                 ? (currentLang === 'fa' ? 'آینه (فعال)' : 'Mirror (Active)')
                 : (currentLang === 'fa' ? 'حالت آینه‌ای' : 'Mirror Feed');
             if (btnM) btnM.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg><span>${mirrorBtnText}</span>`;
-            saveConfig();
+            if (shouldSave) saveConfig(false);
         }
 
         // ==================== Active Schedule Helper ====================
@@ -2340,7 +2340,7 @@
             syncCustomDropdowns();
             updateVisionModeUI();
             renderHourlyChart(hourlyTraffic);
-            applyMirrorState(isMirrored);
+            applyMirrorState(isMirrored, false);
             renderProfileList();
             updateScheduleStatusUI();
             updateBadge();
@@ -3689,7 +3689,7 @@
         }
 
         // ==================== Settings Persistence ====================
-        function saveConfig() {
+        function saveConfig(showToast = false) {
             const cfg = {
                 token: document.getElementById('tgToken').value.trim(),
                 chat: document.getElementById('tgChat').value.trim(),
@@ -3712,7 +3712,9 @@
             };
             try {
                 localStorage.setItem('mikotim_cfg', JSON.stringify(cfg));
-                notify(currentLang === 'fa' ? 'تنظیمات با موفقیت ذخیره شد' : 'Settings saved');
+                if (showToast) {
+                    notify(currentLang === 'fa' ? 'تنظیمات با موفقیت ذخیره شد' : 'Settings saved');
+                }
             } catch (e) {}
 
             fetch('/api/settings', {
