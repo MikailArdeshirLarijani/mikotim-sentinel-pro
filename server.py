@@ -4094,115 +4094,36 @@ class MikoVoRaRa11VisionEngine:
                         (24, 61), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 2, cv2.LINE_AA)
 
         for det in detections:
-            # Use shrink-wrapped anatomical body bbox if available
-            body_box = det.get("body_bbox")
-            head_box = det.get("head_bbox")
-            posture = det.get("posture")
-            if body_box is not None:
-                x, y, bw, bh = body_box
-            else:
-                x, y, bw, bh = det.get("smooth_bbox", det["bbox"])
+            # Get bounding box
+            x, y, bw, bh = det.get("smooth_bbox", det["bbox"])
 
             name = det.get("name")
             tid = det.get("track_id", 1)
-            is_loiter = det.get("is_loitering", False)
+            is_spoof = det.get("is_spoof", False)
             in_roi = det.get("in_roi", True)
 
-            is_spoof = det.get("is_spoof", False)
-            attack_type = det.get("attack_type")
-            threat = det.get("threat")
-
-            if threat and threat.threat_level == "CRITICAL":
-                color = (0, 0, 255) # Alert Red for Critical Threat
-            elif is_spoof:
-                color = (0, 0, 255) # Alert Red for Spoof Attacks
-            elif threat and threat.threat_level == "ELEVATED":
-                color = (0, 140, 255) # Intense Orange for Elevated Threat
-            elif is_loiter:
-                color = (0, 0, 255) # Warning Red
-            elif not in_roi:
-                color = (120, 120, 120) # Outside Zone Grey
+            # Simple color logic
+            if is_spoof:
+                color = (0, 0, 255)       # Red
             elif name:
-                color = (48, 209, 88) # Authorized Green
+                color = (48, 209, 88)     # Green
             else:
-                color = (0, 165, 255) # Unknown Amber
+                color = (0, 165, 255)     # Orange/Amber
 
-            # 1. MikoVo RaRa 11 Tactical Body-Cam Connected Mesh & Nodes (Subsystem 12)
-            k17 = det.get("k17")
-            raw_box = tuple(det.get("smooth_bbox", det["bbox"]))
-            if k17 is None:
-                k17 = np.zeros((17, 3), dtype=np.float64)
+            # Simple rectangle
+            ix, iy = int(x), int(y)
+            ix2, iy2 = int(x + bw), int(y + bh)
+            cv2.rectangle(frame, (ix, iy), (ix2, iy2), color, 2, cv2.LINE_AA)
 
-            try:
-                self.tactical_mesh.render(
-                    frame=frame,
-                    keypoints=k17,
-                    bbox=raw_box,
-                    track_id=tid,
-                    color=color,
-                    show_nodes=True,
-                    show_mesh=True,
-                    show_telemetry=False,
-                    alpha=0.82
-                )
-            except Exception:
-                pass
-
-            # Label pill
-            if threat and threat.is_threat:
-                if threat.is_fallen:
-                    prefix = "EMERGENCY: FALL DETECTED! "
-                elif threat.threat_category == "CONCEALED_FACE":
-                    prefix = f"ALERT: CONCEALED ({threat.concealment_type or 'MASK'}) "
-                elif threat.threat_category == "RAPID_DASH":
-                    prefix = f"ALERT: DASH ({threat.velocity_px_sec:.0f}px/s) "
-                elif threat.threat_category == "PROWLER_PACING":
-                    prefix = f"ALERT: PROWLER (score={threat.prowling_score:.2f}) "
-                else:
-                    prefix = f"THREAT: {threat.threat_category} "
-            elif is_spoof:
-                prefix = f"SPOOF ALERT! ({attack_type or 'Fake Face'}) "
-            elif is_loiter:
-                prefix = "LOITERING! "
+            # Name label
+            if name:
+                label = name
             else:
-                prefix = ""
-
-            live_pct = int(det.get("liveness_score", 1.0) * 100)
-            live_txt = f" [Live: {live_pct}%]" if not is_spoof else " [FAKE]"
-            id_txt = f"{name} ({det.get('match_score', 0.94)*100:.0f}%)" if name else f"Unknown ({det['score']*100:.0f}%)"
-            posture_txt = f" [{posture}]" if (posture and posture not in ("STANDING", "UNKNOWN", "PARTIAL_VISIBILITY")) else ""
-            label = f"MikoVo RaRa 11 #{tid}{posture_txt} | {prefix}{id_txt}{live_txt}"
-
-            # 2. Sleek Translucent Tactical HUD Label Badge
-            (tw, th), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.42, 1)
-            ly = max(22, y - 8)
-            pad_x, pad_y = 6, 4
-            lx0, ly0 = max(0, x), max(0, ly - th - pad_y - 2)
-            lx1, ly1 = min(w, x + tw + pad_x * 2), min(h, ly + pad_y)
-
-            if lx1 > lx0 and ly1 > ly0:
-                roi_label = frame[ly0:ly1, lx0:lx1]
-                ov_label = roi_label.copy()
-                cv2.rectangle(ov_label, (0, 0), (lx1 - lx0, ly1 - ly0), (14, 19, 22), -1)
-                cv2.line(ov_label, (0, 0), (lx1 - lx0, 0), color, 2, cv2.LINE_AA)
-                cv2.addWeighted(ov_label, 0.82, roi_label, 0.18, 0, dst=roi_label)
-                cv2.putText(frame, label, (lx0 + pad_x, ly - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (245, 245, 250), 1, cv2.LINE_AA)
-
-            # 3. Threat diagnostic sub-badge
-            if threat and threat.is_threat:
-                diag = f"Occ: {threat.occlusion_ratio:.2f} | Vel: {threat.velocity_px_sec:.0f} px/s | Prowl: {threat.prowling_score:.2f}"
-                (dtw, dth), _ = cv2.getTextSize(diag, cv2.FONT_HERSHEY_SIMPLEX, 0.36, 1)
-                dly = y + bh + 16
-                if dly < h - 5:
-                    dlx0, dly0 = max(0, x), max(0, dly - dth - 3)
-                    dlx1, dly1 = min(w, x + dtw + 10), min(h, dly + 3)
-                    if dlx1 > dlx0 and dly1 > dly0:
-                        roi_d = frame[dly0:dly1, dlx0:dlx1]
-                        ov_d = roi_d.copy()
-                        cv2.rectangle(ov_d, (0, 0), (dlx1 - dlx0, dly1 - dly0), (14, 19, 22), -1)
-                        cv2.line(ov_d, (0, 0), (dlx1 - dlx0, 0), color, 1, cv2.LINE_AA)
-                        cv2.addWeighted(ov_d, 0.82, roi_d, 0.18, 0, dst=roi_d)
-                        cv2.putText(frame, diag, (dlx0 + 4, dly - 1), cv2.FONT_HERSHEY_SIMPLEX, 0.36, (240, 240, 245), 1, cv2.LINE_AA)
+                label = "Unknown"
+            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            ly = max(th + 4, iy - 6)
+            cv2.rectangle(frame, (ix, ly - th - 4), (ix + tw + 8, ly + 2), (0, 0, 0), -1)
+            cv2.putText(frame, label, (ix + 4, ly - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
 
         return frame
 
