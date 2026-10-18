@@ -10,6 +10,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
     <style>
         :root {
             --bg-canvas: #000000;
@@ -1027,6 +1029,14 @@
                 </svg>
                 <span id="navLogs">وقایع و لاگ‌ها</span>
             </button>
+            <button class="nav-dock-item" id="tabAnalytics" onclick="switchView('viewAnalytics')">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="20" x2="18" y2="10"/>
+                    <line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+                <span id="navAnalytics">داشبورد تحلیلی</span>
+            </button>
             <button class="nav-dock-item" id="tabFaces" onclick="switchView('viewFaces')">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -1035,14 +1045,6 @@
                     <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                 </svg>
                 <span id="navFaces">بانک چهره‌ها</span>
-            </button>
-            <button class="nav-dock-item" id="tabAnalytics" onclick="switchView('viewAnalytics')">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="20" x2="18" y2="10"/>
-                    <line x1="12" y1="20" x2="12" y2="4"/>
-                    <line x1="6" y1="20" x2="6" y2="14"/>
-                </svg>
-                <span id="navAnalytics">آنالیز و آمار</span>
             </button>
             <button class="nav-dock-item" id="tabSettings" onclick="switchView('viewSettings')">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1054,16 +1056,6 @@
         </nav>
 
         <div class="header-actions">
-            <!-- Mode A (Client-Edge) vs Mode B (Server Core) Switcher -->
-            <button class="pill-btn mode-pill" onclick="toggleVisionMode()" id="modeToggleBtn" title="تغییر حالت پردازش (Client-Edge vs Server-Core)">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
-                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
-                    <line x1="6" y1="6" x2="6.01" y2="6"/>
-                    <line x1="6" y1="18" x2="6.01" y2="18"/>
-                </svg>
-                <span id="modeStatusLabel">سرور (Mode B)</span>
-            </button>
             <button class="pill-btn" onclick="toggleStealthMode()" id="stealthBtn" title="حالت استتار (Stealth Mode)">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
@@ -1227,7 +1219,7 @@
                                 <polyline points="3 6 5 6 21 6"/>
                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                             </svg>
-                            <span>پاک کردن لاگ‌ها</span>
+                            <span id="tClearLogs">پاک کردن لاگ‌ها</span>
                         </button>
                     </div>
                 </div>
@@ -1348,7 +1340,7 @@
                             <polyline points="17 8 12 3 7 8"/>
                             <line x1="12" y1="3" x2="12" y2="15"/>
                         </svg>
-                        <span>آپلود عکس</span>
+                        <span id="tBtnUpload">آپلود عکس</span>
                     </button>
                 </div>
             </div>
@@ -1418,7 +1410,7 @@
                                                 <circle cx="12" cy="13" r="4"/>
                                             </svg>
                                         </span>
-                                        <span class="dropdown-item-text">ارسال تک‌عکس باکیفیت (Single Photo)</span>
+                                        <span class="dropdown-item-text" id="dropItemPhoto">ارسال تک‌عکس باکیفیت (Single Photo)</span>
                                     </div>
                                     <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                         <polyline points="20 6 9 17 4 12"></polyline>
@@ -1432,7 +1424,7 @@
                                                 <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                                             </svg>
                                         </span>
-                                        <span class="dropdown-item-text">ارسال کلیپ ویدیویی MP4 (5-Sec Clip)</span>
+                                        <span class="dropdown-item-text" id="dropItemVideo">ارسال کلیپ ویدیویی MP4 (5-Sec Clip)</span>
                                     </div>
                                     <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                         <polyline points="20 6 9 17 4 12"></polyline>
@@ -1473,7 +1465,7 @@
                                                 <circle cx="12" cy="7" r="4"/>
                                             </svg>
                                         </span>
-                                        <span class="dropdown-item-text">فقط چهره‌های جدید و ناشناس (غریبه)</span>
+                                        <span class="dropdown-item-text" id="dropItemStranger">فقط چهره‌های جدید و ناشناس (غریبه)</span>
                                     </div>
                                     <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                         <polyline points="20 6 9 17 4 12"></polyline>
@@ -1486,7 +1478,7 @@
                                                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
                                             </svg>
                                         </span>
-                                        <span class="dropdown-item-text">تمام ترددها و حرکات (حساسیت کامل)</span>
+                                        <span class="dropdown-item-text" id="dropItemAll">تمام ترددها و حرکات (حساسیت کامل)</span>
                                     </div>
                                     <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                         <polyline points="20 6 9 17 4 12"></polyline>
@@ -1499,7 +1491,7 @@
                                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                                             </svg>
                                         </span>
-                                        <span class="dropdown-item-text">فقط نفوذ به محدوده امنیتی (ROI)</span>
+                                        <span class="dropdown-item-text" id="dropItemRoi">فقط نفوذ به محدوده امنیتی (ROI)</span>
                                     </div>
                                     <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                         <polyline points="20 6 9 17 4 12"></polyline>
@@ -1515,7 +1507,7 @@
                                                 <path d="M19 7l2-2"/>
                                             </svg>
                                         </span>
-                                        <span class="dropdown-item-text">فقط چهره‌های مجاز و آشنا</span>
+                                        <span class="dropdown-item-text" id="dropItemKnown">فقط چهره‌های مجاز و آشنا</span>
                                     </div>
                                     <svg class="dropdown-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                         <polyline points="20 6 9 17 4 12"></polyline>
@@ -1577,31 +1569,31 @@
                         </div>
                     </div>
                     <div style="margin-top:10px;">
-                        <label style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:6px; display:block;">الگوهای آماده سریع:</label>
+                        <label id="tSchedulePresetsLabel" style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:6px; display:block;">الگوهای آماده سریع:</label>
                         <div style="display:flex; gap:8px; flex-wrap:wrap;">
                             <button type="button" class="pill-btn" onclick="setSchedulePreset('22:00', '07:00')">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-                                <span>شبانه (۲۲:۰۰ تا ۰۷:۰۰)</span>
+                                <span id="tPresetNight">شبانه (۲۲:۰۰ تا ۰۷:۰۰)</span>
                             </button>
                             <button type="button" class="pill-btn" onclick="setSchedulePreset('08:00', '17:00')">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><path d="M9 22v-4h6v4"/></svg>
-                                <span>اداری (۰۸:۰۰ تا ۱۷:۰۰)</span>
+                                <span id="tPresetOffice">اداری (۰۸:۰۰ تا ۱۷:۰۰)</span>
                             </button>
                             <button type="button" class="pill-btn" onclick="setSchedulePreset('18:00', '08:00')">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                <span>غیر اداری (۱۸:۰۰ تا ۰۸:۰۰)</span>
+                                <span id="tPresetOffDuty">غیر اداری (۱۸:۰۰ تا ۰۸:۰۰)</span>
                             </button>
                             <button type="button" class="pill-btn" onclick="disableSchedulePreset()">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                                <span>پایش ۲۴ ساعته</span>
+                                <span id="tPreset247">پایش ۲۴ ساعته</span>
                             </button>
                         </div>
                     </div>
                     <div style="margin-top:14px; padding:12px; background:rgba(10,132,255,0.08); border:1px solid rgba(10,132,255,0.2); border-radius:12px; font-size:0.8rem; line-height:1.6; color:var(--text-secondary);">
                         <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--apple-blue)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                        <strong style="color:var(--text-primary); font-size:0.83rem;">نحوه کارکرد بازه زمانی:</strong>
-                    </div> در خارج از بازه زمانی تعیین‌شده، سامانه در حالت «سکوت» کار می‌کند؛ وقایع در جدول لاگ ثبت می‌شوند اما پیام تلگرام یا آژیر محلی ارسال نمی‌شود.
+                        <strong id="tScheduleNoticeTitle" style="color:var(--text-primary); font-size:0.83rem;">نحوه کارکرد بازه زمانی:</strong>
+                    </div> <span id="tScheduleNoticeText">در خارج از بازه زمانی تعیین‌شده، سامانه در حالت «سکوت» کار می‌کند؛ وقایع در جدول لاگ ثبت می‌شوند اما پیام تلگرام یا آژیر محلی ارسال نمی‌شود.</span>
                     </div>
                 </div>
 
@@ -1612,7 +1604,7 @@
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                             </svg>
-                            <span>قوانین امنیتی و زون‌ها</span>
+                            <span id="tRulesTitle">قوانین امنیتی و زون‌ها</span>
                         </div>
                     </div>
                     <div class="switch-row">
@@ -1625,11 +1617,11 @@
                     <div style="display:flex; gap:8px; margin-bottom:12px;">
                         <button type="button" class="pill-btn" onclick="applyDefaultRoi()" style="font-size:0.78rem;">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
-                            <span>کادر پیش‌فرض مرکزی</span>
+                            <span id="tDefaultRoiBtn">کادر پیش‌فرض مرکزی</span>
                         </button>
                         <button type="button" class="pill-btn" onclick="clearRoiZone()" style="font-size:0.78rem;">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
-                            <span>پاکسازی نقاط</span>
+                            <span id="tClearRoiBtn">پاکسازی نقاط</span>
                         </button>
                     </div>
                     <div class="switch-row">
@@ -1677,7 +1669,7 @@
     <div id="stealthOverlay" ondblclick="toggleStealthMode()">
         <div style="font-family:var(--font-mono); font-size:6.5rem; font-weight:800; letter-spacing:-0.05em;" id="stealthClock">00:00:00</div>
         <div style="font-size:1.25rem; color:#86868b; margin-top:12px;" id="stealthDate">--</div>
-        <div style="position:absolute; bottom:30px; font-size:0.8rem; color:#48484a; letter-spacing:0.02em;">MikoTim Sentinel Pro • برای بازگشت دوبار کلیک کنید یا کلید ESC را بزنید</div>
+        <div style="position:absolute; bottom:30px; font-size:0.8rem; color:#48484a; letter-spacing:0.02em;" id="tStealthFooter">MikoTim Sentinel Pro • برای بازگشت دوبار کلیک کنید یا کلید ESC را بزنید</div>
         <div style="position:absolute; top:24px; right:24px; width:10px; height:10px; border-radius:50%; background:#30d158; opacity:0.6; animation:pulseGlow 2s infinite;"></div>
     </div>
 
@@ -1699,6 +1691,7 @@
                 persons: 'افراد در صحنه',
                 tg: 'هشدارهای تلگرام',
                 logTitle: 'لاگ وقایع امنیتی و رخدادها',
+                btnClearLogs: 'پاک کردن لاگ‌ها',
                 thTime: 'زمان',
                 thCount: 'تعداد افراد',
                 thConf: 'اطمینان',
@@ -1707,11 +1700,16 @@
                 emptyLog: 'هنوز رویدادی ثبت نشده است',
                 regTitle: 'ثبت پروفایل چهره جدید',
                 nameLabel: 'نام شخص:',
+                namePlaceholder: 'نام شخص (مثال: میکائیل)',
                 btnReg: 'ثبت از دوربین',
+                btnUpload: 'آپلود عکس',
                 listTitle: 'لیست چهره‌های ذخیره‌شده',
                 btnClear: 'حذف همه',
-                tgTitle: 'تنظیمات ربات تلگرام',
+                tgTitle: 'تنظیمات ربات تلگرام و فیلتر هشدار',
+                tgTokenPlaceholder: 'توکن ربات تلگرام',
+                tgChatPlaceholder: 'شناسه چت یا کانال',
                 captionLabel: 'عنوان هشدار:',
+                captionDefault: 'هشدار تردد هوشمند MikoVo RaRa 11',
                 cooldownLabel: 'فاصله بین ثبت‌ها (ثانیه):',
                 autoSend: 'ارسال خودکار به تلگرام:',
                 onlyNew: 'فقط فرد جدید یا ناشناس:',
@@ -1720,18 +1718,55 @@
                 test: 'تست تلگرام',
                 unknown: 'ناشناس',
                 stealth: 'استتار',
+                stealthTitle: 'حالت استتار (Stealth Mode)',
+                stealthFooter: 'MikoTim Sentinel Pro • برای بازگشت دوبار کلیک کنید یا کلید ESC را بزنید',
                 roiBtn: 'محدوده امنیتی',
                 roiInstruct: 'روی تصویر کلیک کنید تا ۴ گوشه محدوده مشخص شود',
                 mediaLabel: 'نوع رسانه هشدار:',
+                mediaPhoto: 'ارسال تک‌عکس باکیفیت (Single Photo)',
+                mediaVideo: 'ارسال کلیپ ویدیویی MP4 (5-Sec Clip)',
+                triggerLabel: 'شرط و اولویت ارسال هشدار:',
+                triggerStranger: 'فقط چهره‌های جدید و ناشناس (غریبه)',
+                triggerAll: 'تمام ترددها و حرکات (حساسیت کامل)',
+                triggerRoi: 'فقط نفوذ به محدوده امنیتی (ROI)',
+                triggerKnown: 'فقط چهره‌های مجاز و آشنا',
                 roiEnable: 'محدوده امنیتی فعال (ROI):',
+                defaultRoiBtn: 'کادر پیش‌فرض مرکزی',
+                clearRoiBtn: 'پاکسازی نقاط',
                 tripwireEnable: 'شمارنده خطی رفت‌وآمد (Tripwire):',
                 audioAlarm: 'آژیر صوتی محلی (Police Siren):',
                 voiceWarning: 'اعلان صوتی هوشمند (Voice Alert):',
+                mirrorLabel: 'حالت آینه‌ای تصویر دوربین:',
                 loiterLabel: 'زمان تشخیص پرسه زدن (ثانیه):',
                 inOut: 'ورود / خروج',
                 loiter: 'پرسه زدن',
-                chartTitle: 'توزیع زمانی تردد امروز (ساعات ۲۴گانه شبانه‌روز)',
-                sendSummary: 'ارسال گزارش خلاصه به تلگرام',
+                rulesTitle: 'قوانین امنیتی و زون‌ها',
+                scheduleTitle: 'زمان‌بندی هوشمند پایش (ساعات فعال)',
+                scheduleEnable: 'فعال‌سازی بازه زمانی اختصاصی:',
+                scheduleStartLabel: 'ساعت شروع پایش:',
+                scheduleEndLabel: 'ساعت پایان پایش:',
+                schedulePresetsLabel: 'الگوهای آماده سریع:',
+                presetNight: 'شبانه (۲۲:۰۰ تا ۰۷:۰۰)',
+                presetOffice: 'اداری (۰۸:۰۰ تا ۱۷:۰۰)',
+                presetOffDuty: 'غیر اداری (۱۸:۰۰ تا ۰۸:۰۰)',
+                preset247: 'پایش ۲۴ ساعته',
+                scheduleNoticeTitle: 'نحوه کارکرد بازه زمانی:',
+                scheduleNoticeText: 'در خارج از بازه زمانی تعیین‌شده، سامانه در حالت «سکوت» کار می‌کند؛ وقایع در جدول لاگ ثبت می‌شوند اما پیام تلگرام یا آژیر محلی ارسال نمی‌شود.',
+                analyticsTitle: 'مرکز آمار و تحلیل تردد MikoVo RaRa 11',
+                analyticsSubtitle: 'تحلیل هوشمند ترافیک، الگوهای تردد ساعتی و سطح تهدیدات امنیتی',
+                sendSummary: 'ارسال خلاصه به تلگرام',
+                refreshAnalytics: 'بروزرسانی',
+                kpiTotal: 'کل رویدادهای ثبت‌شده',
+                kpiInOut: 'ورود / خروج خطی',
+                kpiLoiter: 'هشدارهای پرسه زدن',
+                kpiPeak: 'ساعت اوج تردد',
+                chartTitle: 'نمودار توزیع ساعتی تردد (۲۴ ساعت شبانه‌روز)',
+                chartScaleAuto: 'مقیاس: خودکار',
+                chartEmptyFallback: 'هنوز داده‌ای در ۲۴ ساعت گذشته ثبت نشده است',
+                chartPeak: 'حداکثر تردد',
+                chartHourUnit: 'نفر/ساعت',
+                chartHourLabel: 'ساعت',
+                chartEventsUnit: 'تردد',
                 navLive: 'پایش زنده',
                 navLogs: 'وقایع و لاگ‌ها',
                 navAnalytics: 'داشبورد تحلیلی',
@@ -1751,6 +1786,7 @@
                 persons: 'Persons in View',
                 tg: 'Telegram Alerts',
                 logTitle: 'Security Incident Logs',
+                btnClearLogs: 'Clear Logs',
                 thTime: 'Time',
                 thCount: 'Persons',
                 thConf: 'Confidence',
@@ -1759,11 +1795,16 @@
                 emptyLog: 'No events logged yet',
                 regTitle: 'Register New Face Profile',
                 nameLabel: 'Person Name:',
+                namePlaceholder: 'Person Name (e.g. Mikail)',
                 btnReg: 'Register from Camera',
+                btnUpload: 'Upload Photo',
                 listTitle: 'Saved Face Profiles',
                 btnClear: 'Clear All',
-                tgTitle: 'Telegram Bot Settings',
+                tgTitle: 'Telegram Bot & Alert Filtering',
+                tgTokenPlaceholder: 'Telegram Bot Token',
+                tgChatPlaceholder: 'Chat ID or Channel',
                 captionLabel: 'Alert Title:',
+                captionDefault: 'MikoVo RaRa 11 Smart Security Alert',
                 cooldownLabel: 'Cooldown (sec):',
                 autoSend: 'Auto-send to Telegram:',
                 onlyNew: 'New person only:',
@@ -1772,18 +1813,55 @@
                 test: 'Test Telegram',
                 unknown: 'Unknown',
                 stealth: 'Stealth',
+                stealthTitle: 'Stealth Mode',
+                stealthFooter: 'MikoTim Sentinel Pro • Double-click or press ESC to resume',
                 roiBtn: 'ROI Zone',
                 roiInstruct: 'Click on screen to define 4 corners of restricted zone',
                 mediaLabel: 'Alert Media Format:',
+                mediaPhoto: 'High-Quality Single Photo',
+                mediaVideo: 'MP4 Video Clip (5-Sec Clip)',
+                triggerLabel: 'Alert Condition & Priority:',
+                triggerStranger: 'New & Stranger Faces Only',
+                triggerAll: 'All Movements & Traffic (Full Sensitivity)',
+                triggerRoi: 'Security Zone Breach Only (ROI)',
+                triggerKnown: 'Authorized & Known Faces Only',
                 roiEnable: 'Virtual Security Zone (ROI):',
+                defaultRoiBtn: 'Default Center Box',
+                clearRoiBtn: 'Clear Points',
                 tripwireEnable: 'Tripwire In/Out Counter:',
                 audioAlarm: 'Local Police Siren:',
                 voiceWarning: 'Smart Voice Warning:',
+                mirrorLabel: 'Mirror Camera Feed:',
                 loiterLabel: 'Loitering Threshold (sec):',
                 inOut: 'In / Out',
                 loiter: 'Loitering',
-                chartTitle: "Today's Hourly Traffic Distribution",
+                rulesTitle: 'Security Rules & Zones',
+                scheduleTitle: 'Surveillance Schedule (Active Hours)',
+                scheduleEnable: 'Enable Custom Time Window:',
+                scheduleStartLabel: 'Surveillance Start Time:',
+                scheduleEndLabel: 'Surveillance End Time:',
+                schedulePresetsLabel: 'Quick Presets:',
+                presetNight: 'Night (22:00 to 07:00)',
+                presetOffice: 'Office (08:00 to 17:00)',
+                presetOffDuty: 'Off-Duty (18:00 to 08:00)',
+                preset247: '24/7 Surveillance',
+                scheduleNoticeTitle: 'How Schedule Works:',
+                scheduleNoticeText: 'Outside active hours, the system operates in "Silent Mode"; security incidents are logged but Telegram notifications and audio sirens are muted.',
+                analyticsTitle: 'MikoVo RaRa 11 Traffic & Analytics Center',
+                analyticsSubtitle: 'AI traffic analytics, hourly patterns & security threat metrics',
                 sendSummary: 'Send Summary to Telegram',
+                refreshAnalytics: 'Refresh',
+                kpiTotal: 'Total Captured Events',
+                kpiInOut: 'Linear In / Out',
+                kpiLoiter: 'Loitering Alerts',
+                kpiPeak: 'Peak Traffic Hour',
+                chartTitle: 'Hourly Traffic Distribution (24 Hours)',
+                chartScaleAuto: 'Scale: Auto',
+                chartEmptyFallback: 'No traffic data recorded in the last 24 hours',
+                chartPeak: 'Peak',
+                chartHourUnit: 'p/h',
+                chartHourLabel: 'Hour',
+                chartEventsUnit: 'events',
                 navLive: 'Live Monitor',
                 navLogs: 'Incident Logs',
                 navAnalytics: 'Analytics',
@@ -2118,6 +2196,9 @@
         // ==================== Localization & Themes ====================
         function setLang(lang) {
             currentLang = lang;
+            try {
+                localStorage.setItem('mikotim_lang', lang);
+            } catch (e) {}
             document.documentElement.lang = lang;
             document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
 
@@ -2135,6 +2216,29 @@
                 if (span) span.innerText = d.lang;
             }
 
+            const stealthBtn = document.getElementById('stealthBtn');
+            if (stealthBtn && d.stealthTitle) {
+                stealthBtn.title = d.stealthTitle;
+            }
+
+            const nameInput = document.getElementById('nameInput');
+            if (nameInput && d.namePlaceholder) nameInput.placeholder = d.namePlaceholder;
+
+            const tgToken = document.getElementById('tgToken');
+            if (tgToken && d.tgTokenPlaceholder) tgToken.placeholder = d.tgTokenPlaceholder;
+
+            const tgChat = document.getElementById('tgChat');
+            if (tgChat && d.tgChatPlaceholder) tgChat.placeholder = d.tgChatPlaceholder;
+
+            // Dropdown items
+            safeSetText('dropItemPhoto', d.mediaPhoto);
+            safeSetText('dropItemVideo', d.mediaVideo);
+            safeSetText('dropItemStranger', d.triggerStranger);
+            safeSetText('dropItemAll', d.triggerAll);
+            safeSetText('dropItemRoi', d.triggerRoi);
+            safeSetText('dropItemKnown', d.triggerKnown);
+
+            // Nav and Header
             safeSetText('tCameraIdle', d.idle);
             safeSetText('tStart', d.start);
             safeSetText('tStop', d.stop);
@@ -2143,31 +2247,8 @@
             safeSetText('tFps', d.fps);
             safeSetText('tPersons', d.persons);
             safeSetText('tTg', d.tg);
-            safeSetText('tLogTitle', d.logTitle);
-            safeSetText('thTime', d.thTime);
-            safeSetText('thCount', d.thCount);
-            safeSetText('thConf', d.thConf);
-            safeSetText('thWho', d.thWho);
-            safeSetText('thTg', d.thTg);
-            safeSetText('tRegTitle', d.regTitle);
-            safeSetText('tBtnReg', d.btnReg);
-            safeSetText('tListTitle', d.listTitle);
-            safeSetText('tBtnClear', d.btnClear);
-            safeSetText('tTgTitle', d.tgTitle);
-            safeSetText('tCaptionLabel', d.captionLabel);
-            safeSetText('tCooldownLabel', d.cooldownLabel);
-            safeSetText('tAutoSend', d.autoSend);
-            safeSetText('tRemote', d.remote);
-            safeSetText('tSave', d.save);
-            safeSetText('tTest', d.test);
             safeSetText('tStealth', d.stealth);
             safeSetText('tRoiBtn', d.roiBtn);
-            safeSetText('tMediaLabel', d.mediaLabel);
-            safeSetText('tRoiEnable', d.roiEnable);
-            safeSetText('tTripwireEnable', d.tripwireEnable);
-            safeSetText('tAudioAlarm', d.audioAlarm);
-            safeSetText('tVoiceWarning', d.voiceWarning);
-            safeSetText('tLoiterLabel', d.loiterLabel);
             safeSetText('tInOut', d.inOut);
             safeSetText('tLoiterTile', d.loiter);
             safeSetText('navLive', d.navLive);
@@ -2176,6 +2257,76 @@
             safeSetText('navSettings', d.navSettings);
             safeSetText('navAnalytics', d.navAnalytics);
 
+            // Logs
+            safeSetText('tLogTitle', d.logTitle);
+            safeSetText('tClearLogs', d.btnClearLogs);
+            safeSetText('thTime', d.thTime);
+            safeSetText('thCount', d.thCount);
+            safeSetText('thConf', d.thConf);
+            safeSetText('thWho', d.thWho);
+            safeSetText('thTg', d.thTg);
+            safeSetText('tEmptyLog', d.emptyLog);
+
+            // Face Profiles
+            safeSetText('tRegTitle', d.regTitle);
+            safeSetText('tBtnReg', d.btnReg);
+            safeSetText('tBtnUpload', d.btnUpload);
+            safeSetText('tListTitle', d.listTitle);
+            safeSetText('tBtnClear', d.btnClear);
+
+            // Telegram Settings
+            safeSetText('tTgTitle', d.tgTitle);
+            safeSetText('tCaptionLabel', d.captionLabel);
+            safeSetText('tMediaLabel', d.mediaLabel);
+            safeSetText('tTriggerLabel', d.triggerLabel);
+            safeSetText('tCooldownLabel', d.cooldownLabel);
+            safeSetText('tAutoSend', d.autoSend);
+            safeSetText('tRemote', d.remote);
+            safeSetText('tSave', d.save);
+            safeSetText('tTest', d.test);
+
+            // Schedule
+            safeSetText('tScheduleTitle', d.scheduleTitle);
+            safeSetText('tScheduleEnable', d.scheduleEnable);
+            safeSetText('tScheduleStartLabel', d.scheduleStartLabel);
+            safeSetText('tScheduleEndLabel', d.scheduleEndLabel);
+            safeSetText('tSchedulePresetsLabel', d.schedulePresetsLabel);
+            safeSetText('tPresetNight', d.presetNight);
+            safeSetText('tPresetOffice', d.presetOffice);
+            safeSetText('tPresetOffDuty', d.presetOffDuty);
+            safeSetText('tPreset247', d.preset247);
+            safeSetText('tScheduleNoticeTitle', d.scheduleNoticeTitle);
+            safeSetText('tScheduleNoticeText', d.scheduleNoticeText);
+
+            // Rules & Zones
+            safeSetText('tRulesTitle', d.rulesTitle);
+            safeSetText('tRoiEnable', d.roiEnable);
+            safeSetText('tDefaultRoiBtn', d.defaultRoiBtn);
+            safeSetText('tClearRoiBtn', d.clearRoiBtn);
+            safeSetText('tTripwireEnable', d.tripwireEnable);
+            safeSetText('tAudioAlarm', d.audioAlarm);
+            safeSetText('tVoiceWarning', d.voiceWarning);
+            safeSetText('tMirrorLabel', d.mirrorLabel);
+            safeSetText('tLoiterLabel', d.loiterLabel);
+
+            // Analytics Dashboard
+            safeSetText('tAnalyticsTitle', d.analyticsTitle);
+            safeSetText('tAnalyticsSubtitle', d.analyticsSubtitle);
+            safeSetText('tDispatchSummary', d.sendSummary);
+            safeSetText('tRefreshAnalytics', d.refreshAnalytics);
+            safeSetText('tKpiTotal', d.kpiTotal);
+            safeSetText('tKpiInOut', d.kpiInOut);
+            safeSetText('tKpiLoiter', d.kpiLoiter);
+            safeSetText('tKpiPeak', d.kpiPeak);
+            safeSetText('tChartTitle', d.chartTitle);
+            safeSetText('chartEmptyFallback', d.chartEmptyFallback);
+
+            // Stealth Footer
+            safeSetText('tStealthFooter', d.stealthFooter);
+
+            syncCustomDropdowns();
+            updateVisionModeUI();
+            renderHourlyChart(hourlyTraffic);
             updateBadge();
         }
 
@@ -2219,8 +2370,13 @@
             }
         }
 
-        // ==================== MikoVo RaRa 11 Web Vision Core ====================
+        // ==================== Real-Time Face AI Vision Core ====================
+        let blazefaceModel = null;
+        let isDetectingFace = false;
+        let lastFaceDetectTime = 0;
+        let cachedDetections = [];
         let nativeFaceDetector = null;
+
         if (typeof window !== 'undefined' && 'FaceDetector' in window) {
             try {
                 nativeFaceDetector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 4 });
@@ -2229,10 +2385,20 @@
             }
         }
 
+        async function loadBlazeFaceAI() {
+            if (typeof blazeface !== 'undefined' && !blazefaceModel) {
+                try {
+                    blazefaceModel = await blazeface.load();
+                    console.log("✓ BlazeFace neural vision core loaded successfully.");
+                } catch (e) {
+                    console.warn("BlazeFace load:", e);
+                }
+            }
+        }
+        loadBlazeFaceAI();
+
         let activeTracks = [];
         let trackIdCounter = 1;
-        let lastNativeFaceCheck = 0;
-        let cachedNativeFaces = [];
 
         async function startCamera() {
             // If in Server Vision mode (Mode B), try starting server capture first
@@ -2273,6 +2439,7 @@
 
             // Mode A (Client-Edge Vision via getUserMedia)
             try {
+                loadBlazeFaceAI();
                 videoStream = await navigator.mediaDevices.getUserMedia({
                     video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
                     audio: false
@@ -2634,220 +2801,73 @@
                 ctx.restore();
             }
 
-            // 3. Multi-Cue Vision: Hardware FaceDetector (if available, throttled)
-            if (nativeFaceDetector && (now - lastNativeFaceCheck > 120)) {
-                lastNativeFaceCheck = now;
-                nativeFaceDetector.detect(video).then(faces => {
-                    cachedNativeFaces = faces || [];
-                }).catch(() => {
-                    cachedNativeFaces = [];
-                });
-            }
+            // 3. Robust Face & Person Detection Pipeline
+            if (blazefaceModel && video.readyState >= 2 && !isDetectingFace) {
+                if (now - lastFaceDetectTime > 40) {
+                    isDetectingFace = true;
+                    lastFaceDetectTime = now;
+                    blazefaceModel.estimateFaces(video, false).then(preds => {
+                        const newDets = [];
+                        for (const pred of preds) {
+                            const [x1, y1] = pred.topLeft;
+                            const [x2, y2] = pred.bottomRight;
+                            const fw = x2 - x1;
+                            const fh = y2 - y1;
+                            if (fw < 18 || fh < 18) continue;
 
-            // Downsample for rapid feature analysis
-            procCtx.drawImage(video, 0, 0, procW, procH);
-            const currImg = procCtx.getImageData(0, 0, procW, procH);
-            const currData = currImg.data;
+                            // Clean square on person's face/head
+                            const size = Math.max(fw, fh) * 1.30;
+                            const cx = (x1 + x2) / 2;
+                            const cy = (y1 + y2) / 2;
+                            const bx = Math.max(0, Math.min(w - size, cx - size / 2));
+                            const by = Math.max(0, Math.min(h - size, cy - size / 2));
+                            const score = pred.probability ? pred.probability[0] : 0.96;
 
-            if (!bgFrame) {
-                bgFrame = new Float32Array(procW * procH);
-                prevFrame = new Uint8ClampedArray(procW * procH);
-                for (let i = 0, p = 0; i < currData.length; i += 4, p++) {
-                    const gray = 0.299 * currData[i] + 0.587 * currData[i + 1] + 0.114 * currData[i + 2];
-                    bgFrame[p] = gray;
-                    prevFrame[p] = gray;
-                }
-            }
-
-            const gridCols = 32;
-            const gridRows = 20;
-            const cellW = Math.floor(procW / gridCols);
-            const cellH = Math.floor(procH / gridRows);
-            const activeGrid = Array.from({ length: gridRows }, () => new Uint8Array(gridCols));
-            const skinGrid = Array.from({ length: gridRows }, () => new Uint8Array(gridCols));
-            let frameSkinCount = 0;
-            let frameMotionCount = 0;
-
-            for (let r = 0; r < gridRows; r++) {
-                const startY = r * cellH;
-                for (let c = 0; c < gridCols; c++) {
-                    const startX = c * cellW;
-                    let cellMotion = 0;
-                    let cellBgDiff = 0;
-                    let cellSkin = 0;
-
-                    for (let y = startY; y < startY + cellH; y++) {
-                        for (let x = startX; x < startX + cellW; x++) {
-                            const p = y * procW + x;
-                            const i = p * 4;
-                            const rVal = currData[i];
-                            const gVal = currData[i + 1];
-                            const bVal = currData[i + 2];
-                            const gray = 0.299 * rVal + 0.587 * gVal + 0.114 * bVal;
-
-                            // 1. Kinetic Motion (Frame-to-frame diff)
-                            const kin = Math.abs(gray - prevFrame[p]);
-                            if (kin > 12) {
-                                cellMotion++;
-                                frameMotionCount++;
-                            }
-
-                            // 2. Background Difference
-                            const bgDiff = Math.abs(gray - bgFrame[p]);
-                            if (bgDiff > 18) {
-                                cellBgDiff++;
-                            }
-
-                            // 3. Human Skin Chrominance Detector
-                            const Cb = 128 - 0.168736 * rVal - 0.331264 * gVal + 0.5 * bVal;
-                            const Cr = 128 + 0.5 * rVal - 0.418688 * gVal - 0.081312 * bVal;
-                            const isSkinYCbCr = (Cb >= 72 && Cb <= 138 && Cr >= 128 && Cr <= 185 && gray >= 25);
-                            const isSkinRGB = (rVal > 50 && gVal > 30 && bVal > 20 && rVal > gVal && (rVal - bVal) > 4);
-                            if (isSkinYCbCr || isSkinRGB) {
-                                cellSkin++;
-                                frameSkinCount++;
-                            }
-                        }
-                    }
-
-                    skinGrid[r][c] = cellSkin;
-
-                    // Active cell: kinetic movement, background contrast, or skin presence
-                    if (cellMotion >= 3 || cellBgDiff >= 4 || (cellSkin >= 3 && (cellMotion >= 1 || cellBgDiff >= 2))) {
-                        activeGrid[r][c] = 1;
-                    } else {
-                        // Smoothly update background model ONLY in non-active cells
-                        for (let y = startY; y < startY + cellH; y++) {
-                            for (let x = startX; x < startX + cellW; x++) {
-                                const p = y * procW + x;
-                                const i = p * 4;
-                                const gray = 0.299 * currData[i] + 0.587 * currData[i + 1] + 0.114 * currData[i + 2];
-                                bgFrame[p] += (gray - bgFrame[p]) * 0.06;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Update prevFrame buffer
-            for (let i = 0, p = 0; i < currData.length; i += 4, p++) {
-                prevFrame[p] = 0.299 * currData[i] + 0.587 * currData[i + 1] + 0.114 * currData[i + 2];
-            }
-
-            const visited = Array.from({ length: gridRows }, () => new Uint8Array(gridCols));
-            const candidates = [];
-
-            // Cue A: Hardware FaceDetector (if available in modern browser)
-            if (cachedNativeFaces.length > 0) {
-                for (const face of cachedNativeFaces) {
-                    const fb = face.boundingBox;
-                    const bx = Math.max(0, fb.x - fb.width * 0.35);
-                    const by = Math.max(0, fb.y - fb.height * 0.15);
-                    const bw = Math.min(w - bx, fb.width * 1.7);
-                    const bh = Math.min(h - by, fb.height * 2.8);
-                    candidates.push({
-                        bbox: [bx, by, bw, bh],
-                        faceBbox: [fb.x, fb.y, fb.width, fb.height],
-                        score: 0.98
-                    });
-                }
-            }
-
-            // Cue B: Grid Connected-Component BFS Clustering
-            const scaleX = w / gridCols;
-            const scaleY = h / gridRows;
-
-            for (let r = 0; r < gridRows; r++) {
-                for (let c = 0; c < gridCols; c++) {
-                    if (activeGrid[r][c] && !visited[r][c]) {
-                        let minR = r, maxR = r, minC = c, maxC = c;
-                        let count = 0, totalSkin = 0;
-                        const queue = [[r, c]];
-                        visited[r][c] = 1;
-
-                        while (queue.length > 0) {
-                            const [cr, cc] = queue.shift();
-                            count++;
-                            totalSkin += skinGrid[cr][cc];
-                            if (cr < minR) minR = cr;
-                            if (cr > maxR) maxR = cr;
-                            if (cc < minC) minC = cc;
-                            if (cc > maxC) maxC = cc;
-
-                            for (let dr = -1; dr <= 1; dr++) {
-                                for (let dc = -1; dc <= 1; dc++) {
-                                    const nr = cr + dr;
-                                    const nc = cc + dc;
-                                    if (nr >= 0 && nr < gridRows && nc >= 0 && nc < gridCols &&
-                                        activeGrid[nr][nc] && !visited[nr][nc]) {
-                                        visited[nr][nc] = 1;
-                                        queue.push([nr, nc]);
-                                    }
-                                }
-                            }
-                        }
-
-                        if (count >= 2 || (count >= 1 && totalSkin >= 3)) {
-                            let bx = minC * scaleX;
-                            let by = minR * scaleY;
-                            let bw = (maxC - minC + 1) * scaleX;
-                            let bh = (maxR - minR + 1) * scaleY;
-
-                            bw = Math.max(90, Math.min(w - bx, bw));
-                            bh = Math.max(120, Math.min(h - by, bh));
-                            if (bh < bw * 0.85) {
-                                bh = Math.min(h - by, bw * 1.3);
-                            }
-
-                            const score = Math.min(0.98, 0.84 + (totalSkin > 0 ? 0.08 : 0) + Math.min(0.06, count * 0.01));
-                            candidates.push({
-                                bbox: [bx, by, bw, bh],
-                                faceBbox: [bx + bw * 0.2, by, bw * 0.6, bh * 0.45],
+                            newDets.push({
+                                bbox: [bx, by, size, size],
+                                faceBbox: [x1, y1, fw, fh],
                                 score: score
                             });
                         }
-                    }
+                        cachedDetections = newDets;
+                        isDetectingFace = false;
+                    }).catch(() => {
+                        isDetectingFace = false;
+                    });
                 }
-            }
-
-            // Cue C: Subject Presence Lock (Preserve detection when user sits calmly in front of camera)
-            if (candidates.length === 0 && activeTracks.length > 0) {
-                for (const trk of activeTracks) {
-                    const [bx, by, bw, bh] = trk.bbox;
-                    const scMinC = Math.max(0, Math.floor((bx / w) * gridCols));
-                    const scMaxC = Math.min(gridCols - 1, Math.ceil(((bx + bw) / w) * gridCols));
-                    const scMinR = Math.max(0, Math.floor((by / h) * gridRows));
-                    const scMaxR = Math.min(gridRows - 1, Math.ceil(((by + bh) / h) * gridRows));
-
-                    let trkSkin = 0;
-                    for (let r = scMinR; r <= scMaxR; r++) {
-                        for (let c = scMinC; c <= scMaxC; c++) {
-                            trkSkin += skinGrid[r][c];
+            } else if (nativeFaceDetector && video.readyState >= 2 && !isDetectingFace) {
+                if (now - lastFaceDetectTime > 60) {
+                    isDetectingFace = true;
+                    lastFaceDetectTime = now;
+                    nativeFaceDetector.detect(video).then(faces => {
+                        const newDets = [];
+                        for (const face of faces) {
+                            const fb = face.boundingBox;
+                            const size = Math.max(fb.width, fb.height) * 1.30;
+                            const cx = fb.x + fb.width / 2;
+                            const cy = fb.y + fb.height / 2;
+                            const bx = Math.max(0, Math.min(w - size, cx - size / 2));
+                            const by = Math.max(0, Math.min(h - size, cy - size / 2));
+                            newDets.push({
+                                bbox: [bx, by, size, size],
+                                faceBbox: [fb.x, fb.y, fb.width, fb.height],
+                                score: 0.95
+                            });
                         }
-                    }
-
-                    if (trkSkin > 4 || frameSkinCount > 8 || frameMotionCount > 10) {
-                        candidates.push({
-                            bbox: trk.bbox.slice(),
-                            faceBbox: trk.faceBbox,
-                            score: trk.score
-                        });
-                    }
+                        cachedDetections = newDets;
+                        isDetectingFace = false;
+                    }).catch(() => {
+                        isDetectingFace = false;
+                    });
+                }
+            } else if (!blazefaceModel && !nativeFaceDetector) {
+                if (now - lastFaceDetectTime > 90) {
+                    lastFaceDetectTime = now;
+                    cachedDetections = detectFacesPureJS(video, procCtx, procW, procH, w, h);
                 }
             }
 
-            // Cue D: Center Subject Lock Fallback (Instant detection on webcam startup)
-            if (candidates.length === 0 && (frameSkinCount > 6 || frameMotionCount > 10)) {
-                const cw = w * 0.40;
-                const ch = h * 0.65;
-                const cx = (w - cw) / 2;
-                const cy = h * 0.16;
-                candidates.push({
-                    bbox: [cx, cy, cw, ch],
-                    faceBbox: [cx + cw * 0.2, cy, cw * 0.6, ch * 0.45],
-                    score: 0.86
-                });
-            }
+            const candidates = cachedDetections || [];
 
             // Multi-Frame Track Matching & Smoothing (EMA Filter)
             const updatedTracks = [];
@@ -2861,18 +2881,19 @@
                     const cx2 = cand.bbox[0] + cand.bbox[2] / 2;
                     const cy2 = cand.bbox[1] + cand.bbox[3] / 2;
                     const dist = Math.hypot(cx1 - cx2, cy1 - cy2);
-                    if (dist < bestDist && dist < (w * 0.45)) {
+                    if (dist < bestDist && dist < (w * 0.35)) {
                         bestDist = dist;
                         bestTrack = trk;
                     }
                 }
 
                 if (bestTrack) {
-                    bestTrack.bbox[0] = bestTrack.bbox[0] * 0.65 + cand.bbox[0] * 0.35;
-                    bestTrack.bbox[1] = bestTrack.bbox[1] * 0.65 + cand.bbox[1] * 0.35;
-                    bestTrack.bbox[2] = bestTrack.bbox[2] * 0.65 + cand.bbox[2] * 0.35;
-                    bestTrack.bbox[3] = bestTrack.bbox[3] * 0.65 + cand.bbox[3] * 0.35;
-                    bestTrack.score = Math.min(0.98, bestTrack.score * 0.7 + cand.score * 0.3);
+                    const alpha = 0.45;
+                    bestTrack.bbox[0] = bestTrack.bbox[0] * (1 - alpha) + cand.bbox[0] * alpha;
+                    bestTrack.bbox[1] = bestTrack.bbox[1] * (1 - alpha) + cand.bbox[1] * alpha;
+                    bestTrack.bbox[2] = bestTrack.bbox[2] * (1 - alpha) + cand.bbox[2] * alpha;
+                    bestTrack.bbox[3] = bestTrack.bbox[3] * (1 - alpha) + cand.bbox[3] * alpha;
+                    bestTrack.score = cand.score;
                     bestTrack.missed = 0;
                     bestTrack.faceBbox = cand.faceBbox;
 
@@ -2898,11 +2919,11 @@
                 }
             }
 
-            // Retain unmatched tracks for up to 90 frames (~3s persistence)
+            // Retain unmatched tracks for max 8 frames (~0.25s grace period)
             for (const trk of activeTracks) {
                 if (!updatedTracks.includes(trk)) {
                     trk.missed = (trk.missed || 0) + 1;
-                    if (trk.missed < 90) {
+                    if (trk.missed < 8) {
                         updatedTracks.push(trk);
                     }
                 }
@@ -2919,16 +2940,9 @@
                 const inRoi = hasRoi ? isPointInPoly(feetPt, roiPoints) : false;
                 const isIntruder = hasRoi && inRoi;
 
-                // MikoVo RaRa 11 Shrink-Wrapped Anatomical Bounds
-                const synKpts = synthesizeKeypointsFromBox(trk.bbox, trk.faceBbox);
-                const anatReport = fitAnatomicalPersonBounds(synKpts, trk.bbox, trk.id, clientDualZoneSmoother);
-
                 const detObj = {
                     id: trk.id,
                     bbox: [bx, by, bw, bh],
-                    bodyBbox: anatReport.bodyBbox,
-                    headBbox: anatReport.headBbox,
-                    confidence: anatReport.confidence,
                     score: trk.score,
                     name: trk.name,
                     inRoi: inRoi,
@@ -2964,185 +2978,90 @@
             animationFrameId = requestAnimationFrame(processLoop);
         }
 
-        // ==================== MikoVo RaRa 11 Client-Side Tactical Body-Cam Mesh ====================
-        class ClientTacticalMeshStabilizer {
-            constructor() {
-                this.tracks = new Map();
-            }
-            update(trackId, vertices) {
-                const prev = this.tracks.get(trackId);
-                if (!prev || prev.length !== vertices.length) {
-                    this.tracks.set(trackId, vertices.map(p => [...p]));
-                    return vertices;
+        function detectFacesPureJS(videoEl, pCtx, pw, ph, canvasW, canvasH) {
+            pCtx.drawImage(videoEl, 0, 0, pw, ph);
+            const data = pCtx.getImageData(0, 0, pw, ph).data;
+            let minX = pw, maxX = 0, minY = ph, maxY = 0;
+            let skinCount = 0;
+
+            for (let y = 0; y < ph; y++) {
+                for (let x = 0; x < pw; x++) {
+                    const idx = (y * pw + x) * 4;
+                    const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+                    const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+                    const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+                    if (cb >= 75 && cb <= 130 && cr >= 132 && cr <= 175 && r > 65 && g > 40 && b > 25 && r > g && (r - b) > 5) {
+                        skinCount++;
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                    }
                 }
-                const smoothed = vertices.map((p, i) => {
-                    const pp = prev[i];
-                    const dist = Math.hypot(p[0] - pp[0], p[1] - pp[1]);
-                    const alpha = dist > 8 ? 0.85 : 0.40;
-                    const sx = alpha * p[0] + (1 - alpha) * pp[0];
-                    const sy = alpha * p[1] + (1 - alpha) * pp[1];
-                    return [sx, sy];
-                });
-                this.tracks.set(trackId, smoothed);
-                return smoothed;
             }
-            reset(trackId) {
-                this.tracks.delete(trackId);
-            }
-        }
-        const clientMeshStabilizer = new ClientTacticalMeshStabilizer();
 
-        function generateBodycamContourVertices(det, canvasWidth, isMirrored) {
-            const [x, y, bw, bh] = det.bodyBbox || det.bbox;
-            const pts = [
-                [x + bw * 0.50, y],                           // 0. Head crown apex
-                [x + bw * 0.62, y + bh * 0.05],               // 1. Head right upper
-                [x + bw * 0.60, y + bh * 0.12],               // 2. Head right cheek/ear
-                [x + bw * 0.54, y + bh * 0.16],               // 3. Neck right
-                [x + bw * 0.78, y + bh * 0.20],               // 4. Shoulder right
-                [x + bw * 0.85, y + bh * 0.36],               // 5. Elbow right outer
-                [x + bw * 0.76, y + bh * 0.50],               // 6. Wrist right
-                [x + bw * 0.68, y + bh * 0.56],               // 7. Hip right outer
-                [x + bw * 0.70, y + bh * 0.76],               // 8. Knee right outer
-                [x + bw * 0.68, y + bh * 0.98],               // 9. Ankle right
-                [x + bw * 0.50, y + bh * 0.60],               // 10. Groin center notch
-                [x + bw * 0.32, y + bh * 0.98],               // 11. Ankle left
-                [x + bw * 0.30, y + bh * 0.76],               // 12. Knee left outer
-                [x + bw * 0.32, y + bh * 0.56],               // 13. Hip left outer
-                [x + bw * 0.24, y + bh * 0.50],               // 14. Wrist left
-                [x + bw * 0.15, y + bh * 0.36],               // 15. Elbow left outer
-                [x + bw * 0.22, y + bh * 0.20],               // 16. Shoulder left
-                [x + bw * 0.46, y + bh * 0.16],               // 17. Neck left
-                [x + bw * 0.40, y + bh * 0.12],               // 18. Head left cheek/ear
-                [x + bw * 0.38, y + bh * 0.05]                // 19. Head left upper
-            ];
+            if (skinCount < 140 || minX >= maxX || minY >= maxY) return [];
 
-            return pts.map(([px, py]) => {
-                const rx = isMirrored ? (canvasWidth - px) : px;
-                return [rx, py];
-            });
+            const scaleX = canvasW / pw;
+            const scaleY = canvasH / ph;
+            const clusterW = (maxX - minX + 1) * scaleX;
+            const clusterH = (maxY - minY + 1) * scaleY;
+
+            if (clusterW < 60 || clusterH < 60) return [];
+
+            const size = Math.max(90, Math.min(clusterW * 0.85, clusterH * 0.70, 360));
+            const cx = ((minX + maxX) / 2) * scaleX;
+            const cy = (minY * scaleY) + size * 0.5;
+            const bx = Math.max(0, Math.min(canvasW - size, cx - size / 2));
+            const by = Math.max(0, Math.min(canvasH - size, cy - size / 2));
+
+            return [{
+                bbox: [bx, by, size, size],
+                faceBbox: [bx, by, size, size],
+                score: 0.90
+            }];
         }
 
         function drawHud(det) {
-            const [x, y, bw, bh] = det.bodyBbox || det.bbox;
+            const [x, y, bw, bh] = det.bbox;
             const isKnown = !!det.name;
             const isIntruder = !!det.inRoiAlert;
 
-            // Tactical Neon Colors
+            // Color: green=known, red=intruder, cyan=unknown
             let color = '#00E5FF';
-            let colorDim = 'rgba(0, 229, 255, 0.28)';
-            let colorMid = 'rgba(0, 229, 255, 0.58)';
-            if (isKnown) {
-                color = '#10B981';
-                colorDim = 'rgba(16, 185, 129, 0.28)';
-                colorMid = 'rgba(16, 185, 129, 0.58)';
-            }
-            if (isIntruder) {
-                color = '#FF3B30';
-                colorDim = 'rgba(255, 59, 48, 0.28)';
-                colorMid = 'rgba(255, 59, 48, 0.58)';
-            }
+            if (isKnown) color = '#10B981';
+            if (isIntruder) color = '#FF3B30';
 
             ctx.save();
             ctx.globalAlpha = det.opacity !== undefined ? det.opacity : 1.0;
 
-            // 1. Generate & Stabilize Anatomical Body-Cam Contour Vertices
-            const rawVertices = generateBodycamContourVertices(det, overlayCanvas.width, isMirrored);
-            const vertices = clientMeshStabilizer.update(det.id, rawVertices);
+            // Mirror support
+            const boxX = isMirrored ? (overlayCanvas.width - x - bw) : x;
+            const rx = Math.round(boxX);
+            const ry = Math.round(y);
+            const rw = Math.round(bw);
+            const rh = Math.round(bh);
 
-            // 2. Draw Connected Tactical Polyline (Glowing Neon Mesh Wireframe)
-            if (vertices.length >= 3) {
-                // Dim outer glow polyline
-                ctx.beginPath();
-                ctx.moveTo(vertices[0][0], vertices[0][1]);
-                for (let i = 1; i < vertices.length; i++) {
-                    ctx.lineTo(vertices[i][0], vertices[i][1]);
-                }
-                ctx.closePath();
-                ctx.strokeStyle = colorDim;
-                ctx.lineWidth = 4.0;
-                ctx.lineJoin = 'round';
-                ctx.stroke();
-
-                // Crisp inner neon polyline
-                ctx.strokeStyle = color;
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
-
-                // 3. Draw Layered Glowing Nodes at each vertex
-                const nodeRadius = 3;
-                for (const [px, py] of vertices) {
-                    ctx.fillStyle = colorDim;
-                    ctx.beginPath();
-                    ctx.arc(px, py, nodeRadius + 3, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    ctx.fillStyle = colorMid;
-                    ctx.beginPath();
-                    ctx.arc(px, py, nodeRadius + 1, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    ctx.fillStyle = color;
-                    ctx.beginPath();
-                    ctx.arc(px, py, nodeRadius, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    ctx.fillStyle = '#FFFFFF';
-                    ctx.beginPath();
-                    ctx.arc(px, py, 1.0, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-
-            // 4. Sleek Tactical Glassmorphic Telemetry HUD Label Badge at Top Apex
-            let apexX = x + bw * 0.5;
-            let apexY = y;
-            if (vertices.length > 0) {
-                let minY = Infinity;
-                for (const [vx, vy] of vertices) {
-                    if (vy < minY) { minY = vy; apexX = vx; }
-                }
-                apexY = minY;
-            }
-
-            const prefix = isIntruder ? (currentLang === 'fa' ? 'هشدار نفوذ: ' : 'INTRUSION: ') : '';
-            const idText = isKnown ? det.name : (currentLang === 'fa' ? 'فرد ناشناس' : 'Unknown');
-            const scorePct = Math.round((det.score || 0.95) * 100);
-            const label = `MikoVo RaRa 11 #${det.id} | ${prefix}${idText} (${scorePct}%)`;
-
-            ctx.font = '700 13px -apple-system, Vazirmatn, sans-serif';
-            const textMetrics = ctx.measureText(label);
-            const tw = textMetrics.width;
-            const th = 14;
-            const padX = 8, padY = 5;
-
-            const badgeW = tw + padX * 2;
-            const badgeH = th + padY * 2;
-            let badgeX = Math.max(10, Math.min(overlayCanvas.width - badgeW - 10, apexX - badgeW / 2));
-            let badgeY = Math.max(badgeH + 8, apexY - 14);
-
-            // Translucent glass card background
-            ctx.fillStyle = 'rgba(14, 19, 22, 0.85)';
-            if (ctx.roundRect) {
-                ctx.beginPath();
-                ctx.roundRect(badgeX, badgeY - badgeH, badgeW, badgeH, 4);
-                ctx.fill();
-            } else {
-                ctx.fillRect(badgeX, badgeY - badgeH, badgeW, badgeH);
-            }
-
-            // Top neon accent line
+            // Simple clean rectangle
             ctx.strokeStyle = color;
-            ctx.lineWidth = 2.0;
-            ctx.beginPath();
-            ctx.moveTo(badgeX, badgeY - badgeH);
-            ctx.lineTo(badgeX + badgeW, badgeY - badgeH);
-            ctx.stroke();
+            ctx.lineWidth = 2;
+            ctx.strokeRect(rx, ry, rw, rh);
 
-            // Crisp white text
-            ctx.fillStyle = '#F5F5FA';
-            ctx.shadowBlur = 0;
-            ctx.fillText(label, badgeX + padX, badgeY - padY - 2);
+            // Name label above box
+            const idText = isKnown ? det.name : (currentLang === 'fa' ? 'ناشناس' : 'Unknown');
+            const label = isIntruder ? `⚠ ${idText}` : idText;
+
+            ctx.font = '600 13px -apple-system, Vazirmatn, sans-serif';
+            const tw = ctx.measureText(label).width;
+            const labelY = Math.max(20, ry - 6);
+
+            // Label background
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+            ctx.fillRect(rx, labelY - 16, tw + 10, 20);
+
+            // Label text
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(label, rx + 5, labelY - 1);
 
             ctx.restore();
         }
@@ -3868,7 +3787,8 @@
 
         // ==================== Initialize ====================
         window.addEventListener('DOMContentLoaded', () => {
-            setLang('fa');
+            const savedLang = localStorage.getItem('mikotim_lang') || 'fa';
+            setLang(savedLang);
             loadConfig();
             loadProfiles();
             updateVisionModeUI();
