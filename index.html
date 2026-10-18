@@ -1959,8 +1959,13 @@
         }
 
         // ==================== Audio & Voice Alarms ====================
+        let lastAlarmSirenTime = 0;
         function playAlarmSiren() {
             if (!document.getElementById('chkAudioAlarm').checked) return;
+            if (typeof isWithinSchedule === 'function' && !isWithinSchedule()) return;
+            const nowMs = Date.now();
+            if (nowMs - lastAlarmSirenTime < 3500) return;
+            lastAlarmSirenTime = nowMs;
             try {
                 if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -1981,8 +1986,13 @@
             } catch(e) {}
         }
 
+        let lastVoiceWarningTime = 0;
         function playVoiceWarning(text) {
             if (!document.getElementById('chkVoiceWarning').checked) return;
+            if (typeof isWithinSchedule === 'function' && !isWithinSchedule()) return;
+            const nowMs = Date.now();
+            if (nowMs - lastVoiceWarningTime < 4500) return;
+            lastVoiceWarningTime = nowMs;
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel();
                 const u = new SpeechSynthesisUtterance(text);
@@ -2049,7 +2059,10 @@
                 ? (currentLang === 'fa' ? 'آینه: روشن' : 'Mirror: ON')
                 : (currentLang === 'fa' ? 'آینه: خاموش' : 'Mirror: OFF');
             const btnM = document.getElementById('btnMirrorAction');
-            if (btnM) btnM.innerHTML = isMirrored ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg><span>آینه (فعال)</span>' : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg><span>حالت آینه‌ای</span>';
+            const mirrorBtnText = isMirrored
+                ? (currentLang === 'fa' ? 'آینه (فعال)' : 'Mirror (Active)')
+                : (currentLang === 'fa' ? 'حالت آینه‌ای' : 'Mirror Feed');
+            if (btnM) btnM.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg><span>${mirrorBtnText}</span>`;
             saveConfig();
         }
 
@@ -2327,6 +2340,9 @@
             syncCustomDropdowns();
             updateVisionModeUI();
             renderHourlyChart(hourlyTraffic);
+            applyMirrorState(isMirrored);
+            renderProfileList();
+            updateScheduleStatusUI();
             updateBadge();
         }
 
@@ -3219,25 +3235,31 @@
                             <line x1="18" y1="6" x2="6" y2="18"/>
                             <line x1="6" y1="6" x2="18" y2="18"/>
                         </svg>
-                        <span>حذف</span>
+                        <span>${currentLang === 'fa' ? 'حذف' : 'Delete'}</span>
                     </button>
                 `;
                 list.appendChild(card);
             });
         }
 
-        function deleteProfile(id) {
+        async function deleteProfile(id) {
             registeredProfiles = registeredProfiles.filter(p => p.id !== id);
             saveProfiles();
             renderProfileList();
+            try {
+                await fetch(`/api/faces/${encodeURIComponent(id)}`, { method: 'DELETE' });
+            } catch (e) {}
             notify(currentLang === 'fa' ? 'پروفایل حذف شد' : 'Profile deleted');
         }
 
-        function clearAllFaces() {
+        async function clearAllFaces() {
             if (!confirm(currentLang === 'fa' ? 'آیا از حذف تمام چهره‌ها اطمینان دارید؟' : 'Clear all profiles?')) return;
             registeredProfiles = [];
             saveProfiles();
             renderProfileList();
+            try {
+                await fetch('/api/faces/clear', { method: 'POST' });
+            } catch (e) {}
             notify(currentLang === 'fa' ? 'تمام پروفایل‌ها حذف شدند' : 'All profiles cleared');
         }
 
@@ -3306,6 +3328,20 @@
             if (empty) empty.parentElement.remove();
 
             const tr = document.createElement('tr');
+            const withinSchedule = (typeof isWithinSchedule === 'function') ? isWithinSchedule() : true;
+
+            if (!withinSchedule) {
+                tr.innerHTML = `
+                    <td>${timeStr}</td>
+                    <td>${persons.length}</td>
+                    <td>${Math.round(persons[0].score * 100)}%</td>
+                    <td><strong>${identifiedStr}</strong></td>
+                    <td><span class="pill-tag local">${currentLang === 'fa' ? 'سکوت (خارج بازه)' : 'Silent (Off-hours)'}</span></td>
+                `;
+                tbody.prepend(tr);
+                return; // Outside active surveillance hours: log quietly without alerting
+            }
+
             tr.innerHTML = `
                 <td>${timeStr}</td>
                 <td>${persons.length}</td>
@@ -3316,7 +3352,7 @@
             tbody.prepend(tr);
 
             // Send to Telegram
-            const autoSend = document.getElementById('chkAuto').checked;
+            const autoSend = document.getElementById('chkAuto') && document.getElementById('chkAuto').checked;
             const token = document.getElementById('tgToken').value.trim();
             const chatId = document.getElementById('tgChat').value.trim();
 
@@ -3324,8 +3360,9 @@
                 const tagEl = document.getElementById(`tag_${now}`);
                 const captionText = `[MikoTim Sentinel Pro | MikoVo RaRa 11]\n${document.getElementById('customCaption').value.trim()}\nPersons: ${persons.length}\nIdentity: ${identifiedStr}\nTime: ${timeStr}`;
 
+                let sent = false;
+                // 1. Try secure backend dispatch
                 try {
-                    // Route securely through Python backend
                     const res = await fetch('/api/telegram/send', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -3337,31 +3374,47 @@
                             is_loitering: hasIntruder
                         })
                     });
-                    const resData = await res.json();
-                    if (resData.ok) {
-                        telegramSentCount++;
-                        document.getElementById('tgVal').innerText = telegramSentCount;
-                        if (tagEl) {
-                            tagEl.className = 'pill-tag sent';
-                            tagEl.innerText = 'Sent';
-                        }
-                    } else {
-                        if (tagEl) {
-                            tagEl.className = 'pill-tag local';
-                            tagEl.innerText = 'Local';
-                        }
+                    if (res.ok) {
+                        const resData = await res.json();
+                        if (resData.ok) sent = true;
                     }
-                } catch (e) {
+                } catch (e) {}
+
+                // 2. Direct client-edge fallback if token & chat provided (e.g. GitHub Pages)
+                if (!sent && token && chatId) {
+                    try {
+                        const blob = await (await fetch(imgUrl)).blob();
+                        const fd = new FormData();
+                        fd.append('chat_id', chatId);
+                        fd.append('caption', captionText);
+                        fd.append('photo', blob, 'alert.jpg');
+                        const directRes = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+                            method: 'POST',
+                            body: fd
+                        });
+                        if (directRes.ok) sent = true;
+                    } catch (e) {}
+                }
+
+                if (sent) {
+                    telegramSentCount++;
+                    const tgVal = document.getElementById('tgVal');
+                    if (tgVal) tgVal.innerText = telegramSentCount;
+                    if (tagEl) {
+                        tagEl.className = 'pill-tag sent';
+                        tagEl.innerText = currentLang === 'fa' ? 'ارسال شد' : 'Sent';
+                    }
+                } else {
                     if (tagEl) {
                         tagEl.className = 'pill-tag local';
-                        tagEl.innerText = 'Local';
+                        tagEl.innerText = currentLang === 'fa' ? 'محلی' : 'Local';
                     }
                 }
             } else {
                 const tagEl = document.getElementById(`tag_${now}`);
                 if (tagEl) {
                     tagEl.className = 'pill-tag local';
-                    tagEl.innerText = 'Local';
+                    tagEl.innerText = currentLang === 'fa' ? 'محلی' : 'Local';
                 }
             }
         }
@@ -3389,19 +3442,52 @@
             const token = document.getElementById('tgToken').value.trim();
             const chatId = document.getElementById('tgChat').value.trim();
 
+            if (!token) {
+                notify(currentLang === 'fa' ? 'لطفاً توکن ربات تلگرام را وارد کنید' : 'Please enter Telegram bot token');
+                return;
+            }
+
+            // 1. Try Python server endpoint first
             try {
                 const res = await fetch('/api/test_telegram', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ token: token, chat_id: chatId })
                 });
-                const d = await res.json();
-                if (d.ok) {
-                    notify(currentLang === 'fa' ? 'اتصال با تلگرام با موفقیت برقرار شد' : 'Telegram connected successfully');
-                } else {
-                    notify(d.message || d.error || (currentLang === 'fa' ? 'خطا در اتصال به تلگرام' : 'Telegram error'));
+                if (res.ok) {
+                    const d = await res.json();
+                    if (d.ok) {
+                        notify(currentLang === 'fa' ? 'اتصال با تلگرام با موفقیت برقرار شد' : 'Telegram connected successfully');
+                        return;
+                    } else {
+                        notify(d.message || d.error || (currentLang === 'fa' ? 'خطا در اتصال به تلگرام' : 'Telegram error'));
+                        return;
+                    }
                 }
-            } catch (e) {
+            } catch (e) {}
+
+            // 2. Direct fallback test for standalone client / GitHub Pages
+            try {
+                const directRes = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+                const cd = await directRes.json();
+                if (cd.ok) {
+                    if (chatId) {
+                        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                chat_id: chatId,
+                                text: currentLang === 'fa'
+                                    ? '✅ تست اتصال MikoTim Sentinel Pro: ارتباط با ربات تلگرام برقرار شد.'
+                                    : '✅ MikoTim Sentinel Pro: Telegram connection verified.'
+                            })
+                        });
+                    }
+                    notify(currentLang === 'fa' ? `ربات @${cd.result.username} متصل شد` : `Bot @${cd.result.username} connected`);
+                } else {
+                    notify(cd.description || (currentLang === 'fa' ? 'توکن ربات نامعتبر است' : 'Invalid bot token'));
+                }
+            } catch (err) {
                 notify(currentLang === 'fa' ? 'سرور متصل نیست' : 'Server offline');
             }
         }
@@ -3766,7 +3852,7 @@
                         hourlyTraffic = data.hourly_traffic;
                         renderHourlyChart(hourlyTraffic);
                     }
-                    if (data.logs && Array.isArray(data.logs) && data.logs.length) {
+                    if (currentVisionMode === 'server_vision' && data.logs && Array.isArray(data.logs) && data.logs.length) {
                         const tbody = document.getElementById('logRows');
                         tbody.innerHTML = '';
                         data.logs.forEach(l => {
