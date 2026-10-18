@@ -1,98 +1,215 @@
 # MikoTim Sentinel Pro
 
-سامانه متن‌باز نظارت تصویری هوشمند با موتور پیشرفته **MikoVo RaRa 11** (توسعه‌یافته بر پایه معماری YOLO)  
-**Open-source intelligent vision surveillance powered by MikoVo RaRa 11 (Derived from YOLO)**
+<div align="center">
+
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg?logo=python&logoColor=white)](https://python.org)
+[![Neural Core](https://img.shields.io/badge/Vision%20Core-MikoVo%20RaRa%2011%20(YOLOv8--Derived)-8A2BE2.svg)](https://github.com/MikailArdeshirLarijani/mikotim-sentinel-pro)
+[![Throughput](https://img.shields.io/badge/Throughput->200%20FPS%20(CPU)-success.svg)](https://github.com/MikailArdeshirLarijani/mikotim-sentinel-pro)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-orange.svg)](https://mikailardeshirlarijani.github.io/mikotim-sentinel-pro/)
+
+**Next-Generation Intelligent Vision Surveillance & Biometric Threat Profiler**  
+*Powered by the MikoVo RaRa 11 Neural Vision Core (Engineered & Evolved from YOLOv8 Architecture)*
+
+[**Live Demo Dashboard**](https://mikailardeshirlarijani.github.io/mikotim-sentinel-pro/) • [**Key Features**](#key-features) • [**Architecture & Subsystems**](#mikovo-rara-11-neural-vision-core) • [**Getting Started**](#getting-started) • [**Telegram Integration**](#telegram-bot-gateway--remote-commands) • [**API Reference**](#restful-api-endpoints)
+
+</div>
 
 ---
 
-## موتور هوش مصنوعی MikoVo RaRa 11 | Architecture & Deep Biometrics
+## Overview
 
-> [!NOTE]  
-> **درباره MikoVo RaRa 11:** این نسخه از هوش مصنوعی پروژه با نام اختصاصی **MikoVo RaRa 11** نام‌گذاری شده و هسته پردازش پایه‌ای آن **برگرفته و توسعه‌یافته از معماری شبکه عصبی YOLO (نسخه YOLOv8)** است که با الگوریتم‌های پیشرفته بیومتریک و بینایی ماشین (بدون نیاز به پکیج‌های سنگین، ۱۰۰٪ برداری با سرعت بالای **۲۰۰ فریم بر ثانیه روی پردازنده**) مهندسی شده است.  
-> **About MikoVo RaRa 11:** The project's vision engine, named **MikoVo RaRa 11**, is **derived and evolved directly from the YOLO architecture (YOLOv8)**, enhanced with advanced pure-NumPy/OpenCV biometrics delivering >200 FPS on CPU.
+**MikoTim Sentinel Pro** is a high-performance, enterprise-grade optical surveillance and biometric security gateway designed for zero-latency perimeter defense, facial identity verification, and multi-spectral threat detection.
 
-### ارکان مهندسی و بیومتریک MikoVo RaRa 11:
-1. **هم‌ترازی سه‌بعدی چهره با تبدیل تشابه اومیاما (Weighted Umeyama Similarity Transform via SVD):**  
-   نگاشت بهینه‌سازی‌شده کمترین مربعات برای انتقال ۵ نقطه کلیدی چهره YOLO (بینی، چشم‌ها، گوش‌ها) به مختصات استاندارد ۱۱۲×۱۱۲ با تفکیک چرخش، مقیاس و انتقال.
-2. **متعادل‌کننده نوری تطبیقی پیشرفته (Adaptive LAB CLAHE + Dynamic Exponential Gamma):**  
-   حذف سایه‌های سنگین، نور ضدآفتاب و توازن روشنایی به صورت خودکار در فضای رنگی LAB.
-3. **بردارساز ویژگی عمیق ۵۱۲ بعدی (512-Dimensional Deep Metric Descriptor):**  
-   ترکیب هیستوگرام گرادیان‌های چندمقیاسی Scharr در شبکه‌های فضایی مختلف (۸×۸، ۴×۴، ۲×۲)، الگوهای باینری محلی یکنواخت چندشعاعی (Multi-Radius ULBP) و شاخص‌های انتروپومتریک چهره، تصویرشده روی ابرکره ۵۱۲ بعدی نرمال‌شده با تفکیک‌پذیری فوق‌العاده بالا.
-4. **ردیاب زمانی کالمن ۸ حالته با فیلتر ماهالانوبیس (8-State Kalman Tracker with Mahalanobis Gating):**  
-   ردیابی پیوسته بردار سرعت و موقعیت `[x, y, a, h, vx, vy, va, vh]`، حذف جهش‌ها و نویزهای تشخیص با آستانه $\chi^2$ اطمینان ۹۵٪، و تثبیت شناسه چهره با پنجره رأی‌گیری اکثریتی ۱۰ فریمی.
-5. **سپر ضد تقلب و تشخیص زنده بودن چندطیفی (Multi-Spectral Passive Anti-Spoofing & Liveness):**  
-   تشخیص و مسدودسازی فوری تلاش‌های نفوذ با عکس‌های چاپی، تبلت و صفحه نمایش موبایل (Screen Replay & Print Attack) با تحلیل طیفی فوریه دوبعدی (2D FFT)، پراکندگی رنگی YCrCb/HSV و پایش تغییرات مویرگی پوست (rPPG).
-6. **تخمین سه‌بعدی زوایای سر و فیوژن زمانی هویت (3D Head Pose Euler Solver & EMA Fusion Memory):**  
-   حل معادلات سه‌بعدی PnP برای استخراج زوایای Pitch, Yaw, Roll و تجمیع وزن‌دار بردارهای ۵۱۲ بعدی روی ابرکره واحد با مسدودسازی فریم‌های جعلی و بی‌کیفیت.
-7. **تشخیص پوشش چهره، ماسک و استتار (Facial Occlusion & Concealment Sentinel):**  
-   تحلیل تقارن دوطرفه و اعتماد به لندمارک‌های آنتروپومتریک در کنار گرادیان بافت میکرو (Sobel) و فضای رنگی HSV برای تفکیک پوست طبیعی از انواع ماسک‌های جراحی، پارچه‌ای، دستمال‌سر و نقاب‌های بالاکلاوا (Balaclava).
-8. **تحلیلگر تهدیدات کینتیک، هجوم ناگهانی و تشخیص سقوط/اورژانس (Kinetic Threat & Fall Emergency Analyzer):**  
-   پایش شتاب و سرعت بردار حالت کالمن همراه با نرخ تورم پرسپکتیو (Looming Approach) برای کشف هجوم و دویدن ناگهانی (Rapid Dash)، و پایش فروریزش نسبت ابعاد باکس برای شناسایی فوری افتادن ناگهانی یا بیهوشی افراد در صحنه (Sudden Fall / Medical Collapse).
-9. **تحلیلگر آنتروپی مسیر و پرسه‌زنی مشکوک (Trajectory Tortuosity & Shannon Entropy Prowler Profiler):**  
-   بررسی پیچیدگی هندسی مسیر حرکت (Tortuosity) و آنتروپی شانون در ۸ جهت زاویه‌ای در یک پنجره لغزان ۴۵ فریمی برای تفکیک عبور هدفمند از پرسه‌زنی مشکوک و بی‌هدف (Prowling) در اطراف حریم حفاظتی.
-10. **سپر پایش نزاع، درگیری فیزیکی و پرتاب ضربه (Physical Violence, Strike Velocity & Grapple Sentinel):**  
-   تحلیل کینماتیک سرعت پرتاب مچ و تکان زاویه‌ای مفصل آرنج (Kinematic Jerk) برای کشف ضربات مشت و ضربه فیزیکی، همگرایی پرشتاب و تداخل کادرهای دو نفر در حالت گلاویز شدن (Grappling/Clinch)، و سنجش آنتروپی تلاطم بالاتنه در پنجره ۲۰ فریمی برای تفکیک پیاده‌روی طبیعی از درگیری و نزاع فیزیکی با توان پردازش بیش از ۶۰۰ فریم بر ثانیه روی تک‌هسته CPU.
-11. **برازش آناتومیک و چفت‌شدن دقیق به فرم بدن و سر (Shrink-Wrapped Anatomical Body & Head Fitter):**  
-   تبدیل کادر تخمینی و آزاد شناسایی به کادر فوق‌العاده چفت و منطبق بر اسکلت و سیلوئت واقعی بدن (Anthropometric Bone-Segment Projection)؛ تفکیک دو زون قفل‌شده سر (تاج تا چانه، گوش تا گوش) و کل کالبد شخص، اعمال صاف‌ساز تطبیقی زمانی EMA در هر ترک، فیلتر لبه سیلوئت لباس و پوست با تبدیل سوبل (Sobel-Otsu Edge Snapping)، و تشخیص دقیق وضعیت بدنی (ایستاده، نشسته، چمباتمه، خمیده و دستان گشوده) با سرعت اجرای فراتر از ۵۰۰ فریم بر ثانیه روی پردازنده معمولی.
-12. **مش تاکتیکال بادی‌کم و نقاط محیطی متصل (Tactical Body-Cam Contour Mesh & Connected Nodes Core):**  
-   حذف کادرهای مستطیلی قدیمی و جایگزینی با سیستم بصری تاکتیکال دوربین‌های پلیسی و نظامی؛ استخراج ۲۰ گره و نقطه لنگر محیطی (Perimeter Anchor Nodes) با درخشش چندلایه‌ای نئونی دور تا دور ابعاد، اندام‌ها و کالبد واقعی بدن شخص، اتصال پیوسته نقاط با خطوط وکتور لیزری ضدپله‌ای (`cv2.LINE_AA`) و تثبیت زمانی حرکات با فیلتر تطبیقی چرخشی (`MikoVoTemporalMeshStabilizer`) برای حذف لرزش و پرش نقاط همراه با تگ‌های متنی شیشه‌ای شفاف (HUD Telemetry) با بازدهی پردازش بیش از ۳۰۰ فریم بر ثانیه روی تک‌هسته پردازنده.
+At its heart lies the proprietary **MikoVo RaRa 11 Neural Vision Core** — an edge-optimized architecture directly derived and evolved from **YOLOv8** pose estimation, operating purely with vectorized NumPy and OpenCV array arithmetic (**no heavyweight PyTorch or TensorFlow runtimes required on inference hot paths**). It comfortably achieves **>200 FPS on single-core CPU** while providing military-grade anti-spoofing, kinetic threat analysis, and tactical anatomical mesh tracking.
 
 ---
 
-## قابلیت‌های حرفه‌ای سامانه | Professional Features
+## MikoVo RaRa 11 Neural Vision Core
 
-- **📸 انتخاب نوع رسانه هشدار: ویدیو یا عکس (Dual Media Alert):** ارسال آنی تک‌عکس باکیفیت یا ویدیوی ۵ ثانیه‌ای واقعی MP4 (شامل ۳ ثانیه قبل و ۲ ثانیه بعد از رخداد) به تلگرام.
-- **🎯 محدوده ممنوعه تعاملی (Interactive Virtual Tripwire & ROI):** رسم محدوده امنیتی دلخواه با کلیک مستقیم روی تصویر در مرورگر.
-- **🚶‍♂️ شمارنده خطی رفت‌وآمد (In/Out Direction Counter):** تفکیک و شمارش دقیق اشخاص واردشونده و خارج‌شونده.
-- **⏱ تشخیص پرسه زدن (Loitering Detection):** آلارم خودکار در صورت توقف طولانی فرد ناشناس در دید دوربین.
-- **🚨 آژیر صوتی محلی و اعلان گفتاری (Local Siren & Voice Alert):** آژیر دو صدایی پلیسی و خواندن هشدار صوتی هوشمند از بلندگوی سیستم بدون وابستگی خارجی.
-- **🕶 حالت استتار (Stealth Mode):** پایش نامحسوس امنیتی در پشت یک ساعت مینیمال OLED رومیزی.
-- **📊 گزارش آماری روزانه و دستورات تلگرام:** نمودار ستونی ۲۴ ساعته و ارسال خلاصه گزارش امنیتی به ربات با دستور `/summary`.
+The system integrates 12 specialized mathematical and biometric subsystems:
+
+```
++-----------------------------------------------------------------------------------+
+|                       MikoVo RaRa 11 Neural Vision Core                           |
++-----------------------------------------------------------------------------------+
+|  1. 3D Umeyama Face Alignment (Canonical 112x112 via SVD)                        |
+|  2. Adaptive LAB CLAHE + Dynamic Exponential Gamma Illumination Compensator       |
+|  3. 512-Dimensional Deep Metric Hypersphere Feature Descriptor                    |
+|  4. 8-State Constant-Velocity Kalman Tracker with Chi-Square 95% Mahalanobis Gate |
+|  5. Multi-Spectral Passive Anti-Spoofing (2D FFT + YCrCb/HSV + rPPG Liveness)     |
+|  6. 3D Head Pose Euler Solver (PnP) & Quality-Weighted EMA Hypersphere Memory     |
+|  7. Facial Occlusion & Concealment Sentinel (Mask / Bandana / Balaclava Profiler) |
+|  8. Kinetic Looming Dash & Sudden Fall Medical Emergency Aspect-Ratio Analyzer   |
+|  9. Trajectory Tortuosity & Shannon Directional-Entropy Prowler Profiler          |
+| 10. Physical Violence, Strike Velocity & Pairwise Clinch/Grapple Interlock Core   |
+| 11. Shrink-Wrapped Anatomical Body & Head Fitter (Bone-Segment Projection)        |
+| 12. Tactical Body-Cam Perimeter Mesh & Glowing Connected Anchor Nodes (HUD AA)    |
++-----------------------------------------------------------------------------------+
+```
+
+### 1. 3D-Aware Face Alignment via Weighted Umeyama Transform
+- Least-squares SVD closed-form solver that rectifies raw 2D landmark coordinates (nose, eyes, ears) into canonical $112 \times 112$ metric space.
+- Decouples rotation, isotropic scaling, and Euclidean translation, removing perspective distortion from oblique angles.
+
+### 2. Adaptive LAB Illumination Compensator
+- Operates on the luminance channel within CIE-LAB color space using Contrast Limited Adaptive Histogram Equalization (CLAHE).
+- Applies a dynamic exponential gamma curve normalization to eliminate harsh shadows, direct backlights, and over-saturation without chromatic artifacts.
+
+### 3. 512-Dimensional Deep Metric Descriptor
+- Fuses multi-scale Scharr spatial gradient histograms ($8 \times 8, 4 \times 4, 2 \times 2$), multi-radius Uniform Local Binary Patterns (ULBP), and craniofacial anthropometric ratios into a unit-normalized $\mathbb{S}^{511}$ hypersphere embedding.
+- High intra-class cohesion with strict inter-class separation (>0.82 cosine similarity verification threshold).
+
+### 4. 8-State Kalman Tracker with Mahalanobis Gating
+- Continuous state tracking $[x, y, a, h, v_x, v_y, v_a, v_h]$ incorporating constant-velocity kinematic projection.
+- Suppresses false positives and tracking jitter using a 95% confidence $\chi^2$ Mahalanobis distance gating threshold and sliding-window majority identity voting.
+
+### 5. Multi-Spectral Passive Anti-Spoofing Guard
+- Instant mitigation against print attacks, screen replays, and tablet presentations.
+- Evaluates 2D Fourier high-frequency specular decay (FFT), YCrCb/HSV chromatic dispersion, and temporal micro-capillary pulse fluctuations (rPPG).
+
+### 6. 3D Head Pose Euler Solver & Quality-Weighted EMA Memory
+- Direct Perspective-n-Point (PnP) pose solver yielding Pitch, Yaw, and Roll angles.
+- Hypersphere identity vectors are aggregated into an Exponential Moving Average (EMA) memory track, automatically rejecting occluded or low-quality poses.
+
+### 7. Facial Occlusion & Concealment Sentinel
+- Dual-symmetry analysis combining micro-texture gradients and anthropometric confidence to detect surgical masks, bandanas, scarves, and balaclavas.
+
+### 8. Kinetic Threat, Looming Dash & Fall Emergency Analyzer
+- Real-time acceleration tracking paired with bounding box perspective inflation rates (Looming Approach) to detect rapid dashes or physical attacks.
+- Aspect-ratio collapse triggers immediate alerts for sudden falls, fainting, or medical emergencies.
+
+### 9. Trajectory Tortuosity & Shannon Entropy Prowler Profiler
+- Evaluates movement complexity and directional Shannon entropy across 8 angular bins in a 45-frame rolling window to distinguish intentional transit from suspicious prowling/loitering.
+
+### 10. Physical Violence & Grapple Interlock Sentinel
+- Analyzes wrist strike kinematics, angular jerk, and pairwise proxemic bounding box overlap (Grapple/Clinch) at over 600 FPS on CPU to immediately identify fights and physical altercations.
+
+### 11. Shrink-Wrapped Anatomical Body Fitter
+- Projects anthropometric bone segments directly from skeletal geometry, snapping to clothing and silhouette contours via Sobel-Otsu edge detection.
+
+### 12. Tactical Body-Cam Contour Mesh & Connected Nodes Core
+- Replaces legacy rectangular bounding boxes with a futuristic tactical HUD.
+- Renders 20 anti-aliased glowing perimeter anchor nodes connected with laser vector lines (`cv2.LINE_AA`) and smoothed with cyclic temporal stabilization.
 
 ---
 
-## ساختار فایل‌های پروژه | Project Structure
+## Dual Vision Pipeline Modes
 
-پروژه به صورت کاملاً ساختاریافته در ۵ فایل اصلی و تمیز سامان‌دهی شده است:
+| Feature | Mode A: Pure Client-Edge Vision | Mode B: Server Vision Core |
+|---|---|---|
+| **Primary Runtime** | Browser (`getUserMedia` + WebAssembly / BlazeFace / Pure JS) | Python Backend (Flask + OpenCV + YOLOv8 + MikoVo RaRa 11) |
+| **Server Requirements** | None (Runs standalone on GitHub Pages) | Python 3.10+ with webcam or RTSP feed |
+| **Stream Delivery** | HTML5 Canvas (Direct WebCam) | High-speed MJPEG `/video_feed` stream |
+| **Telegram Alerts** | Direct via client-side Telegram Bot API | Circular MP4 video buffer & server photo dispatch |
+| **Best For** | Static hosting, quick demo, remote browser clients | Enterprise surveillance, continuous video recording, heavy analytics |
+
+---
+
+## Key Features
+
+- 📸 **Dual Alert Media Formats:** Instant high-resolution photo snapshot or real 5-second MP4 video clip (capturing 3 seconds pre-event and 2 seconds post-event).
+- 🎯 **Interactive Virtual ROI & Directional Tripwire:** Draw custom multi-point restricted security zones directly by clicking on the video overlay.
+- 🚶‍♂️ **Linear In/Out Counter:** Directional line-crossing counter tracking ingress and egress flows.
+- ⏱ **Loitering & Prowler Detection:** Configurable threshold triggering alerts when an unauthorized person remains in the zone.
+- 🚨 **Local Police Siren & Smart Speech Alerts:** Native Web Audio synthesizer with frequency ramps and smart multi-lingual speech warnings.
+- 🕶 **Stealth Mode (OLED Desk Clock):** Covert background surveillance masked behind a minimalist OLED digital clock screensaver.
+- 📊 **24-Hour Analytics & Traffic Distribution:** Hourly traffic distribution charts with KPI counters for total incidents, tripwire crossings, and peak hours.
+- 🌐 **Full English & Persian Localization:** 100% localized interface with persistent language selection.
+
+---
+
+## Project Structure
+
+The project root is consolidated into a clean, minimalist 5-file architecture:
 
 ```text
 mikotim-sentinel-pro/
-├── index.html          # فرانت‌اند مدرن Apple Glassmorphism، دوربین مستقیم، رسم محدوده و آژیر محلی
-├── server.py           # سرور پایتون و موتور هوش مصنوعی MikoVo RaRa 11 (تبدیل اومیاما، کالمن و ویدیو MP4)
-├── requirements.txt    # لیست وابستگی‌ها و کتابخانه‌های پایتون
-├── README.md           # مستندات و راهنمای جامع فارسی و انگلیسی
-├── LICENSE             # پروانه انتشار متن‌باز MIT
-└── mikovo_rara11.pt    # وزن‌ها و مدل اختصاصی MikoVo RaRa 11
+├── index.html          # Modern Apple Glassmorphism single-page surveillance app
+├── server.py           # Unified Python server & MikoVo RaRa 11 AI Vision Core (all 12 subsystems)
+├── mikovo_rara11.pt    # YOLOv8-derived neural pose weights
+├── requirements.txt    # Python runtime dependencies
+├── README.md           # Comprehensive project documentation
+├── LICENSE             # MIT Open-Source License
+└── data/               # Persistent database directory
+    ├── config.json           # Runtime configuration settings
+    ├── config.example.json   # Template configuration file
+    └── faces.json            # Biometric face descriptor database
 ```
 
 ---
 
-## نحوه راه‌اندازی و اجرا | Getting Started
+## Getting Started
 
-### ۱. اجرای مستقیم در مرورگر (بدون نیاز به پایتون)
-صرفاً با باز کردن فایل `index.html` در مرورگر (Chrome, Edge, Firefox).
+### Option 1: Instant Browser Execution (Zero Install)
 
-### ۲. اجرای سرور پردازش هوش مصنوعی MikoVo RaRa 11 با پایتون
-```bash
-# نصب پیش‌نیازها
-pip install -r requirements.txt
+Run the application entirely inside your web browser without installing Python:
+1. Simply open [`index.html`](index.html) in Google Chrome, Microsoft Edge, or Mozilla Firefox.
+2. Alternatively, visit the live hosted version:  
+   👉 **[https://mikailardeshirlarijani.github.io/mikotim-sentinel-pro/](https://mikailardeshirlarijani.github.io/mikotim-sentinel-pro/)**
 
-# اجرای سرور پایتون
-python server.py
-```
-سپس در مرورگر خود وارد آدرس زیر شوید:  
-👉 **http://127.0.0.1:5000**
+### Option 2: Full Server Vision Core Setup (Python)
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/MikailArdeshirLarijani/mikotim-sentinel-pro.git
+   cd mikotim-sentinel-pro
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Start the Sentinel server:**
+   ```bash
+   python server.py
+   ```
+
+4. **Access the surveillance dashboard:**  
+   Open your browser and navigate to:  
+   👉 **`http://127.0.0.1:5000`**
 
 ---
 
-## دستورات کنترل از راه دور در تلگرام | Telegram Commands
-- `/photo` یا `عکس`: دریافت فریم زنده به صورت عکس.
-- `/video` یا `ویدیو`: دریافت کلیپ ویدیویی کوتاه زنده.
-- `/summary` یا `گزارش`: دریافت آمار جامع ترددها و افراد مجاز.
-- `/mode video` یا `/mode photo`: تغییر حالت پیش‌فرض هشدار.
-- `/pause` و `/resume`: توقف موقت یا ادامه پایش.
+## Telegram Bot Gateway & Remote Commands
+
+Configure your Telegram Bot Token and Chat ID in the Settings tab or in `data/config.json`. The server listens for interactive remote commands:
+
+| Command | Action |
+|---|---|
+| `/photo` | Dispatches an instantaneous high-res snapshot of the camera feed. |
+| `/video` | Encodes and sends a 5-second MP4 video clip from the circular frame buffer. |
+| `/summary` | Returns a comprehensive 24-hour security report (KPIs, in/out counts, loitering). |
+| `/mode photo` | Sets alert dispatch media format to single photo. |
+| `/mode video` | Sets alert dispatch media format to 5-second MP4 video. |
+| `/pause` | Pauses active optical surveillance. |
+| `/resume` | Resumes active optical surveillance. |
 
 ---
 
-## پروانه انتشار | License
-این پروژه به صورت متن‌باز تحت پروانه [MIT](LICENSE) منتشر شده است.
+## RESTful API Endpoints
+
+The unified Flask backend exposes high-throughput JSON and stream endpoints:
+
+- `GET /` — Serves the Apple Glassmorphism dashboard interface.
+- `GET /video_feed` — Low-latency MJPEG video feed with real-time HUD annotations.
+- `GET /api/status` — Live telemetry (streaming state, FPS, person count, tripwire counts).
+- `GET /api/mikovo/info` — Deep inspection details of all 12 neural subsystems.
+- `POST /api/mode` — Switch between `client_edge` (Mode A) and `server_vision` (Mode B).
+- `GET /api/analytics` — 24-hour hourly traffic distribution and KPI counters.
+- `POST /api/telegram/send` — Dispatches photo or video alerts to Telegram.
+- `POST /api/test_telegram` — Validates Telegram bot credentials and connection.
+- `POST /api/register` — Registers a new face profile with 512-D embedding into `data/faces.json`.
+- `GET /api/faces` — Returns all registered face profile identities and thumbnails.
+- `DELETE /api/faces/<id>` — Deletes a face profile by ID.
+- `POST /api/faces/clear` — Clears all registered face profiles.
+- `GET /api/settings` — Returns current configuration.
+- `POST /api/settings` — Updates runtime configuration settings.
+
+---
+
+## License
+
+This project is open-source software licensed under the [MIT License](LICENSE).  
+Developed with passion by **Mikail Ardeshir Larijani** and powered by **MikoVo RaRa 11**.
